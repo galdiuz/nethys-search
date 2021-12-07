@@ -8,12 +8,11 @@ from bs4 import BeautifulSoup
 
 
 def main():
-    download_category("Equipment")
-    exit(0)
     download_category("Actions")
     download_category("Ancestries")
     download_category("Archetypes")
     download_category("Armor")
+    download_category("ArmorGroups")
     download_category("Backgrounds")
     download_category("Classes")
     download_category("Conditions")
@@ -24,8 +23,10 @@ def main():
     download_category("Equipment")
     download_category("Feats")
     download_category("Hazards")
+    download_category("Heritages")
     download_category("Languages")
     download_category("MonsterAbilities")
+    download_category("MonsterFamilies")
     download_category("Monsters")
     download_category("NPCs")
     download_category("Planes")
@@ -37,6 +38,9 @@ def main():
     download_category("Spells")
     download_category("Traits")
     download_category("Weapons")
+    download_category("WeaponGroups")
+
+    # TODO: Ancestry Heritage pages?
 
 
 def download_category(category: str):

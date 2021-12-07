@@ -19,7 +19,7 @@ import Url.Parser.Query
 
 
 type alias Query =
-    { fulltext : String
+    { fulltext : List String
     , must : List ( String, String )
     , mustNot : List ( String, String )
     , comparisons : List ( String, Comparison, Int )
@@ -33,6 +33,24 @@ type QueryPart
     | Comparison String Comparison Int
 
 
+type alias Hit a =
+    { id : String
+    , score : Float
+    , source : a
+    }
+
+
+type alias Document =
+    { id : Int
+    , category : Category
+    , name : String
+    , level : Maybe Int
+    , type_ : String
+    , traits : List String
+    , breadcrumbs : Maybe String
+    }
+
+
 type Comparison
     = GT
     | GE
@@ -40,23 +58,16 @@ type Comparison
     | LE
 
 
-comparisonToString : Comparison -> String
-comparisonToString comparison =
-    case comparison of
-        GT -> "gt"
-        GE -> "gte"
-        LT -> "lt"
-        LE -> "lte"
-
-
 type alias Flags =
     ()
 
 
-type DocType
+type Category
     = Equipment
-    | Spell
     | Feat
+    | Rules
+    | Spell
+    | Trait
     | Unknown
 
 
@@ -248,7 +259,7 @@ buildQuery parts =
         (\part query ->
             case part of
                 Fulltext str ->
-                    { query | fulltext = query.fulltext ++ " " ++ str }
+                    { query | fulltext = List.append query.fulltext [str] }
 
                 Must field value ->
                     { query | must =  ( field, value ) :: query.must }
@@ -260,7 +271,7 @@ buildQuery parts =
                     { query | comparisons = ( field, operator, value ) :: query.comparisons }
 
         )
-        { fulltext = ""
+        { fulltext = []
         , must = []
         , mustNot = []
         , comparisons = []
@@ -304,15 +315,17 @@ search queryString =
                                         , Encode.object
                                             [ ( "multi_match"
                                               , Encode.object
-                                                    [ ( "query", Encode.string query.fulltext )
+                                                    [ ( "query", Encode.string (String.join " " query.fulltext) )
                                                     , ( "fuzziness", Encode.string "auto" )
                                                     , ( "type", Encode.string "most_fields" )
                                                     , ( "fields"
                                                       , Encode.list
                                                             Encode.string
-                                                            [ "*^5"
-                                                            , "description"
-                                                            , "name^20"
+                                                            [ "*"
+                                                            , "description^0.2"
+                                                            , "type^4"
+                                                            , "name^5"
+                                                            , "traits^2"
                                                             ]
                                                       )
                                                     ]
@@ -389,24 +402,9 @@ encodeObjectMaybe list =
         |> Encode.object
 
 
-type alias Document =
-    { id : Int
-    , name : String
-    , level : Int
-    , type_ : DocType
-    }
-
-
 esResultDecoder : Decode.Decoder (List (Hit Document))
 esResultDecoder =
     Decode.at [ "hits", "hits" ] (Decode.list (hitDecoder documentDecoder))
-
-
-type alias Hit a =
-    { id : String
-    , score : Float
-    , source : a
-    }
 
 
 hitDecoder : Decode.Decoder a -> Decode.Decoder (Hit a)
@@ -424,19 +422,25 @@ hitDecoder decoder =
 documentDecoder : Decode.Decoder Document
 documentDecoder =
     Field.require "id" Decode.int <| \id ->
+    Field.require "category" categoryDecoder <| \category ->
     Field.require "name" Decode.string <| \name ->
-    Field.require "level" Decode.int <| \level ->
-    Field.require "type" typeDecoder <| \type_ ->
+    Field.require "type" Decode.string <| \type_ ->
+    Field.attempt "level" Decode.int <| \level ->
+    Field.attempt "traits" (Decode.list Decode.string) <| \maybeTraits ->
+    Field.attempt "breadcrumbs" Decode.string <| \breadcrumbs ->
     Decode.succeed
         { id = id
+        , category = category
         , type_ = type_
         , name = name
         , level = level
+        , traits = Maybe.withDefault [] maybeTraits
+        , breadcrumbs = breadcrumbs
         }
 
 
-typeDecoder : Decode.Decoder DocType
-typeDecoder =
+categoryDecoder : Decode.Decoder Category
+categoryDecoder =
     Decode.string
         |> Decode.andThen
             (\str ->
@@ -450,6 +454,12 @@ typeDecoder =
                     "spell" ->
                         Decode.succeed Spell
 
+                    "rules" ->
+                        Decode.succeed Rules
+
+                    "trait" ->
+                        Decode.succeed Trait
+
                     _ ->
                         Decode.succeed Unknown
             )
@@ -457,15 +467,21 @@ typeDecoder =
 
 getUrl : Document -> String
 getUrl doc =
-    case doc.type_ of
+    case doc.category of
         Equipment ->
             buildUrl "Equipment" doc.id
 
         Feat ->
             buildUrl "Feats" doc.id
 
+        Rules ->
+            buildUrl "Rules" doc.id
+
         Spell ->
             buildUrl "Spells" doc.id
+
+        Trait ->
+            buildUrl "Traits" doc.id
 
         Unknown ->
             ""
@@ -474,6 +490,15 @@ getUrl doc =
 buildUrl : String -> Int -> String
 buildUrl category id =
     "https://2e.aonprd.com/" ++ category ++ ".aspx?ID=" ++ String.fromInt id
+
+
+comparisonToString : Comparison -> String
+comparisonToString comparison =
+    case comparison of
+        GT -> "gt"
+        GE -> "gte"
+        LT -> "lt"
+        LE -> "lte"
 
 
 view : Model -> Browser.Document Msg
@@ -497,7 +522,9 @@ view model =
                     (List.map
                         (\hit ->
                             Html.li
-                                [ HA.style "display" "block" ]
+                                [ HA.style "display" "block"
+                                , HA.style "margin-bottom" "5px"
+                                ]
                                 [ Html.a
                                     [ HA.href (getUrl hit.source)
                                     , HA.target "_blank"
@@ -505,7 +532,40 @@ view model =
                                     [ Html.text hit.source.name ]
                                 , Html.div
                                     []
-                                    [ Html.text (String.fromInt hit.source.level)
+                                    [ Html.text hit.source.type_
+                                    , Html.text " "
+                                    , case hit.source.level of
+                                        Just level ->
+                                            Html.text (String.fromInt level)
+
+                                        Nothing ->
+                                            Html.text ""
+                                    , if List.isEmpty hit.source.traits then
+                                        Html.text ""
+
+                                      else
+                                        Html.span
+                                            []
+                                            [ Html.text " - "
+                                            , Html.span
+                                                []
+                                                (List.map
+                                                    (\trait ->
+                                                        Html.text ("[" ++ trait ++ "] ")
+                                                    )
+                                                    hit.source.traits
+                                                )
+                                            ]
+                                    , case hit.source.breadcrumbs of
+                                        Just breadcrumbs ->
+                                            Html.span
+                                                []
+                                                [ Html.text " - "
+                                                , Html.text breadcrumbs
+                                                ]
+
+                                        Nothing ->
+                                            Html.text ""
                                     ]
                                 ]
                         )
