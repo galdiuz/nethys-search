@@ -63,11 +63,37 @@ type alias Flags =
 
 
 type Category
-    = Equipment
+    = Action
+    | Ancestry
+    | Archetype
+    | Armor
+    | ArmorGroup
+    | Background
+    | Class
+    | Condition
+    | Curse
+    | Deity
+    | Disease
+    | Domain
+    | Equipment
     | Feat
+    | Hazard
+    | Heritage
+    | Language
+    | Monster
+    | MonsterAbility
+    | MonsterFamily
+    | NPC
+    | Plane
+    | Relic
+    | Ritual
     | Rules
+    | Shield
+    | Skill
     | Spell
     | Trait
+    | Weapon
+    | WeaponGroup
     | Unknown
 
 
@@ -239,6 +265,14 @@ parseQueryParts str =
                     _ ->
                         Fulltext part
 
+            else if String.contains "!=" part then
+                case String.split "!=" part of
+                    [ field, value ] ->
+                        MustNot field value
+
+                    _ ->
+                        Fulltext part
+
             else if String.contains "=" part then
                 case String.split "=" part of
                     [ field, value ] ->
@@ -310,7 +344,11 @@ search queryString =
                       , Encode.object
                             [ ( "bool"
                               , encodeObjectMaybe
-                                    [ Just
+                                    [ if List.isEmpty query.fulltext then
+                                        Nothing
+
+                                      else
+                                        Just
                                         ( "must"
                                         , Encode.object
                                             [ ( "multi_match"
@@ -445,20 +483,98 @@ categoryDecoder =
         |> Decode.andThen
             (\str ->
                 case str of
+                    "action" ->
+                        Decode.succeed Action
+
+                    "ancestry" ->
+                        Decode.succeed Ancestry
+
+                    "archetype" ->
+                        Decode.succeed Archetype
+
+                    "armor" ->
+                        Decode.succeed Armor
+
+                    "armor-group" ->
+                        Decode.succeed ArmorGroup
+
+                    "background" ->
+                        Decode.succeed Background
+
+                    "class" ->
+                        Decode.succeed Class
+
+                    "condition" ->
+                        Decode.succeed Condition
+
+                    "curse" ->
+                        Decode.succeed Curse
+
+                    "deity" ->
+                        Decode.succeed Deity
+
+                    "disease" ->
+                        Decode.succeed Disease
+
+                    "domain" ->
+                        Decode.succeed Domain
+
                     "equipment" ->
                         Decode.succeed Equipment
 
                     "feat" ->
                         Decode.succeed Feat
 
-                    "spell" ->
-                        Decode.succeed Spell
+                    "hazard" ->
+                        Decode.succeed Hazard
+
+                    "heritage" ->
+                        Decode.succeed Heritage
+
+                    "language" ->
+                        Decode.succeed Language
+
+                    "monster" ->
+                        Decode.succeed Monster
+
+                    "monster-ability" ->
+                        Decode.succeed MonsterAbility
+
+                    "monster-family" ->
+                        Decode.succeed MonsterFamily
+
+                    "npc" ->
+                        Decode.succeed NPC
+
+                    "rlane" ->
+                        Decode.succeed Plane
+
+                    "relic" ->
+                        Decode.succeed Relic
+
+                    "ritual" ->
+                        Decode.succeed Ritual
 
                     "rules" ->
                         Decode.succeed Rules
 
+                    "shield" ->
+                        Decode.succeed Shield
+
+                    "skill" ->
+                        Decode.succeed Skill
+
+                    "spell" ->
+                        Decode.succeed Spell
+
                     "trait" ->
                         Decode.succeed Trait
+
+                    "weapon" ->
+                        Decode.succeed Weapon
+
+                    "weapon-group" ->
+                        Decode.succeed WeaponGroup
 
                     _ ->
                         Decode.succeed Unknown
@@ -468,20 +584,99 @@ categoryDecoder =
 getUrl : Document -> String
 getUrl doc =
     case doc.category of
+        Action ->
+            buildUrl "Actions" doc.id
+
+        Ancestry ->
+            buildUrl "Ancestrys" doc.id
+
+        Archetype ->
+            buildUrl "Archetypes" doc.id
+
+        Armor ->
+            buildUrl "Armors" doc.id
+
+        ArmorGroup ->
+            buildUrl "ArmorGroups" doc.id
+
+        Background ->
+            buildUrl "Backgrounds" doc.id
+
+        Class ->
+            buildUrl "Classs" doc.id
+
+        Condition ->
+            buildUrl "Conditions" doc.id
+
+        Curse ->
+            buildUrl "Curses" doc.id
+
+        Deity ->
+            buildUrl "Deitys" doc.id
+
+        Disease ->
+            buildUrl "Diseases" doc.id
+
+        Domain ->
+            buildUrl "Domains" doc.id
+
         Equipment ->
             buildUrl "Equipment" doc.id
 
         Feat ->
             buildUrl "Feats" doc.id
 
+        Hazard ->
+            buildUrl "Hazards" doc.id
+
+        Heritage ->
+            buildUrl "Heritages" doc.id
+
+        Language ->
+            buildUrl "Languages" doc.id
+
+        Monster ->
+            buildUrl "Monsters" doc.id
+
+        MonsterAbility ->
+            buildUrl "MonsterAbilities" doc.id
+
+        MonsterFamily ->
+            buildUrl "MonsterFamilies" doc.id
+
+        NPC ->
+            buildUrl "NPCs" doc.id
+
+        Plane ->
+            buildUrl "Planes" doc.id
+
+        Relic ->
+            buildUrl "Relics" doc.id
+
+        Ritual ->
+            buildUrl "Rituals" doc.id
+
         Rules ->
             buildUrl "Rules" doc.id
+
+        Shield ->
+            buildUrl "Shields" doc.id
+
+        Skill ->
+            buildUrl "Skills" doc.id
 
         Spell ->
             buildUrl "Spells" doc.id
 
         Trait ->
             buildUrl "Traits" doc.id
+
+        Weapon ->
+            buildUrl "Weapons" doc.id
+
+        WeaponGroup ->
+            buildUrl "WeaponGroups" doc.id
+
 
         Unknown ->
             ""

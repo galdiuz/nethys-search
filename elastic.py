@@ -11,8 +11,8 @@ def main():
     Doc.init()
 
     for dir_name in sorted(os.listdir('data')):
-        if not dir_name in ['weapons']:
-            continue
+        # if not dir_name in ['monster-families']:
+        #     continue
 
         for file_name in sorted(os.listdir(f'data/{dir_name}/')):
             file_path = f'data/{dir_name}/{file_name}'
@@ -22,10 +22,7 @@ def main():
 
             id = file_name.replace('.html', '')
 
-            if id != '1':
-                continue
-
-            # if int(id) >= 100:
+            # if id != '2':
             #     continue
 
             print(file_path)
@@ -120,6 +117,9 @@ def main():
 
             elif dir_name == 'traits':
                 parse_trait(id, soup)
+
+            elif dir_name == 'weapon-groups':
+                parse_weapon_group(id, soup)
 
             elif dir_name == 'weapons':
                 parse_weapon(id, soup)
@@ -744,8 +744,23 @@ def parse_trait(id: str, soup: BeautifulSoup):
     doc.save()
 
 
+def parse_weapon_group(id: str, soup: BeautifulSoup):
+    title = soup.find('h1', class_='title')
+
+    doc = Doc()
+    doc.meta.id = 'weapon-group-' + id
+    doc.id = id
+    doc.category = 'weapon-group'
+    doc.name = title.text
+    doc['type'] = 'Weapon Specialization'
+    doc.description = get_description(title)
+
+    doc.save()
+
+
 def parse_weapon(id: str, soup: BeautifulSoup):
     title = soup.find('h1', class_='title')
+    price = get_label_text(title, 'Price')
 
     doc = Doc()
     doc.meta.id = 'weapon-' + id
@@ -753,6 +768,20 @@ def parse_weapon(id: str, soup: BeautifulSoup):
     doc.category = 'weapon'
     doc.name = title.text
     doc['type'] = 'Weapon'
+
+    doc.ammunition = get_label_text(soup, 'Ammunition')
+    doc.bulk = get_label_text(soup, 'Bulk')
+    doc.damage = get_label_text(soup, 'Damage')
+    doc.description = get_description(title)
+    doc.favoredWeapon = split_comma(get_label_text(soup, 'Favored Weapon'))
+    doc.hands = get_label_text(soup, 'Hands')
+    doc.normalized_price = parse_price(price)
+    doc.price = price
+    doc.range = get_label_text(soup, 'Range')
+    doc.reload = get_label_text(soup, 'Reload')
+    doc.traits = split_comma(get_label_text(soup, 'Traits'))
+    doc.weaponCategory = get_label_text(soup, 'Category')
+    doc.weaponGroup = get_label_text(soup, 'Group')
 
     doc.save()
 
