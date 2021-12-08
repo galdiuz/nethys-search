@@ -23,8 +23,8 @@ jobs:
         with:
           elm-version: 0.19.1
 
-      - name: Build
-        run: make build
+      - name: Build Elm
+        run: make elm
 
       - name: Replace commit hash and Elasticsearch URL
         run: |
