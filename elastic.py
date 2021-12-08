@@ -379,8 +379,8 @@ def parse_equipment(id: str, soup: BeautifulSoup):
             doc.hands = get_label_text(sub_title, 'Hands')
             doc.bulk = get_label_text(sub_title, 'Bulk')
             doc.usage = get_label_text(soup, 'Usage')
-            # TODO: Activate actions (id 74)
-            doc.traits = get_traits(soup)
+            doc.activate = get_actions(soup, 'Activate')
+            doc.traits = get_traits(sub_title) or get_traits(soup)
 
             doc.description = join_and_strip([
                 get_description(title),
@@ -744,30 +744,18 @@ def parse_trait(id: str, soup: BeautifulSoup):
     doc.save()
 
 
-def parse_weapon_group(id: str, soup: BeautifulSoup):
-    title = soup.find('h1', class_='title')
-
-    doc = Doc()
-    doc.meta.id = 'weapon-group-' + id
-    doc.id = id
-    doc.category = 'weapon-group'
-    doc.name = title.text
-    doc['type'] = 'Weapon Specialization'
-    doc.description = get_description(title)
-
-    doc.save()
-
-
 def parse_weapon(id: str, soup: BeautifulSoup):
     title = soup.find('h1', class_='title')
+    name, type_, level = get_title_data(title)
     price = get_label_text(title, 'Price')
 
     doc = Doc()
     doc.meta.id = 'weapon-' + id
     doc.id = id
     doc.category = 'weapon'
-    doc.name = title.text
+    doc.name = name
     doc['type'] = 'Weapon'
+    doc.level = level
 
     doc.ammunition = get_label_text(soup, 'Ammunition')
     doc.bulk = get_label_text(soup, 'Bulk')
@@ -779,9 +767,23 @@ def parse_weapon(id: str, soup: BeautifulSoup):
     doc.price = price
     doc.range = get_label_text(soup, 'Range')
     doc.reload = get_label_text(soup, 'Reload')
-    doc.traits = split_comma(get_label_text(soup, 'Traits'))
+    doc.traits = get_label_links(soup, 'Traits')
     doc.weaponCategory = get_label_text(soup, 'Category')
     doc.weaponGroup = get_label_text(soup, 'Group')
+
+    doc.save()
+
+
+def parse_weapon_group(id: str, soup: BeautifulSoup):
+    title = soup.find('h1', class_='title')
+
+    doc = Doc()
+    doc.meta.id = 'weapon-group-' + id
+    doc.id = id
+    doc.category = 'weapon-group'
+    doc.name = title.text
+    doc['type'] = 'Weapon Critical Specialization'
+    doc.description = get_description(title)
 
     doc.save()
 
@@ -789,13 +791,19 @@ def parse_weapon(id: str, soup: BeautifulSoup):
 def get_title_data(title: BeautifulSoup):
     strings = [s for s in list(title.strings) if s.strip()]
     name = strings[0]
-    split = strings[-1].split()
-    if len(split) >= 2 and split[-1].isnumeric():
-        type_ = ' '.join(split[0:-1])
-        level = split[-1]
+
+    if len(strings) > 1:
+        split = strings[-1].split()
+        if len(split) >= 2 and split[-1].rstrip('+').isnumeric():
+            type_ = ' '.join(split[0:-1])
+            level = split[-1]
+
+        else:
+            type_ = strings[-1]
+            level = None
 
     else:
-        type_ = strings[-1]
+        type_ = None
         level = None
 
     return name, type_, level
@@ -803,9 +811,13 @@ def get_title_data(title: BeautifulSoup):
 
 def get_traits(soup: BeautifulSoup):
     traits = []
-    for node in soup.find_all('span'):
-        if 'class' in node.attrs and node['class'][0].startswith('trait'):
+    node = soup
+    while node := node.next_element:
+        if node.name == 'span' and 'class' in node.attrs and node['class'][0].startswith('trait'):
             traits.append(node.text)
+
+        elif traits and node.name in ['h2']:
+            break
 
     return traits
 
@@ -939,7 +951,7 @@ def get_label_links(soup, label):
             if node.name == 'br' or node.name == 'hr':
                 break
 
-            elif node.name == 'a':
+            elif node.name == 'a' or node.name == 'u':
                 parts.append(node.text.strip('; '))
 
                 if node.text.strip().endswith(';'):

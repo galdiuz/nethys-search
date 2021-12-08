@@ -48,6 +48,13 @@ type alias Document =
     , type_ : String
     , traits : List String
     , breadcrumbs : Maybe String
+    , alignment : Maybe String
+    , damage : Maybe String
+    , weaponCategory : Maybe String
+    , weaponGroup : Maybe String
+    , hands : Maybe String
+    , range : Maybe String
+    , reload : Maybe String
     }
 
 
@@ -59,7 +66,8 @@ type Comparison
 
 
 type alias Flags =
-    ()
+    { elasticUrl : String
+    }
 
 
 type Category
@@ -111,6 +119,8 @@ type alias Model =
     , navKey : Browser.Navigation.Key
     , debounce : Int
     , url : Url
+    , elasticUrl : String
+    , tracker : Maybe Int
     }
 
 
@@ -129,24 +139,29 @@ main =
 init : Flags -> Url -> Browser.Navigation.Key -> ( Model, Cmd Msg )
 init flags url navKey =
     let
+        query : String
         query =
             url
                 |> Url.Parser.parse (Url.Parser.query (Url.Parser.Query.string "q"))
                 |> Maybe.Extra.join
                 |> Maybe.withDefault ""
-    in
-    ( { query = query
-      , searchResult = Nothing
-      , navKey = navKey
-      , debounce = 0
-      , url = url
-      }
-    , if query /= "" then
-        search query
 
-      else
-        Cmd.none
-    )
+        model : Model
+        model =
+            { query = query
+            , searchResult = Nothing
+            , navKey = navKey
+            , debounce = 0
+            , url = url
+            , elasticUrl = flags.elasticUrl
+            , tracker = Nothing
+            }
+    in
+    if query /= "" then
+        searchWithCurrentQuery ( model, Cmd.none )
+
+    else
+        ( model, Cmd.none )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -178,13 +193,12 @@ update msg model =
         DebouncePassed debounce ->
             if model.debounce == debounce then
                 ( model
-                , Cmd.batch
-                    [ search model.query
-                    , setQueryParam model.query model.url
-                        |> Url.toString
-                        |> Browser.Navigation.pushUrl model.navKey
-                    ]
+                , setQueryParam model.query model.url
+                    |> Url.toString
+                    |> Browser.Navigation.pushUrl model.navKey
                 )
+                    |> searchWithCurrentQuery
+
             else
                 ( model, Cmd.none )
 
@@ -192,7 +206,10 @@ update msg model =
             -- let
             --     _ = Debug.log "result" result
             -- in
-            ( { model | searchResult = Just result }
+            ( { model
+                | searchResult = Just result
+                , tracker = Nothing
+              }
             , Cmd.none
             )
 
@@ -311,6 +328,9 @@ buildQuery parts =
         , comparisons = []
         }
         parts
+        |> (\query ->
+                { query | fulltext = List.filter (not << String.isEmpty) query.fulltext }
+            )
 
 
 setQueryParam : String -> Url -> Url
@@ -325,113 +345,139 @@ setQueryParam value url =
     }
 
 
-search : String -> Cmd Msg
-search queryString =
+buildSearchBody : String -> Encode.Value
+buildSearchBody queryString =
     let
         query =
-            parseQueryParts queryString
-                |> buildQuery
-                |> Debug.log "query"
+            buildQuery (parseQueryParts queryString)
     in
-    Http.request
-        { method = "POST"
-        , url = "http://localhost:9200/aon/_search"
-        , headers = []
-        , body =
-            Http.jsonBody
-                (Encode.object
-                    [ ( "query"
-                      , Encode.object
-                            [ ( "bool"
-                              , encodeObjectMaybe
-                                    [ if List.isEmpty query.fulltext then
-                                        Nothing
+    Encode.object
+        [ ( "query"
+          , Encode.object
+                [ ( "bool"
+                  , encodeObjectMaybe
+                        [ if List.isEmpty query.fulltext then
+                            Nothing
 
-                                      else
-                                        Just
-                                        ( "must"
-                                        , Encode.object
-                                            [ ( "multi_match"
-                                              , Encode.object
-                                                    [ ( "query", Encode.string (String.join " " query.fulltext) )
-                                                    , ( "fuzziness", Encode.string "auto" )
-                                                    , ( "type", Encode.string "most_fields" )
-                                                    , ( "fields"
-                                                      , Encode.list
-                                                            Encode.string
-                                                            [ "*"
-                                                            , "description^0.2"
-                                                            , "type^4"
-                                                            , "name^5"
-                                                            , "traits^2"
-                                                            ]
+                          else
+                            Just
+                            ( "must"
+                            , Encode.object
+                                [ ( "multi_match"
+                                  , Encode.object
+                                        [ ( "query"
+                                          , Encode.string (String.join " " query.fulltext)
+                                          )
+                                        , ( "fuzziness", Encode.string "auto" )
+                                        , ( "type", Encode.string "most_fields" )
+                                        , ( "fields"
+                                          , Encode.list
+                                                Encode.string
+                                                [ "*"
+                                                , "description^0.2"
+                                                , "type^4"
+                                                , "name^5"
+                                                , "traits^2"
+                                                ]
+                                          )
+                                        ]
+                                  )
+                                ]
+                            )
+
+                        , if List.isEmpty query.must && List.isEmpty query.comparisons then
+                            Nothing
+
+                          else
+                            Just
+                                ( "filter"
+                                , Encode.list Encode.object
+                                    (List.append
+                                        (List.map
+                                            (\( field, value ) ->
+                                                ( "term"
+                                                , Encode.object [ ( field, Encode.string value ) ]
+                                                )
+                                            )
+                                            query.must
+                                        )
+                                        (List.map
+                                            (\( field, comparison, value ) ->
+                                                ( "range"
+                                                , Encode.object
+                                                    [ ( field
+                                                      , Encode.object
+                                                            [ ( comparisonToString comparison, Encode.int value ) ]
                                                       )
                                                     ]
-                                              )
-                                            ]
+                                                )
+                                            )
+                                            query.comparisons
                                         )
+                                        |> List.map List.singleton
+                                    )
+                                )
 
-                                    , if List.isEmpty query.must && List.isEmpty query.comparisons then
-                                        Nothing
+                        , if List.isEmpty query.mustNot then
+                            Nothing
 
-                                      else
-                                        Just
-                                            ( "filter"
-                                            , Encode.list Encode.object
-                                                (List.append
-                                                    (List.map
-                                                        (\( field, value ) ->
-                                                            ( "term"
-                                                            , Encode.object [ ( field, Encode.string value ) ]
-                                                            )
-                                                        )
-                                                        query.must
-                                                    )
-                                                    (List.map
-                                                        (\( field, comparison, value ) ->
-                                                            ( "range"
-                                                            , Encode.object
-                                                                [ ( field
-                                                                  , Encode.object
-                                                                        [ ( comparisonToString comparison, Encode.int value ) ]
-                                                                  )
-                                                                ]
-                                                            )
-                                                        )
-                                                        query.comparisons
-                                                    )
-                                                    |> List.map List.singleton
-                                                )
-                                            )
+                          else
+                            Just
+                                ( "must_not"
+                                , Encode.list Encode.object
+                                    (List.map
+                                          (\( field, value ) ->
+                                              ( "term"
+                                              , Encode.object [ ( field, Encode.string value ) ]
+                                              )
+                                          )
+                                          query.mustNot
+                                          |> List.map List.singleton
+                                    )
+                                )
+                        ]
+                  )
+                ]
+          )
+        , ( "size", Encode.int 100 )
+        ]
 
-                                    , if List.isEmpty query.mustNot then
-                                        Nothing
 
-                                      else
-                                        Just
-                                            ( "must_not"
-                                            , Encode.list Encode.object
-                                                (List.map
-                                                      (\( field, value ) ->
-                                                          ( "term"
-                                                          , Encode.object [ ( field, Encode.string value ) ]
-                                                          )
-                                                      )
-                                                      query.mustNot
-                                                      |> List.map List.singleton
-                                                )
-                                            )
-                                    ]
-                              )
-                            ]
-                      )
-                    , ( "size", Encode.int 100 )
-                    ]
-                )
-        , expect = Http.expectJson GotSearchResult esResultDecoder
-        , timeout = Just 10000
-        , tracker = Nothing
-        }
+
+searchWithCurrentQuery : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+searchWithCurrentQuery ( model, cmd ) =
+    let
+        newTracker : Int
+        newTracker =
+            case model.tracker of
+                Just tracker ->
+                    tracker + 1
+
+                Nothing ->
+                    1
+    in
+    ( { model | tracker = Just newTracker }
+    , Cmd.batch
+        [ cmd
+
+        , case model.tracker of
+            Just tracker ->
+                Http.cancel ("search-" ++ String.fromInt tracker)
+
+            Nothing ->
+                Cmd.none
+
+        , Http.request
+            { method = "POST"
+            , url = model.elasticUrl ++ "/_search"
+            , headers = []
+            , body = Http.jsonBody (buildSearchBody model.query)
+            , expect = Http.expectJson GotSearchResult esResultDecoder
+            , timeout = Just 10000
+            , tracker = Just ("search-" ++ String.fromInt newTracker)
+            }
+        ]
+    )
 
 
 encodeObjectMaybe : List (Maybe ( String, Encode.Value )) -> Encode.Value
@@ -466,6 +512,13 @@ documentDecoder =
     Field.attempt "level" Decode.int <| \level ->
     Field.attempt "traits" (Decode.list Decode.string) <| \maybeTraits ->
     Field.attempt "breadcrumbs" Decode.string <| \breadcrumbs ->
+    Field.attempt "alignment" Decode.string <| \alignment ->
+    Field.attempt "damage" Decode.string <| \damage ->
+    Field.attempt "weaponCategory" Decode.string <| \weaponCategory ->
+    Field.attempt "weaponGroup" Decode.string <| \weaponGroup ->
+    Field.attempt "hands" Decode.string <| \hands ->
+    Field.attempt "range" Decode.string <| \range ->
+    Field.attempt "reload" Decode.string <| \reload ->
     Decode.succeed
         { id = id
         , category = category
@@ -474,6 +527,13 @@ documentDecoder =
         , level = level
         , traits = Maybe.withDefault [] maybeTraits
         , breadcrumbs = breadcrumbs
+        , alignment = alignment
+        , damage = damage
+        , weaponCategory = weaponCategory
+        , weaponGroup = weaponGroup
+        , hands = hands
+        , range = range
+        , reload = reload
         }
 
 
@@ -612,7 +672,7 @@ getUrl doc =
             buildUrl "Curses" doc.id
 
         Deity ->
-            buildUrl "Deitys" doc.id
+            buildUrl "Deities" doc.id
 
         Disease ->
             buildUrl "Diseases" doc.id
@@ -698,7 +758,12 @@ comparisonToString comparison =
 
 view : Model -> Browser.Document Msg
 view model =
-    { title = "AoN Search"
+    { title =
+        if String.isEmpty model.query then
+            "Nethys Search"
+
+        else
+            model.query ++ " - Nethys Search"
     , body =
         [ Html.div
             []
@@ -725,6 +790,7 @@ view model =
                                     , HA.target "_blank"
                                     ]
                                     [ Html.text hit.source.name ]
+
                                 , Html.div
                                     []
                                     [ Html.text hit.source.type_
@@ -735,6 +801,58 @@ view model =
 
                                         Nothing ->
                                             Html.text ""
+
+                                    , case hit.source.category of
+                                        Deity ->
+                                            case hit.source.alignment of
+                                                Just alignment ->
+                                                    Html.span
+                                                        []
+                                                        [ Html.text " - "
+                                                        , Html.text alignment
+                                                        ]
+
+                                                Nothing ->
+                                                    Html.text ""
+
+                                        Rules ->
+                                            case hit.source.breadcrumbs of
+                                                Just breadcrumbs ->
+                                                    Html.span
+                                                        []
+                                                        [ Html.text " - "
+                                                        , Html.text breadcrumbs
+                                                        ]
+
+                                                Nothing ->
+                                                    Html.text ""
+
+                                        Weapon ->
+                                            Html.span
+                                                []
+                                                (List.filterMap identity
+                                                    [ case hit.source.range of
+                                                        Just _ ->
+                                                            Just "Ranged"
+
+                                                        Nothing ->
+                                                            Just "Melee"
+                                                    , hit.source.weaponCategory
+                                                    , hit.source.weaponGroup
+                                                    , Maybe.map (\hands -> hands ++ " hands") hit.source.hands
+                                                    , hit.source.damage
+                                                    , hit.source.range
+                                                    , Maybe.map (\reload -> "Reload " ++ reload) hit.source.reload
+                                                    ]
+                                                    |> List.map Html.text
+                                                    |> List.intersperse (Html.text ", ")
+                                                    |> List.append [ Html.text " - " ]
+                                                )
+
+
+                                        _ ->
+                                            Html.text ""
+
                                     , if List.isEmpty hit.source.traits then
                                         Html.text ""
 
@@ -751,16 +869,6 @@ view model =
                                                     hit.source.traits
                                                 )
                                             ]
-                                    , case hit.source.breadcrumbs of
-                                        Just breadcrumbs ->
-                                            Html.span
-                                                []
-                                                [ Html.text " - "
-                                                , Html.text breadcrumbs
-                                                ]
-
-                                        Nothing ->
-                                            Html.text ""
                                     ]
                                 ]
                         )
