@@ -109,6 +109,7 @@ type Msg
     = NoOp
     | QueryChanged String
     | GotSearchResult (Result Http.Error (List (Hit Document)))
+    | UrlChanged Url
     | UrlRequested Browser.UrlRequest
     | DebouncePassed Int
 
@@ -132,7 +133,7 @@ main =
         , update = update
         , view = view
         , onUrlRequest = UrlRequested
-        , onUrlChange = \_ -> NoOp
+        , onUrlChange = UrlChanged
         }
 
 
@@ -157,11 +158,8 @@ init flags url navKey =
             , tracker = Nothing
             }
     in
-    if query /= "" then
-        searchWithCurrentQuery ( model, Cmd.none )
-
-    else
-        ( model, Cmd.none )
+    ( model, Cmd.none )
+        |> searchWithCurrentQuery
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -186,7 +184,7 @@ update msg model =
                     | query = str
                     , debounce = model.debounce + 1
                   }
-                , Process.sleep 150
+                , Process.sleep 250
                     |> Task.perform (\_ -> DebouncePassed (model.debounce + 1))
                 )
 
@@ -197,21 +195,31 @@ update msg model =
                     |> Url.toString
                     |> Browser.Navigation.pushUrl model.navKey
                 )
-                    |> searchWithCurrentQuery
 
             else
                 ( model, Cmd.none )
 
         GotSearchResult result ->
-            -- let
-            --     _ = Debug.log "result" result
-            -- in
             ( { model
                 | searchResult = Just result
                 , tracker = Nothing
               }
             , Cmd.none
             )
+
+        UrlChanged url ->
+            let
+                query : String
+                query =
+                    url
+                        |> Url.Parser.parse (Url.Parser.query (Url.Parser.Query.string "q"))
+                        |> Maybe.Extra.join
+                        |> Maybe.withDefault ""
+            in
+            ( { model | query = query }
+            , Cmd.none
+            )
+                |> searchWithCurrentQuery
 
         UrlRequested urlRequest ->
             case urlRequest of
@@ -456,28 +464,32 @@ searchWithCurrentQuery ( model, cmd ) =
                 Nothing ->
                     1
     in
-    ( { model | tracker = Just newTracker }
-    , Cmd.batch
-        [ cmd
+    if String.isEmpty (String.trim model.query) then
+        ( model, cmd )
 
-        , case model.tracker of
-            Just tracker ->
-                Http.cancel ("search-" ++ String.fromInt tracker)
+    else
+        ( { model | tracker = Just newTracker }
+        , Cmd.batch
+            [ cmd
 
-            Nothing ->
-                Cmd.none
+            , case model.tracker of
+                Just tracker ->
+                    Http.cancel ("search-" ++ String.fromInt tracker)
 
-        , Http.request
-            { method = "POST"
-            , url = model.elasticUrl ++ "/_search"
-            , headers = []
-            , body = Http.jsonBody (buildSearchBody model.query)
-            , expect = Http.expectJson GotSearchResult esResultDecoder
-            , timeout = Just 10000
-            , tracker = Just ("search-" ++ String.fromInt newTracker)
-            }
-        ]
-    )
+                Nothing ->
+                    Cmd.none
+
+            , Http.request
+                { method = "POST"
+                , url = model.elasticUrl ++ "/_search"
+                , headers = []
+                , body = Http.jsonBody (buildSearchBody model.query)
+                , expect = Http.expectJson GotSearchResult esResultDecoder
+                , timeout = Just 10000
+                , tracker = Just ("search-" ++ String.fromInt newTracker)
+                }
+            ]
+        )
 
 
 encodeObjectMaybe : List (Maybe ( String, Encode.Value )) -> Encode.Value
@@ -736,7 +748,6 @@ getUrl doc =
 
         WeaponGroup ->
             buildUrl "WeaponGroups" doc.id
-
 
         Unknown ->
             ""
