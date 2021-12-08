@@ -22,107 +22,51 @@ def main():
 
             id = file_name.replace('.html', '')
 
-            # if id != '2':
-            #     continue
+            if id != '1':
+                continue
 
             print(file_path)
 
             with open(file_path, 'r') as fp:
                 soup = BeautifulSoup(fp, 'html5lib')
 
-            if dir_name == 'actions':
-                parse_action(id, soup)
+            parse_functions = {
+                'actions': parse_action,
+                'ancestries': parse_ancestry,
+                'archetypes': parse_archetype,
+                'armor': parse_armor,
+                'armor-groups': parse_armor_group,
+                'backgrounds': parse_background,
+                'classes': parse_class,
+                'conditions': parse_condition,
+                'curses': parse_curse,
+                'deities': parse_deity,
+                'diseases': parse_disease,
+                'domains': parse_domain,
+                'equipment': parse_equipment,
+                'feats': parse_feat,
+                'hazards': parse_hazard,
+                'heritages': parse_heritage,
+                'languages': parse_language,
+                'monster-abilities': parse_monster_ability,
+                'monster-families': parse_monster_family,
+                'monsters': parse_monster,
+                'np-cs': parse_npc,
+                'planes': parse_plane,
+                'relics': parse_relic,
+                'rituals': parse_ritual,
+                'rules': parse_rule,
+                'shields': parse_shield,
+                'skills': parse_skill,
+                'spells': parse_spell,
+                'traits': parse_trait,
+                'weapon-groups': parse_weapon_group,
+                'weapons': parse_weapon,
+            }
 
-            elif dir_name == 'ancestries':
-                parse_ancestry(id, soup)
+            if dir_name in parse_functions:
+                parse_functions[dir_name](id, soup)
 
-            elif dir_name == 'archetypes':
-                parse_archetype(id, soup)
-
-            elif dir_name == 'armor':
-                parse_armor(id, soup)
-
-            elif dir_name == 'armor-groups':
-                parse_armor_group(id, soup)
-
-            elif dir_name == 'backgrounds':
-                parse_background(id, soup)
-
-            elif dir_name == 'classes':
-                parse_class(id, soup)
-
-            elif dir_name == 'conditions':
-                parse_condition(id, soup)
-
-            elif dir_name == 'curses':
-                parse_curse(id, soup)
-
-            elif dir_name == 'deities':
-                parse_deity(id, soup)
-
-            elif dir_name == 'diseases':
-                parse_disease(id, soup)
-
-            elif dir_name == 'domains':
-                parse_domain(id, soup)
-
-            elif dir_name == 'equipment':
-                parse_equipment(id, soup)
-
-            elif dir_name == 'feats':
-                parse_feat(id, soup)
-
-            elif dir_name == 'hazards':
-                parse_hazard(id, soup)
-
-            elif dir_name == 'heritages':
-                parse_heritage(id, soup)
-
-            elif dir_name == 'languages':
-                parse_language(id, soup)
-
-            elif dir_name == 'monster-abilities':
-                parse_monster_ability(id, soup)
-
-            elif dir_name == 'monster-families':
-                parse_monster_family(id, soup)
-
-            elif dir_name == 'monsters':
-                parse_monster(id, soup)
-
-            elif dir_name == 'np-cs':
-                pass # TODO
-                # parse_npc(id, soup)
-
-            elif dir_name == 'planes':
-                parse_plane(id, soup)
-
-            elif dir_name == 'relics':
-                parse_relic(id, soup)
-
-            elif dir_name == 'rituals':
-                parse_ritual(id, soup)
-
-            elif dir_name == 'rules':
-                parse_rule(id, soup)
-
-            elif dir_name == 'shields':
-                parse_shield(id, soup)
-
-            elif dir_name == 'skills':
-                parse_skill(id, soup)
-
-            elif dir_name == 'spells':
-                parse_spell(id, soup)
-
-            elif dir_name == 'traits':
-                parse_trait(id, soup)
-
-            elif dir_name == 'weapon-groups':
-                parse_weapon_group(id, soup)
-
-            elif dir_name == 'weapons':
-                parse_weapon(id, soup)
 
 
 def parse_action(id: str, soup: BeautifulSoup):
@@ -567,6 +511,10 @@ def parse_monster(id: str, soup: BeautifulSoup):
         doc.monsterFamily = list(soup.find_all('h1', class_='title'))[2].text
 
     doc.save()
+
+
+def parse_npc(id: str, soup: BeautifulSoup):
+    pass # TODO
 
 
 def parse_plane(id: str, soup: BeautifulSoup):
