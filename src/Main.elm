@@ -139,26 +139,16 @@ main =
 
 init : Flags -> Url -> Browser.Navigation.Key -> ( Model, Cmd Msg )
 init flags url navKey =
-    let
-        query : String
-        query =
-            url
-                |> Url.Parser.parse (Url.Parser.query (Url.Parser.Query.string "q"))
-                |> Maybe.Extra.join
-                |> Maybe.withDefault ""
-
-        model : Model
-        model =
-            { query = query
-            , searchResult = Nothing
-            , navKey = navKey
-            , debounce = 0
-            , url = url
-            , elasticUrl = flags.elasticUrl
-            , tracker = Nothing
-            }
-    in
-    ( model, Cmd.none )
+    ( { query = getQueryFromParam url
+      , searchResult = Nothing
+      , navKey = navKey
+      , debounce = 0
+      , url = url
+      , elasticUrl = flags.elasticUrl
+      , tracker = Nothing
+      }
+    , Cmd.none
+    )
         |> searchWithCurrentQuery
 
 
@@ -208,15 +198,7 @@ update msg model =
             )
 
         UrlChanged url ->
-            let
-                query : String
-                query =
-                    url
-                        |> Url.Parser.parse (Url.Parser.query (Url.Parser.Query.string "q"))
-                        |> Maybe.Extra.join
-                        |> Maybe.withDefault ""
-            in
-            ( { model | query = query }
+            ( { model | query = getQueryFromParam url }
             , Cmd.none
             )
                 |> searchWithCurrentQuery
@@ -450,6 +432,14 @@ buildSearchBody queryString =
         , ( "size", Encode.int 100 )
         ]
 
+
+
+getQueryFromParam : Url -> String
+getQueryFromParam url =
+    { url | path = "" }
+        |> Url.Parser.parse (Url.Parser.query (Url.Parser.Query.string "q"))
+        |> Maybe.Extra.join
+        |> Maybe.withDefault ""
 
 
 searchWithCurrentQuery : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
