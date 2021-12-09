@@ -433,7 +433,6 @@ buildSearchBody queryString =
         ]
 
 
-
 getQueryFromParam : Url -> String
 getQueryFromParam url =
     { url | path = "" }
@@ -608,7 +607,7 @@ categoryDecoder =
                     "npc" ->
                         Decode.succeed NPC
 
-                    "rlane" ->
+                    "plane" ->
                         Decode.succeed Plane
 
                     "relic" ->
@@ -767,116 +766,146 @@ view model =
             model.query ++ " - Nethys Search"
     , body =
         [ Html.div
-            []
-            [ Html.text "Search"
-            , Html.input
-                [ HE.onInput QueryChanged
-                , HA.value model.query
-                , HA.style "width" "90%"
-                ]
-                [ Html.text model.query ]
+            [ HA.style "display" "flex"
+            , HA.style "flex-direction" "column"
+            , HA.style "align-items" "center"
             ]
-        , case model.searchResult of
-            Just (Ok hits) ->
-                Html.ul
-                    []
-                    (List.map
-                        (\hit ->
-                            Html.li
-                                [ HA.style "display" "block"
-                                , HA.style "margin-bottom" "5px"
-                                ]
-                                [ Html.a
-                                    [ HA.href (getUrl hit.source)
-                                    , HA.target "_blank"
-                                    ]
-                                    [ Html.text hit.source.name ]
-
-                                , Html.div
-                                    []
-                                    [ Html.text hit.source.type_
-                                    , Html.text " "
-                                    , case hit.source.level of
-                                        Just level ->
-                                            Html.text (String.fromInt level)
-
-                                        Nothing ->
-                                            Html.text ""
-
-                                    , case hit.source.category of
-                                        Deity ->
-                                            case hit.source.alignment of
-                                                Just alignment ->
-                                                    Html.span
-                                                        []
-                                                        [ Html.text " - "
-                                                        , Html.text alignment
-                                                        ]
-
-                                                Nothing ->
-                                                    Html.text ""
-
-                                        Rules ->
-                                            case hit.source.breadcrumbs of
-                                                Just breadcrumbs ->
-                                                    Html.span
-                                                        []
-                                                        [ Html.text " - "
-                                                        , Html.text breadcrumbs
-                                                        ]
-
-                                                Nothing ->
-                                                    Html.text ""
-
-                                        Weapon ->
-                                            Html.span
-                                                []
-                                                (List.filterMap identity
-                                                    [ case hit.source.range of
-                                                        Just _ ->
-                                                            Just "Ranged"
-
-                                                        Nothing ->
-                                                            Just "Melee"
-                                                    , hit.source.weaponCategory
-                                                    , hit.source.weaponGroup
-                                                    , Maybe.map (\hands -> hands ++ " hands") hit.source.hands
-                                                    , hit.source.damage
-                                                    , hit.source.range
-                                                    , Maybe.map (\reload -> "Reload " ++ reload) hit.source.reload
-                                                    ]
-                                                    |> List.map Html.text
-                                                    |> List.intersperse (Html.text ", ")
-                                                    |> List.append [ Html.text " - " ]
-                                                )
-
-
-                                        _ ->
-                                            Html.text ""
-
-                                    , if List.isEmpty hit.source.traits then
-                                        Html.text ""
-
-                                      else
-                                        Html.span
-                                            []
-                                            [ Html.text " - "
-                                            , Html.span
-                                                []
-                                                (List.map
-                                                    (\trait ->
-                                                        Html.text ("[" ++ trait ++ "] ")
-                                                    )
-                                                    hit.source.traits
-                                                )
-                                            ]
-                                    ]
-                                ]
-                        )
-                        hits
-                    )
-
-            _ ->
-                Html.text ""
+            [ Html.div
+                [ HA.style "max-width" "1000px"
+                , HA.style "width" "100%"
+                , HA.style "display" "flex"
+                , HA.style "flex-direction" "column"
+                , HA.style "align-items" "center"
+                , HA.style "gap" "8px"
+                ]
+                [ Html.div
+                    [ HA.style "font-size" "32px" ]
+                    [ Html.text "Nethys Search"
+                    ]
+                , viewQuery model
+                , viewSearchResults model
+                ]
+            ]
         ]
     }
+
+
+viewQuery : Model -> Html Msg
+viewQuery model =
+    Html.input
+        [ HE.onInput QueryChanged
+        , HA.value model.query
+        , HA.style "width" "100%"
+        , HA.style "flex" "1"
+        , HA.style "font-size" "24px"
+        ]
+        [ Html.text model.query ]
+
+
+
+viewSearchResults : Model -> Html msg
+viewSearchResults model =
+    case model.searchResult of
+        Just (Ok hits) ->
+            Html.div
+                [ HA.style "width" "100%"
+                , HA.style "display" "flex"
+                , HA.style "flex-direction" "column"
+                , HA.style "gap" "8px"
+                ]
+                (List.map viewSingleSearchResult hits)
+
+        _ ->
+            Html.text ""
+
+
+viewSingleSearchResult : Hit Document -> Html msg
+viewSingleSearchResult hit =
+    Html.div
+        [ HA.style "display" "flex"
+        , HA.style "flex-direction" "column"
+        , HA.style "align-items" "flex-start"
+        ]
+        [ Html.a
+            [ HA.href (getUrl hit.source)
+            , HA.target "_blank"
+            , HA.style "font-size" "20px"
+            ]
+            [ Html.text hit.source.name ]
+
+        , Html.div
+            []
+            (List.concat
+                [ [ Html.text hit.source.type_ ]
+
+                , case hit.source.level of
+                    Just level ->
+                        [ Html.text " "
+                        , Html.text (String.fromInt level)
+                        ]
+
+                    Nothing ->
+                        []
+
+                , case hit.source.category of
+                    Deity ->
+                        case hit.source.alignment of
+                            Just alignment ->
+                                [ Html.text " - "
+                                , Html.text alignment
+                                ]
+
+                            Nothing ->
+                                []
+
+                    Rules ->
+                        case hit.source.breadcrumbs of
+                            Just breadcrumbs ->
+                                [ Html.text " - "
+                                , Html.text breadcrumbs
+                                ]
+
+                            Nothing ->
+                                []
+
+                    Weapon ->
+                        (List.filterMap identity
+                            [ case hit.source.range of
+                                Just _ ->
+                                    Just "Ranged"
+
+                                Nothing ->
+                                    Just "Melee"
+                            , hit.source.weaponCategory
+                            , hit.source.weaponGroup
+                            , Maybe.map (\hands -> hands ++ " hands") hit.source.hands
+                            , hit.source.damage
+                            , hit.source.range
+                            , Maybe.map (\reload -> "Reload " ++ reload) hit.source.reload
+                            ]
+                            |> List.map Html.text
+                            |> List.intersperse (Html.text ", ")
+                            |> List.append [ Html.text " - " ]
+                        )
+
+
+                    _ ->
+                        []
+
+                , if List.isEmpty hit.source.traits then
+                    []
+
+                  else
+                    [ Html.text " - "
+                    , Html.span
+                        []
+                        (List.map
+                            (\trait ->
+                                Html.text ("[" ++ trait ++ "] ")
+                            )
+                            hit.source.traits
+                        )
+                    ]
+                ]
+            )
+        ]
