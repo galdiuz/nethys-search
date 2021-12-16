@@ -664,7 +664,7 @@ getUrl doc =
             buildUrl "Backgrounds" doc.id
 
         Class ->
-            buildUrl "Class" doc.id
+            buildUrl "Classes" doc.id
 
         Condition ->
             buildUrl "Conditions" doc.id
