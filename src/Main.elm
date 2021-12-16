@@ -649,7 +649,7 @@ getUrl doc =
             buildUrl "Actions" doc.id
 
         Ancestry ->
-            buildUrl "Ancestrys" doc.id
+            buildUrl "Ancestries" doc.id
 
         Archetype ->
             buildUrl "Archetypes" doc.id
@@ -664,7 +664,7 @@ getUrl doc =
             buildUrl "Backgrounds" doc.id
 
         Class ->
-            buildUrl "Classs" doc.id
+            buildUrl "Class" doc.id
 
         Condition ->
             buildUrl "Conditions" doc.id
