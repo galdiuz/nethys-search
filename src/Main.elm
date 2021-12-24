@@ -4,6 +4,7 @@ import Browser
 import Browser.Navigation
 import Html exposing (Html)
 import Html.Attributes as HA
+import Html.Attributes.Extra as HAE
 import Html.Events as HE
 import Http
 import Json.Decode as Decode
@@ -765,9 +766,17 @@ view model =
         else
             model.query ++ " - Nethys Search"
     , body =
-        [ Html.div
-            [ HA.style "display" "flex"
-            , HA.style "flex-direction" "column"
+        [ Html.node "style"
+            []
+            [ Html.text css
+            , if True then
+                Html.text cssDark
+
+              else
+                Html.text ""
+            ]
+        , Html.div
+            [ HA.class "column"
             , HA.style "align-items" "center"
             ]
             [ Html.div
@@ -776,10 +785,10 @@ view model =
                 , HA.style "display" "flex"
                 , HA.style "flex-direction" "column"
                 , HA.style "align-items" "center"
-                , HA.style "gap" "8px"
+                , HA.style "gap" "12px"
                 ]
                 [ Html.div
-                    [ HA.style "font-size" "32px" ]
+                    [ HA.style "font-size" "48px" ]
                     [ Html.text "Nethys Search"
                     ]
                 , viewQuery model
@@ -811,7 +820,7 @@ viewSearchResults model =
                 [ HA.style "width" "100%"
                 , HA.style "display" "flex"
                 , HA.style "flex-direction" "column"
-                , HA.style "gap" "8px"
+                , HA.style "gap" "20px"
                 ]
                 (List.map viewSingleSearchResult hits)
 
@@ -824,40 +833,50 @@ viewSingleSearchResult hit =
     Html.div
         [ HA.style "display" "flex"
         , HA.style "flex-direction" "column"
-        , HA.style "align-items" "flex-start"
+        , HA.style "align-items" "stretch"
+        , HA.style "gap" "8px"
         ]
-        [ Html.a
-            [ HA.href (getUrl hit.source)
-            , HA.target "_blank"
-            , HA.style "font-size" "20px"
-            ]
-            [ Html.text hit.source.name ]
-
-        , Html.div
-            []
-            (List.concat
-                [ [ Html.text hit.source.type_ ]
-
+        [ Html.div
+            [ HA.class "title" ]
+            [ Html.a
+                [ HA.href (getUrl hit.source)
+                , HA.target "_blank"
+                ]
+                [ Html.text hit.source.name ]
+            , Html.span
+                []
+                [ Html.text hit.source.type_
                 , case hit.source.level of
                     Just level ->
-                        [ Html.text " "
-                        , Html.text (String.fromInt level)
-                        ]
+                        Html.text (" " ++ String.fromInt level)
 
                     Nothing ->
-                        []
+                        Html.text ""
+                ]
+            ]
 
-                , case hit.source.category of
-                    Deity ->
-                        case hit.source.alignment of
-                            Just alignment ->
-                                [ Html.text " - "
-                                , Html.text alignment
-                                ]
+        , Html.div
+            [ HA.style "display" "flex" ]
+            (List.map
+                viewTrait
+                (List.append
+                    hit.source.traits
+                    (case hit.source.alignment of
+                        Just alignment ->
+                            [ alignment ]
 
-                            Nothing ->
-                                []
+                        Nothing ->
+                            []
+                    )
+                )
+            )
 
+        , Html.div
+            [ HA.style "display" "flex"
+            , HA.style "gap" "4px"
+            ]
+            (List.concat
+                [ case hit.source.category of
                     Rules ->
                         case hit.source.breadcrumbs of
                             Just breadcrumbs ->
@@ -885,27 +904,169 @@ viewSingleSearchResult hit =
                             ]
                             |> List.map Html.text
                             |> List.intersperse (Html.text ", ")
-                            |> List.append [ Html.text " - " ]
                         )
 
 
                     _ ->
                         []
-
-                , if List.isEmpty hit.source.traits then
-                    []
-
-                  else
-                    [ Html.text " - "
-                    , Html.span
-                        []
-                        (List.map
-                            (\trait ->
-                                Html.text ("[" ++ trait ++ "] ")
-                            )
-                            hit.source.traits
-                        )
-                    ]
                 ]
             )
         ]
+
+
+viewTrait : String -> Html msg
+viewTrait trait =
+    Html.span
+        [ HA.class "trait"
+        , case trait of
+            "Uncommon" ->
+                HA.class "trait-uncommon"
+
+            "Rare" ->
+                HA.class "trait-rare"
+
+            "Unique" ->
+                HA.class "trait-unique"
+
+            "Tiny" ->
+                HA.class "trait-size"
+
+            "Small" ->
+                HA.class "trait-size"
+
+            "Medium" ->
+                HA.class "trait-size"
+
+            "Large" ->
+                HA.class "trait-size"
+
+            "Huge" ->
+                HA.class "trait-size"
+
+            "Gargantuan" ->
+                HA.class "trait-size"
+
+            "LG" ->
+                HA.class "trait-alignment"
+
+            "LN" ->
+                HA.class "trait-alignment"
+
+            "LE" ->
+                HA.class "trait-alignment"
+
+            "NG" ->
+                HA.class "trait-alignment"
+
+            "N" ->
+                HA.class "trait-alignment"
+
+            "NE" ->
+                HA.class "trait-alignment"
+
+            "CG" ->
+                HA.class "trait-alignment"
+
+            "CN" ->
+                HA.class "trait-alignment"
+
+            "CE" ->
+                HA.class "trait-alignment"
+
+            _ ->
+                HAE.empty
+        ]
+        [ Html.text trait ]
+
+
+css : String
+css =
+    """
+    body {
+        font-family: "Century Gothic", CenturyGothic, AppleGothic, sans-serif;
+    }
+    input {
+        border-style: solid;
+        border-radius: 4px;
+        padding: 4px;
+    }
+
+    a {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    a:hover {
+        text-decoration: underline;
+    }
+
+    .column {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .row {
+        display: flex;
+        flex-direction: row;
+    }
+
+    .title {
+        border-radius: 4px;
+        display: flex;
+        font-size: 24px;
+        font-variant: small-caps;
+        font-weight: 700;
+        justify-content: space-between;
+        padding: 4px 9px;
+    }
+
+    .trait {
+        border-color: #d8c483;
+        border-style: double;
+        border-width: 2px;
+        background-color: #522e2c;
+        padding: 5px;
+        font-variant: small-caps;
+        font-weight: 700;
+    }
+
+    .trait-alignment {
+        background-color: #4287f5;
+    }
+
+    .trait-rare {
+        background-color: #0c1466;
+    }
+
+    .trait-size {
+        background-color: #478c42;
+    }
+
+    .trait-uncommon {
+        background-color: #c45500;
+    }
+
+    .trait-unique {
+        background-color: #800080;
+    }
+    """
+
+
+cssDark : String
+cssDark =
+    """
+    body {
+        background-color: #111111;
+        color: #eeeeee;
+    }
+
+    input {
+        background-color: #111111;
+        color: #eeeeee;
+    }
+
+    .title {
+        background-color: #522e2c;
+        color: #cbc18f;
+    }
+    """

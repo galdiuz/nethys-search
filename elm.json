@@ -13,6 +13,7 @@
             "elm/json": "1.1.3",
             "elm/regex": "1.0.0",
             "elm/url": "1.0.0",
+            "elm-community/html-extra": "3.4.0",
             "elm-community/maybe-extra": "5.2.1",
             "webbhuset/elm-json-decode": "1.1.0"
         },
