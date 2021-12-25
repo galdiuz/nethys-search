@@ -68,7 +68,6 @@ def main():
                 parse_functions[dir_name](id, soup)
 
 
-
 def parse_action(id: str, soup: BeautifulSoup):
     title = soup.find('h1', class_='title')
 
@@ -239,7 +238,7 @@ def parse_deity(id: str, soup: BeautifulSoup):
 
     doc.alignment = title.text.split('[')[1].strip(']')
     doc.anathema = get_label_text(soup, 'Anathema')
-    doc.areasOfConcert = get_label_text(soup, 'Areas of Concern')
+    doc.areasOfConcern = get_label_text(soup, 'Areas of Concern')
     doc.clericSpells = get_label_text(soup, 'Cleric Spells')
     doc.description = get_description(title)
     doc.divineAbility = get_label_text(soup, 'Divine Ability')
@@ -917,7 +916,12 @@ def get_actions(soup, label):
 
     if node := soup.find_next('b', text=label):
         while node := node.next_sibling:
-            if node.name in ['br', 'hr', 'a'] or '(' in node.text:
+            if '(' in node.text:
+                parts.append(node.text.split('(')[0].strip())
+
+                break
+
+            if node.name in ['br', 'hr', 'a']:
                 break
 
             if node.name == 'img' and 'actiondark' in node['class'] :

@@ -56,6 +56,16 @@ type alias Document =
     , hands : Maybe String
     , range : Maybe String
     , reload : Maybe String
+    , traditions : List String
+    , components : List String
+    , actions : Maybe String
+    , duration : Maybe String
+    , savingThrow : Maybe String
+    , targets : Maybe String
+    , area : Maybe String
+    , price : Maybe String
+    , bulk : Maybe String
+    , usage : Maybe String
     }
 
 
@@ -521,6 +531,16 @@ documentDecoder =
     Field.attempt "hands" Decode.string <| \hands ->
     Field.attempt "range" Decode.string <| \range ->
     Field.attempt "reload" Decode.string <| \reload ->
+    Field.attempt "traditions" (Decode.list Decode.string) <| \traditions ->
+    Field.attempt "components" (Decode.list Decode.string) <| \components ->
+    Field.attempt "actions" Decode.string <| \actions ->
+    Field.attempt "duration" Decode.string <| \duration ->
+    Field.attempt "targets" Decode.string <| \targets ->
+    Field.attempt "savingThrow" Decode.string <| \savingThrow ->
+    Field.attempt "area" Decode.string <| \area ->
+    Field.attempt "price" Decode.string <| \price ->
+    Field.attempt "bulk" Decode.string <| \bulk ->
+    Field.attempt "usage" Decode.string <| \usage ->
     Decode.succeed
         { id = id
         , category = category
@@ -536,6 +556,16 @@ documentDecoder =
         , hands = hands
         , range = range
         , reload = reload
+        , traditions = Maybe.withDefault [] traditions
+        , components = Maybe.withDefault [] components
+        , actions = actions
+        , duration = duration
+        , savingThrow = savingThrow
+        , targets = targets
+        , area = area
+        , price = price
+        , bulk = bulk
+        , usage = usage
         }
 
 
@@ -831,9 +861,7 @@ viewSearchResults model =
 viewSingleSearchResult : Hit Document -> Html msg
 viewSingleSearchResult hit =
     Html.div
-        [ HA.style "display" "flex"
-        , HA.style "flex-direction" "column"
-        , HA.style "align-items" "stretch"
+        [ HA.class "column"
         , HA.style "gap" "8px"
         ]
         [ Html.div
@@ -856,62 +884,209 @@ viewSingleSearchResult hit =
             ]
 
         , Html.div
-            [ HA.style "display" "flex" ]
+            [ HA.class "row"
+            , HA.class "traitrow"
+            ]
             (List.map
                 viewTrait
                 (List.append
                     hit.source.traits
-                    (case hit.source.alignment of
-                        Just alignment ->
+                    (case ( hit.source.category, hit.source.alignment ) of
+                        ( Deity, Just alignment ) ->
                             [ alignment ]
 
-                        Nothing ->
+                        _ ->
                             []
                     )
                 )
             )
 
-        , Html.div
-            [ HA.style "display" "flex"
-            , HA.style "gap" "4px"
-            ]
-            (List.concat
-                [ case hit.source.category of
-                    Rules ->
-                        case hit.source.breadcrumbs of
-                            Just breadcrumbs ->
-                                [ Html.text " - "
-                                , Html.text breadcrumbs
+        , viewSearchResultAdditionalInfo hit
+        ]
+
+
+viewSearchResultAdditionalInfo : Hit Document -> Html msg
+viewSearchResultAdditionalInfo hit =
+    Html.div
+        [ HA.class "column" ]
+        (case hit.source.category of
+            Equipment ->
+                (List.filterMap identity
+                    [ Maybe.map
+                        (viewLabelAndText "Price")
+                        hit.source.price
+                    , if List.any
+                        Maybe.Extra.isJust
+                        [ hit.source.hands, hit.source.usage, hit.source.bulk ]
+                      then
+                        Html.div
+                            [ HA.class "row"
+                            , HA.style "gap" "12px"
+                            ]
+                            (List.filterMap identity
+                                [ Maybe.map
+                                    (viewLabelAndText "Hands")
+                                    hit.source.hands
+                                , Maybe.map
+                                    (viewLabelAndText "Usage")
+                                    hit.source.usage
+                                , Maybe.map
+                                    (viewLabelAndText "Bulk")
+                                    hit.source.bulk
                                 ]
+                            )
+                            |> Just
 
-                            Nothing ->
-                                []
+                      else
+                        Nothing
+                    ]
+                )
 
-                    Weapon ->
-                        (List.filterMap identity
-                            [ case hit.source.range of
-                                Just _ ->
-                                    Just "Ranged"
+            Rules ->
+                case hit.source.breadcrumbs of
+                    Just breadcrumbs ->
+                        [ Html.text breadcrumbs
+                        ]
+
+                    Nothing ->
+                        []
+
+            Spell ->
+                List.append
+                    [ Html.div
+                        []
+                        (List.append
+                            [ Html.span
+                                [ HA.class "bold" ]
+                                [ Html.text "Traditions" ]
+                            , Html.text " "
+                            ]
+                            (List.map
+                                (Html.text)
+                                hit.source.traditions
+                                |> List.intersperse (Html.text ", ")
+                            )
+                        )
+                    , Html.div
+                        [ HA.class "row"
+                        , HA.style "gap" "12px"
+                        ]
+                        [ Html.div
+                            []
+                            [ viewLabel "Cast"
+                            , Html.text " "
+                            , case hit.source.actions of
+                                Just actions ->
+                                    Html.text actions
 
                                 Nothing ->
-                                    Just "Melee"
-                            , hit.source.weaponCategory
-                            , hit.source.weaponGroup
-                            , Maybe.map (\hands -> hands ++ " hands") hit.source.hands
-                            , hit.source.damage
-                            , hit.source.range
-                            , Maybe.map (\reload -> "Reload " ++ reload) hit.source.reload
+                                    Html.text ""
                             ]
-                            |> List.map Html.text
-                            |> List.intersperse (Html.text ", ")
-                        )
+                        , Html.div
+                            []
+                            (List.append
+                                [ viewLabel "Components"
+                                , Html.text " "
+                                ]
+                                (List.map
+                                    (Html.text)
+                                    hit.source.components
+                                    |> List.intersperse (Html.text ", ")
+                                )
+                            )
+                        ]
+                    ]
+                    (List.filterMap identity
+                        [ if List.any
+                            Maybe.Extra.isJust
+                            [ hit.source.range, hit.source.targets, hit.source.area ]
+                          then
+                            Html.div
+                                [ HA.class "row"
+                                , HA.style "gap" "12px"
+                                ]
+                                (List.filterMap identity
+                                    [ Maybe.map
+                                        (viewLabelAndText "Range")
+                                        hit.source.range
+                                    , Maybe.map
+                                        (viewLabelAndText "Targets")
+                                        hit.source.targets
+                                    , Maybe.map
+                                        (viewLabelAndText "Area")
+                                        hit.source.area
+                                    ]
+                                )
+                                |> Just
+
+                          else
+                            Nothing
+
+                        , if List.any
+                            Maybe.Extra.isJust
+                            [ hit.source.savingThrow, hit.source.duration ]
+                          then
+                            Html.div
+                                [ HA.class "row"
+                                , HA.style "gap" "12px"
+                                ]
+                                (List.filterMap identity
+                                    [ Maybe.map
+                                        (viewLabelAndText "Duration")
+                                        hit.source.duration
+
+                                    , Maybe.map
+                                        (viewLabelAndText "Saving Throw")
+                                        hit.source.savingThrow
+                                    ]
+                                )
+                                |> Just
+
+                          else
+                            Nothing
+                        ]
+                    )
+
+            Weapon ->
+                (List.filterMap identity
+                    [ case hit.source.range of
+                        Just _ ->
+                            Just "Ranged"
+
+                        Nothing ->
+                            Just "Melee"
+                    , hit.source.weaponCategory
+                    , hit.source.weaponGroup
+                    , Maybe.map (\hands -> hands ++ " hands") hit.source.hands
+                    , hit.source.damage
+                    , hit.source.range
+                    , Maybe.map (\reload -> "Reload " ++ reload) hit.source.reload
+                    ]
+                    |> List.map Html.text
+                    |> List.intersperse (Html.text ", ")
+                )
 
 
-                    _ ->
-                        []
-                ]
-            )
+            _ ->
+                []
+        )
+
+
+viewLabelAndText : String -> String -> Html msg
+viewLabelAndText label text =
+    Html.div
+        []
+        [ viewLabel label
+        , Html.text " "
+        , Html.text text
         ]
+
+
+viewLabel : String -> Html msg
+viewLabel text =
+    Html.span
+        [ HA.class "bold" ]
+        [ Html.text text ]
 
 
 viewTrait : String -> Html msg
@@ -1000,14 +1175,20 @@ css =
         text-decoration: underline;
     }
 
+    .bold {
+        font-weight: 700;
+    }
+
     .column {
         display: flex;
         flex-direction: column;
+        gap: 4px;
     }
 
     .row {
         display: flex;
         flex-direction: row;
+        gap: 4px;
     }
 
     .title {
@@ -1028,6 +1209,10 @@ css =
         padding: 5px;
         font-variant: small-caps;
         font-weight: 700;
+    }
+
+    .traitrow {
+        gap: 0;
     }
 
     .trait-alignment {
