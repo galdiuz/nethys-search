@@ -362,10 +362,36 @@ buildSearchBody queryString =
 
                           else
                             Just
-                            ( "must"
-                            , Encode.object
-                                [ ( "multi_match"
+                            ( "should"
+                            , Encode.list Encode.object
+                                [ [ ( "match_phrase"
+                                    , Encode.object
+                                        [ ( "name"
+                                          , Encode.object
+                                                [ ( "query"
+                                                  , Encode.string (String.join " " query.fulltext)
+                                                  )
+                                                , ( "boost", Encode.int 10 )
+                                                ]
+                                          )
+                                        ]
+                                    )
+                                  ]
+                                , [ ( "match_phrase_prefix"
                                   , Encode.object
+                                        [ ( "name"
+                                          , Encode.object
+                                                [ ( "query"
+                                                  , Encode.string (String.join " " query.fulltext)
+                                                  )
+                                                , ( "boost", Encode.int 5 )
+                                                ]
+                                          )
+                                        ]
+                                  )
+                                  ]
+                                , [ ( "multi_match"
+                                    , Encode.object
                                         [ ( "query"
                                           , Encode.string (String.join " " query.fulltext)
                                           )
@@ -382,7 +408,8 @@ buildSearchBody queryString =
                                                 ]
                                           )
                                         ]
-                                  )
+                                    )
+                                  ]
                                 ]
                             )
 
@@ -810,15 +837,15 @@ view model =
             , HA.style "align-items" "center"
             ]
             [ Html.div
-                [ HA.style "max-width" "1000px"
+                [ HA.class "column"
+                , HA.class "gap-large"
+                , HA.style "max-width" "1000px"
                 , HA.style "width" "100%"
-                , HA.style "display" "flex"
-                , HA.style "flex-direction" "column"
-                , HA.style "align-items" "center"
-                , HA.style "gap" "12px"
                 ]
                 [ Html.div
-                    [ HA.style "font-size" "48px" ]
+                    [ HA.style "font-size" "48px"
+                    , HA.style "align-self" "center"
+                    ]
                     [ Html.text "Nethys Search"
                     ]
                 , viewQuery model
@@ -834,9 +861,7 @@ viewQuery model =
     Html.input
         [ HE.onInput QueryChanged
         , HA.value model.query
-        , HA.style "width" "100%"
-        , HA.style "flex" "1"
-        , HA.style "font-size" "24px"
+        , HA.placeholder "Enter search query..."
         ]
         [ Html.text model.query ]
 
@@ -844,25 +869,29 @@ viewQuery model =
 
 viewSearchResults : Model -> Html msg
 viewSearchResults model =
-    case model.searchResult of
-        Just (Ok hits) ->
-            Html.div
-                [ HA.style "width" "100%"
-                , HA.style "display" "flex"
-                , HA.style "flex-direction" "column"
-                , HA.style "gap" "20px"
-                ]
-                (List.map viewSingleSearchResult hits)
+    if Maybe.Extra.isJust model.tracker then
+        Html.div
+            [ HA.class "loader" ]
+            []
 
-        _ ->
-            Html.text ""
+    else
+        case model.searchResult of
+            Just (Ok hits) ->
+                Html.div
+                    [ HA.class "column"
+                    , HA.class "gap-large"
+                    ]
+                    (List.map viewSingleSearchResult hits)
+
+            _ ->
+                Html.text ""
 
 
 viewSingleSearchResult : Hit Document -> Html msg
 viewSingleSearchResult hit =
     Html.div
         [ HA.class "column"
-        , HA.style "gap" "8px"
+        , HA.class "gap-small"
         ]
         [ Html.div
             [ HA.class "title" ]
@@ -908,20 +937,23 @@ viewSingleSearchResult hit =
 viewSearchResultAdditionalInfo : Hit Document -> Html msg
 viewSearchResultAdditionalInfo hit =
     Html.div
-        [ HA.class "column" ]
+        [ HA.class "column"
+        , HA.class "gap-tiny"
+        ]
         (case hit.source.category of
             Equipment ->
                 (List.filterMap identity
                     [ Maybe.map
                         (viewLabelAndText "Price")
                         hit.source.price
+
                     , if List.any
                         Maybe.Extra.isJust
                         [ hit.source.hands, hit.source.usage, hit.source.bulk ]
                       then
                         Html.div
                             [ HA.class "row"
-                            , HA.style "gap" "12px"
+                            , HA.class "gap-medium"
                             ]
                             (List.filterMap identity
                                 [ Maybe.map
@@ -952,100 +984,73 @@ viewSearchResultAdditionalInfo hit =
                         []
 
             Spell ->
-                List.append
-                    [ Html.div
-                        []
-                        (List.append
-                            [ Html.span
-                                [ HA.class "bold" ]
-                                [ Html.text "Traditions" ]
-                            , Html.text " "
-                            ]
-                            (List.map
-                                (Html.text)
-                                hit.source.traditions
-                                |> List.intersperse (Html.text ", ")
-                            )
-                        )
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.style "gap" "12px"
-                        ]
-                        [ Html.div
-                            []
-                            [ viewLabel "Cast"
-                            , Html.text " "
-                            , case hit.source.actions of
-                                Just actions ->
-                                    Html.text actions
+                List.filterMap identity
+                    [ if List.isEmpty hit.source.traditions then
+                        Nothing
 
-                                Nothing ->
-                                    Html.text ""
+                      else
+                        hit.source.traditions
+                            |> String.join ", "
+                            |> viewLabelAndText "Traditions"
+                            |> Just
+
+                    , if List.isEmpty hit.source.components then
+                        Nothing
+
+                      else
+                        hit.source.components
+                            |> String.join ", "
+                            |> viewLabelAndText "Components"
+                            |> Just
+
+                    , if List.any
+                        Maybe.Extra.isJust
+                        [ hit.source.range, hit.source.targets, hit.source.area ]
+                      then
+                        Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-medium"
                             ]
-                        , Html.div
-                            []
-                            (List.append
-                                [ viewLabel "Components"
-                                , Html.text " "
+                            (List.filterMap identity
+                                [ Maybe.map
+                                    (viewLabelAndText "Range")
+                                    hit.source.range
+                                , Maybe.map
+                                    (viewLabelAndText "Targets")
+                                    hit.source.targets
+                                , Maybe.map
+                                    (viewLabelAndText "Area")
+                                    hit.source.area
                                 ]
-                                (List.map
-                                    (Html.text)
-                                    hit.source.components
-                                    |> List.intersperse (Html.text ", ")
-                                )
                             )
-                        ]
+                            |> Just
+
+                      else
+                        Nothing
+
+                    , if List.any
+                        Maybe.Extra.isJust
+                        [ hit.source.savingThrow, hit.source.duration ]
+                      then
+                        Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-medium"
+                            ]
+                            (List.filterMap identity
+                                [ Maybe.map
+                                    (viewLabelAndText "Duration")
+                                    hit.source.duration
+
+                                , Maybe.map
+                                    (viewLabelAndText "Saving Throw")
+                                    hit.source.savingThrow
+                                ]
+                            )
+                            |> Just
+
+                      else
+                        Nothing
                     ]
-                    (List.filterMap identity
-                        [ if List.any
-                            Maybe.Extra.isJust
-                            [ hit.source.range, hit.source.targets, hit.source.area ]
-                          then
-                            Html.div
-                                [ HA.class "row"
-                                , HA.style "gap" "12px"
-                                ]
-                                (List.filterMap identity
-                                    [ Maybe.map
-                                        (viewLabelAndText "Range")
-                                        hit.source.range
-                                    , Maybe.map
-                                        (viewLabelAndText "Targets")
-                                        hit.source.targets
-                                    , Maybe.map
-                                        (viewLabelAndText "Area")
-                                        hit.source.area
-                                    ]
-                                )
-                                |> Just
-
-                          else
-                            Nothing
-
-                        , if List.any
-                            Maybe.Extra.isJust
-                            [ hit.source.savingThrow, hit.source.duration ]
-                          then
-                            Html.div
-                                [ HA.class "row"
-                                , HA.style "gap" "12px"
-                                ]
-                                (List.filterMap identity
-                                    [ Maybe.map
-                                        (viewLabelAndText "Duration")
-                                        hit.source.duration
-
-                                    , Maybe.map
-                                        (viewLabelAndText "Saving Throw")
-                                        hit.source.savingThrow
-                                    ]
-                                )
-                                |> Just
-
-                          else
-                            Nothing
-                        ]
-                    )
 
             Weapon ->
                 (List.filterMap identity
@@ -1160,10 +1165,12 @@ css =
     body {
         font-family: "Century Gothic", CenturyGothic, AppleGothic, sans-serif;
     }
+
     input {
         border-style: solid;
         border-radius: 4px;
         padding: 4px;
+        font-size: 24px;
     }
 
     a {
@@ -1182,12 +1189,26 @@ css =
     .column {
         display: flex;
         flex-direction: column;
-        gap: 4px;
     }
 
     .row {
         display: flex;
         flex-direction: row;
+    }
+
+    .gap-large {
+        gap: 20px;
+    }
+
+    .gap-medium {
+        gap: 12px;
+    }
+
+    .gap-small {
+        gap: 8px;
+    }
+
+    .gap-tiny {
         gap: 4px;
     }
 
@@ -1233,6 +1254,27 @@ css =
 
     .trait-unique {
         background-color: #800080;
+    }
+
+    .loader {
+        width: 48px;
+        height: 48px;
+        border: 5px solid #FFF;
+        border-bottom-color: transparent;
+        border-radius: 50%;
+        display: inline-block;
+        box-sizing: border-box;
+        margin-top: 48px;
+        animation: rotation 1s linear infinite;
+    }
+
+    @keyframes rotation {
+        0% {
+            transform: rotate(0deg);
+        }
+        100% {
+            transform: rotate(360deg);
+        }
     }
     """
 
