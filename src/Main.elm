@@ -994,13 +994,29 @@ viewSearchResultAdditionalInfo hit =
                             |> viewLabelAndText "Traditions"
                             |> Just
 
-                    , if List.isEmpty hit.source.components then
+                    , if Maybe.Extra.isNothing hit.source.actions && List.isEmpty hit.source.components then
                         Nothing
 
                       else
-                        hit.source.components
-                            |> String.join ", "
-                            |> viewLabelAndText "Components"
+                        Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-medium"
+                            ]
+                            (List.filterMap identity
+                                [ Maybe.map
+                                    (viewLabelAndText "Cast")
+                                    hit.source.actions
+
+                                , if List.isEmpty hit.source.components then
+                                    Nothing
+
+                                  else
+                                    hit.source.components
+                                        |> String.join ", "
+                                        |> viewLabelAndText "Components"
+                                        |> Just
+                                ]
+                            )
                             |> Just
 
                     , if List.any
