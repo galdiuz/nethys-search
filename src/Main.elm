@@ -895,11 +895,21 @@ viewSingleSearchResult hit =
         ]
         [ Html.div
             [ HA.class "title" ]
-            [ Html.a
-                [ HA.href (getUrl hit.source)
-                , HA.target "_blank"
+            [ Html.div
+                []
+                [ Html.a
+                    [ HA.href (getUrl hit.source)
+                    , HA.target "_blank"
+                    ]
+                    [ Html.text hit.source.name
+                    ]
+                , case ( hit.source.actions, List.member hit.source.category [ Action, Feat ]) of
+                    ( Just actions, True ) ->
+                        viewTextWithActionIcons (" " ++ actions)
+
+                    _ ->
+                        Html.text ""
                 ]
-                [ Html.text hit.source.name ]
             , Html.span
                 []
                 [ Html.text hit.source.type_
@@ -1280,7 +1290,9 @@ css =
     }
 
     .icon-font {
-        font-family: "Pathfinder-Icons"
+        font-family: "Pathfinder-Icons";
+        font-variant-caps: normal;
+        font-weight: normal;
     }
 
     .title {
@@ -1366,5 +1378,9 @@ cssDark =
     .title {
         background-color: #522e2c;
         color: #cbc18f;
+    }
+
+    .icon-font {
+        color: #cccccc;
     }
     """
