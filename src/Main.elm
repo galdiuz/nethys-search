@@ -395,16 +395,37 @@ buildSearchBody queryString =
                                         [ ( "query"
                                           , Encode.string (String.join " " query.fulltext)
                                           )
+                                        , ( "type", Encode.string "most_fields" )
+                                        , ( "fields"
+                                          , Encode.list
+                                                Encode.string
+                                                [ "*"
+                                                , "type^4"
+                                                , "name^5"
+                                                , "traits^2"
+                                                , "description^0.2"
+                                                , "text^0.2"
+                                                ]
+                                          )
+                                        ]
+                                    )
+                                  ]
+                                , [ ( "multi_match"
+                                    , Encode.object
+                                        [ ( "query"
+                                          , Encode.string (String.join " " query.fulltext)
+                                          )
                                         , ( "fuzziness", Encode.string "auto" )
                                         , ( "type", Encode.string "most_fields" )
                                         , ( "fields"
                                           , Encode.list
                                                 Encode.string
                                                 [ "*"
-                                                , "description^0.2"
                                                 , "type^4"
                                                 , "name^5"
                                                 , "traits^2"
+                                                , "description^0.2"
+                                                , "text^0.2"
                                                 ]
                                           )
                                         ]
@@ -1347,7 +1368,7 @@ css =
         border-radius: 50%;
         display: inline-block;
         box-sizing: border-box;
-        margin-top: 48px;
+        align-self: center;
         animation: rotation 1s linear infinite;
     }
 
