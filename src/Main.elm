@@ -1099,7 +1099,7 @@ viewLabelAndText label text =
         []
         [ viewLabel label
         , Html.text " "
-        , Html.text text
+        , viewTextWithActionIcons text
         ]
 
 
@@ -1108,6 +1108,51 @@ viewLabel text =
     Html.span
         [ HA.class "bold" ]
         [ Html.text text ]
+
+
+viewTextWithActionIcons : String -> Html msg
+viewTextWithActionIcons text =
+    Html.span
+        []
+        (replaceActionLigatures
+            text
+            ( "Single Action", "[one-action]" )
+            [ ( "Two Actions", "[two-actions]" )
+            , ( "Three Actions", "[three-actions]" )
+            , ( "Reaction", "[reaction]" )
+            , ( "Free Action", "[free-action]" )
+            ]
+        )
+
+
+replaceActionLigatures : String -> ( String, String ) -> List ( String, String ) -> List (Html msg)
+replaceActionLigatures text ( find, replace ) rem =
+    if String.contains find text then
+        case String.split find text of
+            before :: after ->
+                (List.append
+                    [ Html.text before
+                    , Html.span
+                        [ HA.class "icon-font" ]
+                        [ Html.text replace ]
+                    ]
+                    (replaceActionLigatures
+                        (String.join find after)
+                        ( find, replace )
+                        rem
+                    )
+                )
+
+            [] ->
+                [ Html.text text ]
+
+    else
+        case rem of
+            next :: remNext ->
+                replaceActionLigatures text next remNext
+
+            [] ->
+                [ Html.text text ]
 
 
 viewTrait : String -> Html msg
@@ -1178,6 +1223,12 @@ viewTrait trait =
 css : String
 css =
     """
+    @font-face {
+        font-family: "Pathfinder-Icons";
+        src: url("Pathfinder-Icons.ttf");
+        font-display: swap;
+    }
+
     body {
         font-family: "Century Gothic", CenturyGothic, AppleGothic, sans-serif;
     }
@@ -1226,6 +1277,10 @@ css =
 
     .gap-tiny {
         gap: 4px;
+    }
+
+    .icon-font {
+        font-family: "Pathfinder-Icons"
     }
 
     .title {

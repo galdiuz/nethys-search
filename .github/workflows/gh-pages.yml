@@ -35,7 +35,7 @@ jobs:
       - name: Move files
         run: |
           mkdir ./build
-          mv ./index.html ./app-${{ github.sha }}.js ./build/
+          mv ./index.html ./Pathfinder-Icons.ttf ./app-${{ github.sha }}.js ./build/
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
