@@ -11,6 +11,9 @@ def main():
     download_category('Actions', 25)
     download_category('Ancestries')
     download_category('AnimalCompanions')
+    download_category('AnimalCompanions', params=['Advanced=true'], path_suffix='-advanced')
+    download_category('AnimalCompanions', params=['Specialized=true'], path_suffix='-specialized')
+    download_category('AnimalCompanions', params=['Unique=true'], path_suffix='-unique')
     download_category('ArcaneSchools')
     download_category('ArcaneThesis')
     download_category('Archetypes')
@@ -32,6 +35,7 @@ def main():
     download_category('Eidolons')
     download_category('Equipment')
     download_category('Familiars')
+    download_category('Familiars', params=['Specific=true'], path_suffix='-specific')
     download_category('Feats', 25)
     download_category('Hazards')
     download_category('Heritages')
@@ -59,19 +63,15 @@ def main():
     download_category('Skills')
     download_category('Spells', 25)
     download_category('Styles')
-    download_category('Tenets')
+    download_category('Tenets', 1)
     download_category('Traits')
     download_category('Ways')
     download_category('Weapons')
     download_category('WeaponGroups')
 
-    # TODO: Ancestry Heritage pages?
-    # TODO: Advanced/Specialized/Unique companions?
-    # TODO: Specific familiars?
 
-
-def download_category(category: str, max_failures: int = 5, id: int = 0):
-    path = inflection.dasherize(inflection.underscore(category))
+def download_category(category: str, max_failures: int = 3, params: [str] = [], path_suffix: str = '', id: int = 0):
+    path = inflection.dasherize(inflection.underscore(category)) + path_suffix
     Path(f"data/{path}").mkdir(parents=True, exist_ok=True)
 
     if category == 'Monsters':
@@ -82,7 +82,7 @@ def download_category(category: str, max_failures: int = 5, id: int = 0):
 
     while True:
         id += 1
-        url = f"https://2e.aonprd.com/{category}.aspx?ID={id}"
+        url = f"https://2e.aonprd.com/{category}.aspx?" + '&'.join([f"ID={id}"] + params)
         file_name = f"data/{path}/{id}.html"
 
         if Path(file_name).is_file() or Path(file_name.replace('.html', '.404')).is_file():

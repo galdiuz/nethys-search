@@ -34,6 +34,9 @@ def main():
                 'actions': parse_action,
                 'ancestries': parse_ancestry,
                 'animal-companions': parse_animal_companion,
+                'animal-companions-advanced': parse_animal_companion_advanced,
+                'animal-companions-specialized': parse_animal_companion_specialized,
+                'animal-companions-unique': parse_animal_companion_unique,
                 'arcane-schools': parse_arcane_school,
                 'archetypes': parse_archetype,
                 'armor': parse_armor,
@@ -53,6 +56,7 @@ def main():
                 'eidolons': parse_eidolon,
                 'equipment': parse_equipment,
                 'familiars': parse_familiar,
+                'familiars-specific': parse_familiar_specific,
                 'feats': parse_feat,
                 'hazards': parse_hazard,
                 'heritages': parse_heritage,
@@ -92,17 +96,17 @@ def main():
                 parse_functions[dir_name](id, soup)
 
 
-def build_url(category: str, id: int) -> str:
-    return f'{category}.aspx?ID={id}'
+def build_url(category: str, id: int, params: [str] = []) -> str:
+    return f'{category}.aspx?' + '&'.join([f"ID={id}"] + params)
 
 
-def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type_: str):
+def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type_: str, url_params: [str] = []):
     title = soup.find('h1', class_='title')
 
     doc = Doc()
     doc.meta.id = category + '-' + id
     doc.id = id
-    doc.url = build_url(url, id)
+    doc.url = build_url(url, id, url_params)
     doc.category = category
     doc.name = title.get_text(strip=True)
     doc['type'] = type_
@@ -141,6 +145,49 @@ def parse_ancestry(id: str, soup: BeautifulSoup):
 
 def parse_animal_companion(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'animal-companion', 'AnimalCompanions', 'Animal Companion')
+
+    doc.traits = get_traits(soup)
+
+    doc.save()
+
+
+def parse_animal_companion_advanced(id: str, soup: BeautifulSoup):
+    doc = parse_generic(
+        id,
+        soup,
+        'animal-companion-advanced',
+        'AnimalCompanions',
+        'Animal Companion Advanced Option',
+        ['Advanced=true'],
+    )
+
+    doc.traits = get_traits(soup)
+
+    doc.save()
+
+
+def parse_animal_companion_specialized(id: str, soup: BeautifulSoup):
+    doc = parse_generic(
+        id,
+        soup,
+        'animal-companion-specialized',
+        'AnimalCompanions',
+        'Animal Companion Specialization',
+        ['Specialized=true'],
+    )
+
+    doc.save()
+
+
+def parse_animal_companion_unique(id: str, soup: BeautifulSoup):
+    doc = parse_generic(
+        id,
+        soup,
+        'animal-companion-unique',
+        'AnimalCompanions',
+        'Unique Animal Companion',
+        ['Unique=true'],
+    )
 
     doc.traits = get_traits(soup)
 
@@ -437,6 +484,23 @@ def parse_familiar(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'familiar', 'Familiars', 'Familiar Ability')
 
     doc.abilityType = get_label_text(soup, 'Ability Type')
+
+    doc.save()
+
+
+def parse_familiar_specific(id: str, soup: BeautifulSoup):
+    doc = parse_generic(
+        id,
+        soup,
+        'familiar-specific',
+        'Familiars',
+        'Specific Familiar',
+        ['Specific=true']
+    )
+
+    doc.abilities = split_comma(get_label_text(soup, 'Granted Abilities'))
+    doc.requiredAbilities = get_label_text(soup, 'Required Number of Abilities')
+    doc.traits = get_traits(soup)
 
     doc.save()
 
