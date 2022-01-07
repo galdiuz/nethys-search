@@ -794,6 +794,7 @@ viewQuery model =
         [ HE.onInput QueryChanged
         , HA.value model.query
         , HA.placeholder "Enter search query..."
+        , HA.autofocus True
         ]
         [ Html.text model.query ]
 
