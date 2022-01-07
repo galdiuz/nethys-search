@@ -43,6 +43,7 @@ type alias Hit a =
 
 type alias Document =
     { id : Int
+    , url : String
     , category : Category
     , name : String
     , level : Maybe Int
@@ -88,6 +89,7 @@ type Category
     | Armor
     | ArmorGroup
     | Background
+    | Cause
     | Class
     | Condition
     | Curse
@@ -111,9 +113,10 @@ type Category
     | Skill
     | Spell
     | Trait
+    | Way
     | Weapon
     | WeaponGroup
-    | Unknown
+    | Other
 
 
 type Msg
@@ -566,6 +569,7 @@ hitDecoder decoder =
 documentDecoder : Decode.Decoder Document
 documentDecoder =
     Field.require "id" Decode.int <| \id ->
+    Field.require "url" Decode.string <| \url ->
     Field.require "category" categoryDecoder <| \category ->
     Field.require "name" Decode.string <| \name ->
     Field.require "type" Decode.string <| \type_ ->
@@ -591,6 +595,7 @@ documentDecoder =
     Field.attempt "usage" Decode.string <| \usage ->
     Decode.succeed
         { id = id
+        , url = url
         , category = category
         , type_ = type_
         , name = name
@@ -640,6 +645,9 @@ categoryDecoder =
 
                     "background" ->
                         Decode.succeed Background
+
+                    "cause" ->
+                        Decode.succeed Cause
 
                     "class" ->
                         Decode.succeed Class
@@ -710,6 +718,9 @@ categoryDecoder =
                     "trait" ->
                         Decode.succeed Trait
 
+                    "way" ->
+                        Decode.succeed Way
+
                     "weapon" ->
                         Decode.succeed Weapon
 
@@ -717,113 +728,13 @@ categoryDecoder =
                         Decode.succeed WeaponGroup
 
                     _ ->
-                        Decode.succeed Unknown
+                        Decode.succeed Other
             )
 
 
 getUrl : Document -> String
 getUrl doc =
-    case doc.category of
-        Action ->
-            buildUrl "Actions" doc.id
-
-        Ancestry ->
-            buildUrl "Ancestries" doc.id
-
-        Archetype ->
-            buildUrl "Archetypes" doc.id
-
-        Armor ->
-            buildUrl "Armors" doc.id
-
-        ArmorGroup ->
-            buildUrl "ArmorGroups" doc.id
-
-        Background ->
-            buildUrl "Backgrounds" doc.id
-
-        Class ->
-            buildUrl "Classes" doc.id
-
-        Condition ->
-            buildUrl "Conditions" doc.id
-
-        Curse ->
-            buildUrl "Curses" doc.id
-
-        Deity ->
-            buildUrl "Deities" doc.id
-
-        Disease ->
-            buildUrl "Diseases" doc.id
-
-        Domain ->
-            buildUrl "Domains" doc.id
-
-        Equipment ->
-            buildUrl "Equipment" doc.id
-
-        Feat ->
-            buildUrl "Feats" doc.id
-
-        Hazard ->
-            buildUrl "Hazards" doc.id
-
-        Heritage ->
-            buildUrl "Heritages" doc.id
-
-        Language ->
-            buildUrl "Languages" doc.id
-
-        Monster ->
-            buildUrl "Monsters" doc.id
-
-        MonsterAbility ->
-            buildUrl "MonsterAbilities" doc.id
-
-        MonsterFamily ->
-            buildUrl "MonsterFamilies" doc.id
-
-        NPC ->
-            buildUrl "NPCs" doc.id
-
-        Plane ->
-            buildUrl "Planes" doc.id
-
-        Relic ->
-            buildUrl "Relics" doc.id
-
-        Ritual ->
-            buildUrl "Rituals" doc.id
-
-        Rules ->
-            buildUrl "Rules" doc.id
-
-        Shield ->
-            buildUrl "Shields" doc.id
-
-        Skill ->
-            buildUrl "Skills" doc.id
-
-        Spell ->
-            buildUrl "Spells" doc.id
-
-        Trait ->
-            buildUrl "Traits" doc.id
-
-        Weapon ->
-            buildUrl "Weapons" doc.id
-
-        WeaponGroup ->
-            buildUrl "WeaponGroups" doc.id
-
-        Unknown ->
-            ""
-
-
-buildUrl : String -> Int -> String
-buildUrl category id =
-    "https://2e.aonprd.com/" ++ category ++ ".aspx?ID=" ++ String.fromInt id
+    "https://2e.aonprd.com/" ++ doc.url
 
 
 comparisonToString : Comparison -> String
@@ -953,6 +864,9 @@ viewSingleSearchResult hit =
                     hit.source.traits
                     (case ( hit.source.category, hit.source.alignment ) of
                         ( Deity, Just alignment ) ->
+                            [ alignment ]
+
+                        ( Cause, Just alignment ) ->
                             [ alignment ]
 
                         _ ->
