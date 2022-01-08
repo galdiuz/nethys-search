@@ -67,6 +67,7 @@ type alias Document =
     , price : Maybe String
     , bulk : Maybe String
     , usage : Maybe String
+    , prerequisites : Maybe String
     }
 
 
@@ -593,6 +594,7 @@ documentDecoder =
     Field.attempt "price" Decode.string <| \price ->
     Field.attempt "bulk" Decode.string <| \bulk ->
     Field.attempt "usage" Decode.string <| \usage ->
+    Field.attempt "prerequisites" Decode.string <| \prerequisites ->
     Decode.succeed
         { id = id
         , url = url
@@ -619,6 +621,7 @@ documentDecoder =
         , price = price
         , bulk = bulk
         , usage = usage
+        , prerequisites = prerequisites
         }
 
 
@@ -919,6 +922,15 @@ viewSearchResultAdditionalInfo hit =
                         Nothing
                     ]
                 )
+
+            Feat ->
+                case hit.source.prerequisites of
+                    Just prerequisites ->
+                        [ viewLabelAndText "Prerequisites" prerequisites
+                        ]
+
+                    Nothing ->
+                        []
 
             Rules ->
                 case hit.source.breadcrumbs of
