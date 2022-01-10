@@ -62,6 +62,7 @@ def main():
     download_category('Shields')
     download_category('Skills')
     download_category('Spells', 25)
+    download_category('Sources')
     download_category('Styles')
     download_category('Tenets', 1)
     download_category('Traits')

@@ -83,6 +83,7 @@ def main():
                 'rules': parse_rules,
                 'shields': parse_shield,
                 'skills': parse_skill,
+                'sources': parse_source,
                 'spells': parse_spell,
                 'styles': parse_style,
                 'tenets': parse_tenet,
@@ -732,6 +733,12 @@ def parse_skill(id: str, soup: BeautifulSoup):
     doc.name = title.text.split('(')[0].strip()
     doc.attribute = title.text.split('(')[1].strip(')')
     # doc.description = get_description(title)
+
+    doc.save()
+
+
+def parse_source(id: str, soup: BeautifulSoup):
+    doc = parse_generic(id, soup, 'source', 'Sources', 'Source')
 
     doc.save()
 
