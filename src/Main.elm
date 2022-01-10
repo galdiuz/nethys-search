@@ -769,7 +769,7 @@ view model =
             ]
         , Html.div
             [ HA.class "column"
-            , HA.style "align-items" "center"
+            , HA.class "align-center"
             ]
             [ Html.div
                 [ HA.class "column"
@@ -777,18 +777,37 @@ view model =
                 , HA.style "max-width" "1000px"
                 , HA.style "width" "100%"
                 ]
-                [ Html.div
-                    [ HA.style "font-size" "48px"
-                    , HA.style "align-self" "center"
+                [ viewTitle
+                , Html.main_
+                    [ HA.class "column gap-large"
                     ]
-                    [ Html.text "Nethys Search"
+                    [ viewQuery model
+                    , viewSearchResults model
                     ]
-                , viewQuery model
-                , viewSearchResults model
                 ]
             ]
         ]
     }
+
+
+viewTitle : Html Msg
+viewTitle =
+    Html.header
+        [ HA.class "column"
+        , HA.class "align-center"
+        ]
+        [ Html.h1
+            [ HA.class "title"
+            ]
+            [ Html.text "Nethys Search" ]
+        , Html.div
+            []
+            [ Html.text "Search engine for "
+            , Html.a
+                [ HA.href "https://2e.aonprd.com/" ]
+                [ Html.text "2e.aonprd.com" ]
+            ]
+        ]
 
 
 viewQuery : Model -> Html Msg
@@ -825,12 +844,12 @@ viewSearchResults model =
 
 viewSingleSearchResult : Hit Document -> Html msg
 viewSingleSearchResult hit =
-    Html.div
+    Html.section
         [ HA.class "column"
         , HA.class "gap-small"
         ]
-        [ Html.div
-            [ HA.class "title" ]
+        [ Html.h2
+            [ HA.class "result-title" ]
             [ Html.div
                 []
                 [ Html.a
@@ -846,8 +865,8 @@ viewSingleSearchResult hit =
                     _ ->
                         Html.text ""
                 ]
-            , Html.span
-                [ HA.class "title-type" ]
+            , Html.div
+                [ HA.class "result-title-type" ]
                 [ Html.text hit.source.type_
                 , case hit.source.level of
                     Just level ->
@@ -1114,7 +1133,7 @@ replaceActionLigatures text ( find, replace ) rem =
 
 viewTrait : String -> Html msg
 viewTrait trait =
-    Html.span
+    Html.div
         [ HA.class "trait"
         , case trait of
             "Uncommon" ->
@@ -1207,6 +1226,19 @@ css =
         text-decoration: underline;
     }
 
+    h1 {
+        font-weight: normal;
+        margin: 0;
+    }
+
+    h2 {
+        margin: 0;
+    }
+
+    .align-center {
+        align-items: center;
+    }
+
     .bold {
         font-weight: 700;
     }
@@ -1253,7 +1285,7 @@ css =
         font-weight: normal;
     }
 
-    .title {
+    .result-title {
         border-radius: 4px;
         display: flex;
         font-size: 24px;
@@ -1264,8 +1296,12 @@ css =
         padding: 4px 9px;
     }
 
-    .title-type {
+    .result-title-type {
         text-align: right;
+    }
+
+    .title {
+        font-size: 48px;
     }
 
     .trait {
@@ -1334,7 +1370,7 @@ cssDark =
         color: #eeeeee;
     }
 
-    .title {
+    .result-title {
         background-color: #522e2c;
         color: #cbc18f;
     }
