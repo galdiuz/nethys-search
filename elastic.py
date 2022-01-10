@@ -963,8 +963,10 @@ def get_label_text(soup, label, stop_at=';'):
                 else:
                     parts.append(node.text.strip())
 
+    parts = [s.strip() for s in parts if s]
+
     if parts:
-        return ' '.join([s.strip() for s in parts if s]).strip()
+        return ' '.join(parts).strip()
 
     else:
         return None
