@@ -231,7 +231,7 @@ def parse_armor(id: str, soup: BeautifulSoup):
     doc.strength = get_label_text(soup, 'Strength')
     doc.bulk = get_label_text(soup, 'Bulk')
     doc.armorGroup = get_label_text(soup, 'Group')
-    doc.traits = split_comma(get_label_text(soup, 'Traits'))
+    doc.traits = split_comma(get_label_text(soup, 'Traits', '—'))
 
     doc.save()
 
