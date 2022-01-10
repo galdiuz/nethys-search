@@ -847,7 +847,7 @@ viewSingleSearchResult hit =
                         Html.text ""
                 ]
             , Html.span
-                []
+                [ HA.class "title-type" ]
                 [ Html.text hit.source.type_
                 , case hit.source.level of
                     Just level ->
@@ -860,7 +860,6 @@ viewSingleSearchResult hit =
 
         , Html.div
             [ HA.class "row"
-            , HA.class "traitrow"
             ]
             (List.map
                 viewTrait
@@ -1189,6 +1188,7 @@ css =
 
     body {
         font-family: "Century Gothic", CenturyGothic, AppleGothic, sans-serif;
+        margin: 8px;
     }
 
     input {
@@ -1219,6 +1219,11 @@ css =
     .row {
         display: flex;
         flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .column:empty, .row:empty {
+        display: none;
     }
 
     .gap-large {
@@ -1237,6 +1242,11 @@ css =
         gap: 4px;
     }
 
+    .column.gap-tiny .row.gap-medium {
+        column-gap: 12px;
+        row-gap: 4px;
+    }
+
     .icon-font {
         font-family: "Pathfinder-Icons";
         font-variant-caps: normal;
@@ -1249,8 +1259,13 @@ css =
         font-size: 24px;
         font-variant: small-caps;
         font-weight: 700;
+        gap: 8px;
         justify-content: space-between;
         padding: 4px 9px;
+    }
+
+    .title-type {
+        text-align: right;
     }
 
     .trait {
@@ -1258,13 +1273,9 @@ css =
         border-style: double;
         border-width: 2px;
         background-color: #522e2c;
-        padding: 5px;
+        padding: 3px 5px;
         font-variant: small-caps;
         font-weight: 700;
-    }
-
-    .traitrow {
-        gap: 0;
     }
 
     .trait-alignment {
