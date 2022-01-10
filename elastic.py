@@ -110,7 +110,7 @@ def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type_: 
     doc.id = id
     doc.url = build_url(url, id, url_params)
     doc.category = category
-    doc.name = title.get_text(strip=True)
+    doc.name = name
     doc['type'] = title_type or type_
     doc.text = title.parent.get_text(' ', strip=True)
     doc.source = get_label_text(soup, 'Source')
