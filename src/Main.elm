@@ -13,25 +13,12 @@ import Json.Encode as Encode
 import Maybe.Extra
 import Process
 import Regex
+import String.Extra
 import Task
 import Url exposing (Url)
+import Url.Builder
 import Url.Parser
 import Url.Parser.Query
-
-
-type alias Query =
-    { fulltext : List String
-    , must : List ( String, String )
-    , mustNot : List ( String, String )
-    , comparisons : List ( String, Comparison, Int )
-    }
-
-
-type QueryPart
-    = Fulltext String
-    | Must String String
-    | MustNot String String
-    | Comparison String Comparison Int
 
 
 type alias Hit a =
@@ -69,13 +56,6 @@ type alias Document =
     , usage : Maybe String
     , prerequisites : Maybe String
     }
-
-
-type Comparison
-    = GT
-    | GE
-    | LT
-    | LE
 
 
 type alias Flags =
@@ -120,23 +100,30 @@ type Category
     | Other
 
 
+type QueryType
+    = Standard
+    | ElasticsearchQueryString
+
+
 type Msg
     = NoOp
-    | QueryChanged String
     | GotSearchResult (Result Http.Error (List (Hit Document)))
+    | QueryChanged String
+    | QueryTypeSelected QueryType
     | UrlChanged Url
     | UrlRequested Browser.UrlRequest
     | DebouncePassed Int
 
 
 type alias Model =
-    { query : String
-    , searchResult : Maybe (Result Http.Error (List (Hit Document)))
-    , navKey : Browser.Navigation.Key
-    , debounce : Int
-    , url : Url
+    { debounce : Int
     , elasticUrl : String
+    , navKey : Browser.Navigation.Key
+    , query : String
+    , queryType : QueryType
+    , searchResult : Maybe (Result Http.Error (List (Hit Document)))
     , tracker : Maybe Int
+    , url : Url
     }
 
 
@@ -154,14 +141,16 @@ main =
 
 init : Flags -> Url -> Browser.Navigation.Key -> ( Model, Cmd Msg )
 init flags url navKey =
-    ( { query = getQueryFromParam url
-      , searchResult = Nothing
-      , navKey = navKey
-      , debounce = 0
-      , url = url
+    ( { debounce = 0
       , elasticUrl = flags.elasticUrl
+      , navKey = navKey
+      , query = ""
+      , queryType = Standard
+      , searchResult = Nothing
       , tracker = Nothing
+      , url = url
       }
+        |> updateModelFromQueryString url
     , Cmd.none
     )
         |> searchWithCurrentQuery
@@ -174,14 +163,12 @@ update msg model =
             ( model, Cmd.none )
 
         QueryChanged str ->
-            if String.isEmpty str then
+            if String.isEmpty (String.trim str) then
                 ( { model
                     | query = str
                     , searchResult = Nothing
                   }
-                , setQueryParam "" model.url
-                    |> Url.toString
-                    |> Browser.Navigation.pushUrl model.navKey
+                , updateUrl model str model.queryType
                 )
 
             else
@@ -196,9 +183,7 @@ update msg model =
         DebouncePassed debounce ->
             if model.debounce == debounce then
                 ( model
-                , setQueryParam model.query model.url
-                    |> Url.toString
-                    |> Browser.Navigation.pushUrl model.navKey
+                , updateUrl model model.query model.queryType
                 )
 
             else
@@ -212,8 +197,13 @@ update msg model =
             , Cmd.none
             )
 
+        QueryTypeSelected queryType ->
+            ( model
+            , updateUrl model model.query queryType
+            )
+
         UrlChanged url ->
-            ( { model | query = getQueryFromParam url }
+            ( updateModelFromQueryString url model
             , Cmd.none
             )
                 |> searchWithCurrentQuery
@@ -231,263 +221,168 @@ update msg model =
                     )
 
 
-parseQueryParts : String -> List QueryPart
-parseQueryParts str =
-    List.map
-        (\part ->
-            if String.contains ">=" part then
-                case String.split ">=" part of
-                    [ field, value ] ->
-                        case String.toInt value of
-                            Just int ->
-                                Comparison field GE int
-
-                            Nothing ->
-                                Fulltext part
-
-                    _ ->
-                        Fulltext part
-
-            else if String.contains "<=" part then
-                case String.split "<=" part of
-                    [ field, value ] ->
-                        case String.toInt value of
-                            Just int ->
-                                Comparison field LE int
-
-                            Nothing ->
-                                Fulltext part
-
-                    _ ->
-                        Fulltext part
-
-            else if String.contains ">" part then
-                case String.split ">" part of
-                    [ field, value ] ->
-                        case String.toInt value of
-                            Just int ->
-                                Comparison field GT int
-
-                            Nothing ->
-                                Fulltext part
-
-                    _ ->
-                        Fulltext part
-
-            else if String.contains "<" part then
-                case String.split "<" part of
-                    [ field, value ] ->
-                        case String.toInt value of
-                            Just int ->
-                                Comparison field LT int
-
-                            Nothing ->
-                                Fulltext part
-
-                    _ ->
-                        Fulltext part
-
-            else if String.contains "!=" part then
-                case String.split "!=" part of
-                    [ field, value ] ->
-                        MustNot field value
-
-                    _ ->
-                        Fulltext part
-
-            else if String.contains "=" part then
-                case String.split "=" part of
-                    [ field, value ] ->
-                        Must field value
-
-                    _ ->
-                        Fulltext part
-
-            else
-                Fulltext part
-        )
-        (String.split " " str)
-
-
-buildQuery : List QueryPart -> Query
-buildQuery parts =
-    List.foldl
-        (\part query ->
-            case part of
-                Fulltext str ->
-                    { query | fulltext = List.append query.fulltext [str] }
-
-                Must field value ->
-                    { query | must =  ( field, value ) :: query.must }
-
-                MustNot field value ->
-                    { query | mustNot = ( field, value ) :: query.mustNot }
-
-                Comparison field operator value ->
-                    { query | comparisons = ( field, operator, value ) :: query.comparisons }
-
-        )
-        { fulltext = []
-        , must = []
-        , mustNot = []
-        , comparisons = []
-        }
-        parts
-        |> (\query ->
-                { query | fulltext = List.filter (not << String.isEmpty) query.fulltext }
-            )
-
-
-setQueryParam : String -> Url -> Url
-setQueryParam value url =
+updateUrl : Model -> String -> QueryType -> Cmd Msg
+updateUrl { url, navKey } query queryType =
     { url
         | query =
-            if value /= "" then
-                Just ("q=" ++ Url.percentEncode value)
+            [ ( "q", query )
+            , ( "type"
+              , case queryType of
+                    Standard ->
+                        ""
 
-            else
-                Nothing
+                    ElasticsearchQueryString ->
+                        "eqs"
+              )
+            ]
+                |> List.filter (Tuple.second >> String.isEmpty >> not)
+                |> List.map (\(key, val) -> Url.Builder.string key val)
+                |> Url.Builder.toQuery
+                |> String.dropLeft 1
+                |> String.Extra.nonEmpty
     }
+        |> Url.toString
+        |> Browser.Navigation.pushUrl navKey
 
 
-buildSearchBody : String -> Encode.Value
-buildSearchBody queryString =
-    let
-        query =
-            buildQuery (parseQueryParts queryString)
-    in
+buildSearchBody : String -> QueryType -> Encode.Value
+buildSearchBody queryString queryType =
     Encode.object
         [ ( "query"
           , Encode.object
                 [ ( "bool"
                   , encodeObjectMaybe
-                        [ if List.isEmpty query.fulltext then
-                            Nothing
-
-                          else
-                            Just
+                        [ Just
                             ( "should"
                             , Encode.list Encode.object
-                                [ [ ( "match_phrase"
-                                    , Encode.object
-                                        [ ( "name"
-                                          , Encode.object
-                                                [ ( "query"
-                                                  , Encode.string (String.join " " query.fulltext)
+                                (case queryType of
+                                    Standard ->
+                                        [ [ ( "match_phrase"
+                                            , Encode.object
+                                                [ ( "name"
+                                                  , Encode.object
+                                                        [ ( "query"
+                                                          , Encode.string queryString
+                                                          )
+                                                        , ( "boost", Encode.int 10 )
+                                                        ]
                                                   )
-                                                , ( "boost", Encode.int 10 )
                                                 ]
-                                          )
-                                        ]
-                                    )
-                                  ]
-                                , [ ( "match_phrase_prefix"
-                                  , Encode.object
-                                        [ ( "name"
+                                            )
+                                          ]
+                                        , [ ( "match_phrase_prefix"
                                           , Encode.object
-                                                [ ( "query"
-                                                  , Encode.string (String.join " " query.fulltext)
+                                                [ ( "name"
+                                                  , Encode.object
+                                                        [ ( "query"
+                                                          , Encode.string queryString
+                                                          )
+                                                        , ( "boost", Encode.int 5 )
+                                                        ]
                                                   )
-                                                , ( "boost", Encode.int 5 )
                                                 ]
                                           )
-                                        ]
-                                  )
-                                  ]
-                                , [ ( "multi_match"
-                                    , Encode.object
-                                        [ ( "query"
-                                          , Encode.string (String.join " " query.fulltext)
-                                          )
-                                        , ( "type", Encode.string "most_fields" )
-                                        , ( "fields"
-                                          , Encode.list
-                                                Encode.string
-                                                [ "*"
-                                                , "type^4"
-                                                , "name^5"
-                                                , "traits^2"
-                                                , "description^0.2"
-                                                , "text^0.2"
+                                          ]
+                                        , [ ( "multi_match"
+                                            , Encode.object
+                                                [ ( "query"
+                                                  , Encode.string queryString
+                                                  )
+                                                , ( "type", Encode.string "most_fields" )
+                                                , ( "fields"
+                                                  , Encode.list
+                                                        Encode.string
+                                                        [ "*"
+                                                        , "type^4"
+                                                        , "name^5"
+                                                        , "traits^2"
+                                                        , "text^0.2"
+                                                        ]
+                                                  )
                                                 ]
-                                          )
-                                        ]
-                                    )
-                                  ]
-                                , [ ( "multi_match"
-                                    , Encode.object
-                                        [ ( "query"
-                                          , Encode.string (String.join " " query.fulltext)
-                                          )
-                                        , ( "fuzziness", Encode.string "auto" )
-                                        , ( "type", Encode.string "most_fields" )
-                                        , ( "fields"
-                                          , Encode.list
-                                                Encode.string
-                                                [ "*"
-                                                , "type^4"
-                                                , "name^5"
-                                                , "traits^2"
-                                                , "description^0.2"
-                                                , "text^0.2"
+                                            )
+                                          ]
+                                        , [ ( "multi_match"
+                                            , Encode.object
+                                                [ ( "query"
+                                                  , Encode.string queryString
+                                                  )
+                                                , ( "fuzziness", Encode.string "auto" )
+                                                , ( "type", Encode.string "most_fields" )
+                                                , ( "fields"
+                                                  , Encode.list
+                                                        Encode.string
+                                                        [ "*"
+                                                        , "type^4"
+                                                        , "name^5"
+                                                        , "traits^2"
+                                                        , "text^0.2"
+                                                        ]
+                                                  )
                                                 ]
-                                          )
+                                            )
+                                          ]
                                         ]
-                                    )
-                                  ]
-                                ]
+
+                                    ElasticsearchQueryString ->
+                                        [ [ ( "query_string"
+                                            , Encode.object
+                                                [ ( "query"
+                                                  , Encode.string queryString
+                                                  )
+                                                , ( "default_operator", Encode.string "AND" )
+                                                , ( "fields"
+                                                  , Encode.list
+                                                        Encode.string
+                                                        [ "*"
+                                                        , "type^4"
+                                                        , "name^5"
+                                                        , "traits^2"
+                                                        , "text^0.2"
+                                                        ]
+                                                  )
+                                                ]
+                                            )
+                                          ]
+                                        ]
+                                )
                             )
 
-                        , if List.isEmpty query.must && List.isEmpty query.comparisons then
-                            Nothing
+                        -- , if List.isEmpty query.must then
+                        --     Nothing
 
-                          else
-                            Just
-                                ( "filter"
-                                , Encode.list Encode.object
-                                    (List.append
-                                        (List.map
-                                            (\( field, value ) ->
-                                                ( "term"
-                                                , Encode.object [ ( field, Encode.string value ) ]
-                                                )
-                                            )
-                                            query.must
-                                        )
-                                        (List.map
-                                            (\( field, comparison, value ) ->
-                                                ( "range"
-                                                , Encode.object
-                                                    [ ( field
-                                                      , Encode.object
-                                                            [ ( comparisonToString comparison, Encode.int value ) ]
-                                                      )
-                                                    ]
-                                                )
-                                            )
-                                            query.comparisons
-                                        )
-                                        |> List.map List.singleton
-                                    )
-                                )
+                        --   else
+                        --     Just
+                        --         ( "filter"
+                        --         , Encode.list Encode.object
+                        --             (List.map
+                        --                 (\( field, value ) ->
+                        --                     ( "term"
+                        --                     , Encode.object [ ( field, Encode.string value ) ]
+                        --                     )
+                        --                 )
+                        --                 query.must
+                        --                 |> List.map List.singleton
+                        --             )
+                        --         )
 
-                        , if List.isEmpty query.mustNot then
-                            Nothing
+                        -- , if List.isEmpty query.mustNot then
+                        --     Nothing
 
-                          else
-                            Just
-                                ( "must_not"
-                                , Encode.list Encode.object
-                                    (List.map
-                                          (\( field, value ) ->
-                                              ( "term"
-                                              , Encode.object [ ( field, Encode.string value ) ]
-                                              )
-                                          )
-                                          query.mustNot
-                                          |> List.map List.singleton
-                                    )
-                                )
+                        --   else
+                        --     Just
+                        --         ( "must_not"
+                        --         , Encode.list Encode.object
+                        --             (List.map
+                        --                 (\( field, value ) ->
+                        --                     ( "term"
+                        --                     , Encode.object [ ( field, Encode.string value ) ]
+                        --                     )
+                        --                 )
+                        --                 query.mustNot
+                        --                 |> List.map List.singleton
+                        --             )
+                        --         )
                         ]
                   )
                 ]
@@ -496,10 +391,24 @@ buildSearchBody queryString =
         ]
 
 
-getQueryFromParam : Url -> String
-getQueryFromParam url =
+updateModelFromQueryString : Url -> Model -> Model
+updateModelFromQueryString url model =
+    { model
+        | query = getQueryParam url "q"
+        , queryType =
+            case getQueryParam url "type" of
+                "eqs" ->
+                    ElasticsearchQueryString
+
+                _ ->
+                    Standard
+    }
+
+
+getQueryParam : Url -> String -> String
+getQueryParam url param =
     { url | path = "" }
-        |> Url.Parser.parse (Url.Parser.query (Url.Parser.Query.string "q"))
+        |> Url.Parser.parse (Url.Parser.query (Url.Parser.Query.string param))
         |> Maybe.Extra.join
         |> Maybe.withDefault ""
 
@@ -535,7 +444,7 @@ searchWithCurrentQuery ( model, cmd ) =
                 { method = "POST"
                 , url = model.elasticUrl ++ "/_search"
                 , headers = []
-                , body = Http.jsonBody (buildSearchBody model.query)
+                , body = Http.jsonBody (buildSearchBody model.query model.queryType)
                 , expect = Http.expectJson GotSearchResult esResultDecoder
                 , timeout = Just 10000
                 , tracker = Just ("search-" ++ String.fromInt newTracker)
@@ -740,15 +649,6 @@ getUrl doc =
     "https://2e.aonprd.com/" ++ doc.url
 
 
-comparisonToString : Comparison -> String
-comparisonToString comparison =
-    case comparison of
-        GT -> "gt"
-        GE -> "gte"
-        LT -> "lt"
-        LE -> "lte"
-
-
 view : Model -> Browser.Document Msg
 view model =
     { title =
@@ -812,13 +712,46 @@ viewTitle =
 
 viewQuery : Model -> Html Msg
 viewQuery model =
-    Html.input
-        [ HE.onInput QueryChanged
-        , HA.value model.query
-        , HA.placeholder "Enter search query..."
-        , HA.autofocus True
+    Html.div
+        [ HA.class "column"
+        , HA.class "gap-tiny"
+        , HA.class "align-center"
         ]
-        [ Html.text model.query ]
+        [ Html.input
+            [ HE.onInput QueryChanged
+            , HA.value model.query
+            , HA.placeholder "Enter search query..."
+            , HA.autofocus True
+            , HA.style "width" "100%"
+            ]
+            [ Html.text model.query ]
+
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
+            ]
+            [ Html.label
+                []
+                [ Html.input
+                    [ HA.type_ "radio"
+                    , HA.checked (model.queryType == Standard)
+                    , HE.onInput (\_ -> QueryTypeSelected Standard)
+                    ]
+                    []
+                , Html.text "Standard Query"
+                ]
+            , Html.label
+                []
+                [ Html.input
+                    [ HA.type_ "radio"
+                    , HA.checked (model.queryType == ElasticsearchQueryString)
+                    , HE.onInput (\_ -> QueryTypeSelected ElasticsearchQueryString)
+                    ]
+                    []
+                , Html.text "Elasticsearch Query String"
+                ]
+            ]
+        ]
 
 
 
@@ -831,12 +764,26 @@ viewSearchResults model =
 
     else
         case model.searchResult of
+            Just (Ok []) ->
+                Html.div
+                    [ HA.style "font-size" "24px"
+                    ]
+                    [ Html.text "No matches"
+                    ]
+
             Just (Ok hits) ->
                 Html.div
                     [ HA.class "column"
                     , HA.class "gap-large"
                     ]
                     (List.map viewSingleSearchResult hits)
+
+            Just (Err (Http.BadStatus 400)) ->
+                Html.div
+                    [ HA.style "font-size" "24px"
+                    ]
+                    [ Html.text "Error: Failed to parse query"
+                    ]
 
             _ ->
                 Html.text ""
