@@ -82,12 +82,14 @@ def main():
                 'rituals': parse_ritual,
                 'rules': parse_rules,
                 'shields': parse_shield,
+                'siege-weapons': parse_siege_weapon,
                 'skills': parse_skill,
                 'sources': parse_source,
                 'spells': parse_spell,
                 'styles': parse_style,
                 'tenets': parse_tenet,
                 'traits': parse_trait,
+                'vehicles': parse_vehicle,
                 'ways': parse_way,
                 'weapon-groups': parse_weapon_group,
                 'weapons': parse_weapon,
@@ -725,6 +727,14 @@ def parse_shield(id: str, soup: BeautifulSoup):
     doc.save()
 
 
+def parse_siege_weapon(id: str, soup: BeautifulSoup):
+    doc = parse_generic(id, soup, 'siege-weapon', 'SiegeWeapons', 'Siege Weapon')
+
+    doc.traits = get_traits(soup)
+
+    doc.save()
+
+
 def parse_skill(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'skill', 'Skills', 'Skill')
 
@@ -771,14 +781,22 @@ def parse_style(id: str, soup: BeautifulSoup):
     doc.save()
 
 
+def parse_tenet(id: str, soup: BeautifulSoup):
+    doc = parse_generic(id, soup, 'tenet', 'Tenets', 'Champion Tenet')
+
+    doc.save()
+
+
 def parse_trait(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'trait', 'Traits', 'Trait')
 
     doc.save()
 
 
-def parse_tenet(id: str, soup: BeautifulSoup):
-    doc = parse_generic(id, soup, 'tenet', 'Tenets', 'Champion Tenet')
+def parse_vehicle(id: str, soup: BeautifulSoup):
+    doc = parse_generic(id, soup, 'vehicle', 'Vehicles', 'Vehicle')
+
+    doc.traits = get_traits(soup)
 
     doc.save()
 
@@ -850,7 +868,7 @@ def get_traits(soup: BeautifulSoup):
         if node.name == 'span' and 'class' in node.attrs and node['class'][0].startswith('trait'):
             traits.append(node.text)
 
-        elif traits and node.name in ['h2', 'h3']:
+        elif (traits and node.name in ['h1', 'h2']) or node.name in ['h3']:
             break
 
     return traits
@@ -1063,9 +1081,7 @@ class Doc(Document):
     level = Integer()
     category = Keyword()
     type_ = Keyword()
-    description = Text()
     text = Text()
-    traits = Keyword()
 
     class Index:
         name = 'aon'
