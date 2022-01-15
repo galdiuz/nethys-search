@@ -245,6 +245,15 @@ updateUrl { url, navKey } query queryType =
         |> Browser.Navigation.pushUrl navKey
 
 
+searchFields : List String
+searchFields =
+    [ "name"
+    , "text^0.1"
+    , "traits"
+    , "type"
+    ]
+
+
 buildSearchBody : String -> QueryType -> Encode.Value
 buildSearchBody queryString queryType =
     Encode.object
@@ -257,138 +266,68 @@ buildSearchBody queryString queryType =
                             , Encode.list Encode.object
                                 (case queryType of
                                     Standard ->
-                                        [ [ ( "match_phrase"
-                                            , Encode.object
-                                                [ ( "name"
-                                                  , Encode.object
-                                                        [ ( "query"
-                                                          , Encode.string queryString
-                                                          )
-                                                        , ( "boost", Encode.int 10 )
-                                                        ]
-                                                  )
-                                                ]
-                                            )
-                                          ]
-                                        , [ ( "match_phrase_prefix"
-                                          , Encode.object
-                                                [ ( "name"
-                                                  , Encode.object
-                                                        [ ( "query"
-                                                          , Encode.string queryString
-                                                          )
-                                                        , ( "boost", Encode.int 5 )
-                                                        ]
-                                                  )
-                                                ]
-                                          )
-                                          ]
-                                        , [ ( "multi_match"
-                                            , Encode.object
-                                                [ ( "query"
-                                                  , Encode.string queryString
-                                                  )
-                                                , ( "type", Encode.string "most_fields" )
-                                                , ( "fields"
-                                                  , Encode.list
-                                                        Encode.string
-                                                        [ "*"
-                                                        , "type^4"
-                                                        , "name^5"
-                                                        , "traits^2"
-                                                        , "text^0.2"
-                                                        ]
-                                                  )
-                                                ]
-                                            )
-                                          ]
-                                        , [ ( "multi_match"
-                                            , Encode.object
-                                                [ ( "query"
-                                                  , Encode.string queryString
-                                                  )
-                                                , ( "fuzziness", Encode.string "auto" )
-                                                , ( "type", Encode.string "most_fields" )
-                                                , ( "fields"
-                                                  , Encode.list
-                                                        Encode.string
-                                                        [ "*"
-                                                        , "type^4"
-                                                        , "name^5"
-                                                        , "traits^2"
-                                                        , "text^0.2"
-                                                        ]
-                                                  )
-                                                ]
-                                            )
-                                          ]
-                                        ]
+                                        buildStandardQueryBody queryString
 
                                     ElasticsearchQueryString ->
-                                        [ [ ( "query_string"
-                                            , Encode.object
-                                                [ ( "query"
-                                                  , Encode.string queryString
-                                                  )
-                                                , ( "default_operator", Encode.string "AND" )
-                                                , ( "fields"
-                                                  , Encode.list
-                                                        Encode.string
-                                                        [ "*"
-                                                        , "type^4"
-                                                        , "name^5"
-                                                        , "traits^2"
-                                                        , "text^0.2"
-                                                        ]
-                                                  )
-                                                ]
-                                            )
-                                          ]
-                                        ]
+                                        buildElasticsearchQueryStringQueryBody queryString
                                 )
                             )
-
-                        -- , if List.isEmpty query.must then
-                        --     Nothing
-
-                        --   else
-                        --     Just
-                        --         ( "filter"
-                        --         , Encode.list Encode.object
-                        --             (List.map
-                        --                 (\( field, value ) ->
-                        --                     ( "term"
-                        --                     , Encode.object [ ( field, Encode.string value ) ]
-                        --                     )
-                        --                 )
-                        --                 query.must
-                        --                 |> List.map List.singleton
-                        --             )
-                        --         )
-
-                        -- , if List.isEmpty query.mustNot then
-                        --     Nothing
-
-                        --   else
-                        --     Just
-                        --         ( "must_not"
-                        --         , Encode.list Encode.object
-                        --             (List.map
-                        --                 (\( field, value ) ->
-                        --                     ( "term"
-                        --                     , Encode.object [ ( field, Encode.string value ) ]
-                        --                     )
-                        --                 )
-                        --                 query.mustNot
-                        --                 |> List.map List.singleton
-                        --             )
-                        --         )
                         ]
                   )
                 ]
           )
         , ( "size", Encode.int 100 )
         ]
+
+
+buildStandardQueryBody : String -> List (List ( String, Encode.Value ))
+buildStandardQueryBody queryString =
+    [ [ ( "match_phrase_prefix"
+        , Encode.object
+            [ ( "name"
+              , Encode.object
+                    [ ( "query", Encode.string queryString )
+                    ]
+              )
+            ]
+        )
+      ]
+    , [ ( "bool"
+        , Encode.object
+            [ ( "must"
+              , Encode.list Encode.object
+                    (List.map
+                        (\word ->
+                            [ ( "multi_match"
+                              , Encode.object
+                                    [ ( "query", Encode.string word )
+                                    , ( "type", Encode.string "best_fields" )
+                                    , ( "fields", Encode.list Encode.string searchFields )
+                                    , ( "fuzziness", Encode.string "auto" )
+                                    ]
+                              )
+                            ]
+                        )
+                        (String.words queryString)
+                    )
+              )
+            ]
+        )
+      ]
+    ]
+
+
+buildElasticsearchQueryStringQueryBody : String -> List (List ( String, Encode.Value ))
+buildElasticsearchQueryStringQueryBody queryString =
+    [ [ ( "query_string"
+        , Encode.object
+            [ ( "query", Encode.string queryString )
+            , ( "default_operator", Encode.string "AND" )
+            , ( "fields", Encode.list Encode.string searchFields )
+            ]
+        )
+      ]
+    ]
 
 
 updateModelFromQueryString : Url -> Model -> Model
@@ -1109,6 +1048,9 @@ viewTrait trait =
 
             "Gargantuan" ->
                 HA.class "trait-size"
+
+            "No Alignment" ->
+                HA.class "trait-alignment"
 
             "LG" ->
                 HA.class "trait-alignment"
