@@ -131,8 +131,9 @@ def parse_action(id: str, soup: BeautifulSoup):
 
     doc = parse_generic(id, soup, 'action', 'Actions', 'Action')
 
-    if title.img:
-        doc.actions = title.img['alt']
+    doc['type'] = 'Action'
+
+    doc.actions = get_actions_from_title(title)
     doc.cost = get_label_text(soup, 'Cost')
     # doc.description = get_description(title)
     doc.frequency = get_label_text(soup, 'Frequency')
@@ -146,6 +147,8 @@ def parse_action(id: str, soup: BeautifulSoup):
 def parse_ancestry(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'ancestry', 'Ancestries', 'Ancestry')
 
+    doc.name = soup.find('h1', class_='title').text
+    doc['type'] = 'Ancestry'
     doc.traits = get_traits(soup)
 
     doc.save()
@@ -846,12 +849,12 @@ def get_title_data(title: BeautifulSoup):
 
     if len(strings) > 1:
         split = strings[-1].split()
-        if len(split) >= 2 and split[-1].rstrip('+').isnumeric():
+        if len(split) >= 2 and split[-1].strip('+-').isnumeric():
             type_ = ' '.join(split[0:-1])
             level = split[-1]
 
         else:
-            type_ = strings[-1]
+            type_ = strings[-1].replace(' Level Varies', '')
             level = None
 
     else:
