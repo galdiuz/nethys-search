@@ -42,6 +42,7 @@ def main():
                 'armor': parse_armor,
                 'armor-groups': parse_armor_group,
                 'backgrounds': parse_background,
+                'bloodlines': parse_bloodline,
                 'causes': parse_cause,
                 'class-kits': parse_class_kit,
                 'class-samples': parse_class_sample,
@@ -253,6 +254,12 @@ def parse_background(id: str, soup: BeautifulSoup):
 
     doc.region = get_label_text(soup, 'Region')
     doc.traits = get_traits(soup)
+
+    doc.save()
+
+
+def parse_bloodline(id: str, soup: BeautifulSoup):
+    doc = parse_generic(id, soup, 'bloodline', 'Bloodlines', 'Sorcerer Bloodline')
 
     doc.save()
 
