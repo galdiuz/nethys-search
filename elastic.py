@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from bs4 import BeautifulSoup
-from elasticsearch_dsl import Document, Integer, Text, Keyword
+from elasticsearch_dsl import Document, Integer, Keyword, Object, Text
 from elasticsearch_dsl.connections import connections
 import re
 import os
@@ -104,7 +104,7 @@ def build_url(category: str, id: int, params: [str] = []) -> str:
     return f'{category}.aspx?' + '&'.join([f"ID={id}"] + params)
 
 
-def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type_: str, url_params: [str] = []):
+def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type: str, url_params: [str] = []):
     title = soup.find('h1', class_='title')
 
     name, title_type, level = get_title_data(title)
@@ -115,7 +115,7 @@ def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type_: 
     doc.url = build_url(url, id, url_params)
     doc.category = category
     doc.name = name
-    doc['type'] = title_type or type_
+    doc.type = title_type or type
     doc.text = title.parent.get_text(' ', strip=True)
     doc.source = get_label_text(soup, 'Source')
     doc.spoilers = get_spoilers(soup)
@@ -131,15 +131,16 @@ def parse_action(id: str, soup: BeautifulSoup):
         return
 
     doc = parse_generic(id, soup, 'action', 'Actions', 'Action')
+    traits = get_traits(soup)
 
-    doc['type'] = 'Action'
+    doc.type = 'Action'
 
     doc.actions = get_actions_from_title(title)
     doc.cost = get_label_text(soup, 'Cost')
-    # doc.description = get_description(title)
     doc.frequency = get_label_text(soup, 'Frequency')
     doc.requirements = get_label_text(soup, 'Requirements')
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
     doc.trigger = get_label_text(soup, 'Trigger')
 
     doc.save()
@@ -147,18 +148,22 @@ def parse_action(id: str, soup: BeautifulSoup):
 
 def parse_ancestry(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'ancestry', 'Ancestries', 'Ancestry')
+    traits = get_traits(soup)
 
     doc.name = soup.find('h1', class_='title').text
-    doc['type'] = 'Ancestry'
-    doc.traits = get_traits(soup)
+    doc.type = 'Ancestry'
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
 
 def parse_animal_companion(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'animal-companion', 'AnimalCompanions', 'Animal Companion')
+    traits = get_traits(soup)
 
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
@@ -172,8 +177,10 @@ def parse_animal_companion_advanced(id: str, soup: BeautifulSoup):
         'Animal Companion Advanced Option',
         ['Advanced=true'],
     )
+    traits = get_traits(soup)
 
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
@@ -200,8 +207,10 @@ def parse_animal_companion_unique(id: str, soup: BeautifulSoup):
         'Unique Animal Companion',
         ['Unique=true'],
     )
+    traits = get_traits(soup)
 
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
@@ -228,9 +237,10 @@ def parse_armor(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'armor', 'Armor', 'Armor')
 
     price = get_label_text(soup, 'Price')
+    traits = split_comma(get_label_text(soup, 'Traits', '—'))
 
-    doc.price = price
-    doc.normalized_price = parse_price(price)
+    doc.price.normalized = normalize_price(price)
+    doc.price.raw = price
     doc.acBonus = get_label_text(soup, 'AC Bonus')
     doc.dexCap = get_label_text(soup, 'Dex Cap')
     doc.checkPenalty = get_label_text(soup, 'Check Penalty')
@@ -238,7 +248,8 @@ def parse_armor(id: str, soup: BeautifulSoup):
     doc.strength = get_label_text(soup, 'Strength')
     doc.bulk = get_label_text(soup, 'Bulk')
     doc.armorGroup = get_label_text(soup, 'Group')
-    doc.traits = split_comma(get_label_text(soup, 'Traits', '—'))
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
@@ -251,9 +262,11 @@ def parse_armor_group(id: str, soup: BeautifulSoup):
 
 def parse_background(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'background', 'Backgrounds', 'Background')
+    traits = get_traits(soup)
 
     doc.region = get_label_text(soup, 'Region')
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
@@ -268,17 +281,22 @@ def parse_cause(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'cause', 'Causes', 'Champion Cause')
 
     title = soup.find('h1', class_='title')
+    alignment = ''.join([word[0] for word in title.text.split('[')[1].strip(']').split()])
 
     doc.name = title.text.split('[')[0].strip()
-    doc.alignment = ''.join([word[0] for word in title.text.split('[')[1].strip(']').split()])
+    doc.alignment = alignment
+    doc.traits.normalized = normalize_traits([alignment])
+    doc.traits.raw = [alignment]
 
     doc.save()
 
 
 def parse_class(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'class', 'Classes', 'Class')
+    traits = get_traits(soup)
 
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
@@ -303,8 +321,10 @@ def parse_condition(id: str, soup: BeautifulSoup):
 
 def parse_curse(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'curse', 'Curses', 'Curse')
+    traits = get_traits(soup)
 
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
     doc.usage = get_label_text(soup, 'Usage')
 
     doc.save()
@@ -316,12 +336,12 @@ def parse_deity(id: str, soup: BeautifulSoup):
     title = soup.find('h1', class_='title')
 
     doc.name = title.text.split('[')[0].strip()
+    alignment = title.text.split('[')[1].strip(']')
 
-    doc.alignment = title.text.split('[')[1].strip(']')
+    doc.alignment = alignment
     doc.anathema = get_label_text(soup, 'Anathema')
     doc.areasOfConcern = get_label_text(soup, 'Areas of Concern')
     doc.clericSpells = get_label_text(soup, 'Cleric Spells')
-    # doc.description = get_description(title)
     doc.divineAbility = get_label_text(soup, 'Divine Ability')
     doc.divineFont = get_label_text(soup, 'Divine Font')
     doc.divineSkill = get_label_text(soup, 'Divine Skill')
@@ -329,12 +349,15 @@ def parse_deity(id: str, soup: BeautifulSoup):
     doc.edicts = get_label_text(soup, 'Edicts')
     doc.favoredWeapon = get_label_text(soup, 'Favored Weapon')
     doc.followerAlignments = split_comma(get_label_text(soup, 'Follower Alignments'))
+    doc.traits.normalized = normalize_traits([alignment])
+    doc.traits.raw = [alignment]
 
     doc.save()
 
 
 def parse_disease(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'disease', 'Diseases', 'Disease')
+    traits = get_traits(soup)
 
     doc.savingThrow = get_label_text(soup, 'Saving Throw')
     doc.onset = get_label_text(soup, 'Onset')
@@ -345,7 +368,8 @@ def parse_disease(id: str, soup: BeautifulSoup):
     doc.stage5 = get_label_text(soup, 'Stage 5')
     doc.stage6 = get_label_text(soup, 'Stage 6')
     doc.stage7 = get_label_text(soup, 'Stage 7')
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
@@ -362,7 +386,6 @@ def parse_domain(id: str, soup: BeautifulSoup):
     doc.advancedDomainSpell = get_label_text(soup, 'Advanced Domain Spell')
     doc.deities = split_comma(get_label_text(soup, 'Deities'))
     doc.domainSpell = get_label_text(soup, 'Domain Spell')
-    # doc.description = get_description(title)
 
     doc.save()
 
@@ -375,6 +398,7 @@ def parse_druidic_order(id: str, soup: BeautifulSoup):
 
 def parse_eidolon(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'eidolon', 'Eidolons', 'Summoner Eidolon')
+    traits = get_traits(soup)
 
     doc.homePlane = get_label_text(soup, 'Home Plane')
     doc.languages = get_label_text(soup, 'Languages')
@@ -383,14 +407,15 @@ def parse_eidolon(id: str, soup: BeautifulSoup):
     doc.skills = split_comma(get_label_text(soup, 'Skills'))
     doc.speed = get_label_text(soup, 'Speed')
     doc.tradition = get_label_text(soup, 'Tradition')
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
 
 def parse_equipment(id: str, soup: BeautifulSoup):
     title = soup.find('h1', class_='title')
-    name, type_, level = get_title_data(title)
+    name, type, level = get_title_data(title)
     has_sub_items = level[-1] == '+'
 
     if has_sub_items:
@@ -400,39 +425,37 @@ def parse_equipment(id: str, soup: BeautifulSoup):
 
             doc = parse_generic(id, soup, 'equipment', 'Equipment', 'Equipment')
 
-            name, type_, level = get_title_data(sub_title)
+            name, type, level = get_title_data(sub_title)
+            traits = get_traits(sub_title) or get_traits(soup)
 
             doc.meta.id = 'equipment-' + id + '-' + str(idx)
             doc.name = name
-            doc['type'] = type_
+            doc.type = type
             doc.level = level
             price = get_label_text(sub_title, 'Price')
-            doc.price = price
-            doc.normalized_price = parse_price(price)
+            doc.price.normalized = normalize_price(price)
+            doc.price.raw = price
             doc.hands = get_label_text(sub_title, 'Hands')
             doc.bulk = get_label_text(sub_title, 'Bulk')
             doc.usage = get_label_text(soup, 'Usage')
             doc.activate = get_actions(soup, 'Activate')
-            doc.traits = get_traits(sub_title) or get_traits(soup)
-
-            # doc.description = join_and_strip([
-            #     get_description(title),
-            #     get_sub_item_description(sub_title)
-            # ])
+            doc.traits.normalized = normalize_traits(traits)
+            doc.traits.raw = traits
 
             doc.save()
 
     else:
         doc = parse_generic(id, soup, 'equipment', 'Equipment', 'Equipment')
+        traits = get_traits(soup)
 
         price = get_label_text(title, 'Price')
-        doc.price = price
-        doc.normalized_price = parse_price(price)
+        doc.price.normalized = normalize_price(price)
+        doc.price.raw = price
         doc.hands = get_label_text(title, 'Hands')
         doc.bulk = get_label_text(title, 'Bulk')
         doc.usage = get_label_text(soup, 'Usage')
-        # doc.description = get_description(title)
-        doc.traits = get_traits(soup)
+        doc.traits.normalized = normalize_traits(traits)
+        doc.traits.raw = traits
 
         doc.save()
 
@@ -454,10 +477,12 @@ def parse_familiar_specific(id: str, soup: BeautifulSoup):
         'Specific Familiar',
         ['Specific=true']
     )
+    traits = get_traits(soup)
 
     doc.abilities = split_comma(get_label_text(soup, 'Granted Abilities'))
     doc.requiredAbilities = get_label_text(soup, 'Required Number of Abilities')
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
@@ -466,14 +491,15 @@ def parse_feat(id: str, soup):
     doc = parse_generic(id, soup, 'feat', 'Feats', 'Feat')
 
     title = soup.find('h1', class_='title')
+    traits = get_traits(soup)
 
-    doc.traits = get_traits(soup)
     doc.actions = get_actions_from_title(title)
     doc.archetype = get_label_text(soup, 'Archetype')
-    # doc.description = get_description(title)
     doc.frequency = get_label_text(soup, 'Frequency')
-    doc.prerequisites = get_label_text(soup, 'Prerequisites')
+    doc.prerequisites = get_label_text(soup, 'Prerequisites', '')
     doc.requirements = get_label_text(soup, 'Requirements')
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
     doc.trigger = get_label_text(soup, 'Trigger')
 
     doc.save()
@@ -484,7 +510,6 @@ def parse_hazard(id: str, soup: BeautifulSoup):
 
     doc.ac = get_label_text(soup, 'AC')
     doc.complexity = get_label_text(soup, 'Complexity')
-    # doc.description = get_label_text(soup, 'Description')
     doc.disable = get_label_text(soup, 'Disable')
     doc.fortitude = get_label_text(soup, 'Fort')
     doc.hardness = get_label_text(soup, 'Hardness')
@@ -499,9 +524,10 @@ def parse_hazard(id: str, soup: BeautifulSoup):
 
 def parse_heritage(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'heritage', 'Heritages', 'Heritage')
+    traits = get_traits(soup)
 
-    # doc.description = get_description(title)
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
@@ -538,9 +564,11 @@ def parse_language(id: str, soup: BeautifulSoup):
 
 def parse_lesson(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'lesson', 'Lessons', 'Witch Lesson')
+    traits = get_traits(soup)
 
     doc.lessonType = get_label_text(soup, 'Lesson Type')
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
@@ -558,7 +586,6 @@ def parse_monster_ability(id: str, soup: BeautifulSoup):
 
     if title.img:
         doc.actions = title.img['alt']
-    # doc.description = get_description(title)
     doc.requirements = get_label_text(soup, 'Requirements')
     doc.effect = get_label_text(soup, 'Effect')
     doc.trigger = get_label_text(soup, 'Trigger')
@@ -602,15 +629,17 @@ def parse_creature(id: str, soup: BeautifulSoup, url: str):
     doc = parse_generic(id, soup, 'creature', url, 'Creature')
 
     title = list(soup.find_all('h1', class_='title'))[1]
-    name, type_, level = get_title_data(title)
+    name, type, level = get_title_data(title)
+    traits = get_traits(soup)
 
     doc.name = name
-    doc['type'] = type_
+    doc.type = type
     doc.level = level
 
     doc.alignment = soup.find('span', class_='traitalignment').text
     doc.size = soup.find('span', class_='traitsize').text
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.languages = split_comma(get_label_text(soup, 'Languages'))
     doc.perception = get_label_text(soup, 'Perception')
@@ -643,24 +672,28 @@ def parse_creature(id: str, soup: BeautifulSoup, url: str):
 
 def parse_patron(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'patron', 'Patrons', 'Witch Patron Theme')
+    traits = get_traits(soup)
 
     doc.grantedSpell = get_label_text(soup, 'Patron Skill')
     doc.hexCantrip = get_label_text(soup, 'Hex Cantrip')
     doc.skills = get_label_text(soup, 'Patron Skill')
     doc.spellList = get_label_text(soup, 'Spell List')
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
 
 def parse_plane(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'plane', 'Planes', 'Plane')
+    traits = get_traits(soup)
 
     doc.alignment = soup.find('span', class_='traitalignment').text
     doc.divinities = get_label_text(soup, 'Divinities')
     doc.nativeInhabitants = get_label_text(soup, 'Native Inhabitants')
     doc.planeCategory = get_label_text(soup, 'Category')
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
@@ -673,10 +706,12 @@ def parse_racket(id: str, soup: BeautifulSoup):
 
 def parse_relic(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'relic', 'Relics', 'Relic')
+    traits = get_traits(soup)
 
     doc.prerequisites = get_label_text(soup, 'Preprequisite')
     doc.aspect = get_label_text(soup, 'Aspect')
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
@@ -689,6 +724,7 @@ def parse_research_field(id: str, soup: BeautifulSoup):
 
 def parse_ritual(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'ritual', 'Rituals', 'Ritual')
+    traits = get_traits(soup)
 
     doc.area = get_label_text(soup, 'Area')
     doc.cast = get_label_text(soup, 'Cast')
@@ -699,7 +735,8 @@ def parse_ritual(id: str, soup: BeautifulSoup):
     doc.secondaryCasters = get_label_text(soup, 'Secondary Casters')
     doc.secondaryChecks = get_label_text(soup, 'Secondary Checks')
     doc.target = get_label_text(soup, 'Target(s)')
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
@@ -730,8 +767,8 @@ def parse_shield(id: str, soup: BeautifulSoup):
     doc.bulk = get_label_text(soup, 'Bulk')
     doc.hardness = get_label_text(soup, 'Hardness')
     doc.hp = get_label_text(soup, 'HP (BT)')
-    doc.normalized_price = parse_price(price)
-    doc.price = price
+    doc.price.normalized = normalize_price(price)
+    doc.price.raw = price
     doc.speedPenalty = get_label_text(soup, 'Speed Penalty')
 
     doc.save()
@@ -739,8 +776,10 @@ def parse_shield(id: str, soup: BeautifulSoup):
 
 def parse_siege_weapon(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'siege-weapon', 'SiegeWeapons', 'Siege Weapon')
+    traits = get_traits(soup)
 
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
@@ -752,7 +791,6 @@ def parse_skill(id: str, soup: BeautifulSoup):
 
     doc.name = title.text.split('(')[0].strip()
     doc.attribute = title.text.split('(')[1].strip(')')
-    # doc.description = get_description(title)
 
     doc.save()
 
@@ -765,6 +803,7 @@ def parse_source(id: str, soup: BeautifulSoup):
 
 def parse_spell(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'spell', 'Spells', 'Spell')
+    traits = get_traits(soup)
 
     doc.actions = get_actions(soup, 'Cast')
     doc.area = get_label_text(soup, 'Area')
@@ -779,7 +818,8 @@ def parse_spell(id: str, soup: BeautifulSoup):
     doc.savingThrow = get_label_text(soup, 'Saving Throw')
     doc.targets = get_label_text(soup, 'Targets')
     doc.traditions = split_comma(get_label_text(soup, 'Traditions'))
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
     doc.trigger = get_label_text(soup, 'Trigger')
 
     doc.save()
@@ -805,8 +845,10 @@ def parse_trait(id: str, soup: BeautifulSoup):
 
 def parse_vehicle(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'vehicle', 'Vehicles', 'Vehicle')
+    traits = get_traits(soup)
 
-    doc.traits = get_traits(soup)
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
 
     doc.save()
 
@@ -826,18 +868,19 @@ def parse_weapon(id: str, soup: BeautifulSoup):
 
     title = soup.find('h1', class_='title')
     price = get_label_text(title, 'Price')
+    traits = get_label_links(soup, 'Traits')
 
     doc.ammunition = get_label_text(soup, 'Ammunition')
     doc.bulk = get_label_text(soup, 'Bulk')
     doc.damage = get_label_text(soup, 'Damage')
-    # doc.description = get_description(title)
     doc.favoredWeapon = split_comma(get_label_text(soup, 'Favored Weapon'))
     doc.hands = get_label_text(soup, 'Hands')
-    doc.normalized_price = parse_price(price)
-    doc.price = price
+    doc.price.normalized = normalize_price(price)
+    doc.price.raw = price
     doc.range = get_label_text(soup, 'Range')
     doc.reload = get_label_text(soup, 'Reload')
-    doc.traits = get_label_links(soup, 'Traits')
+    doc.traits.normalized = normalize_traits(traits)
+    doc.traits.raw = traits
     doc.weaponCategory = get_label_text(soup, 'Category')
     doc.weaponGroup = get_label_text(soup, 'Group')
 
@@ -857,18 +900,18 @@ def get_title_data(title: BeautifulSoup):
     if len(strings) > 1:
         split = strings[-1].split()
         if len(split) >= 2 and split[-1].strip('+-').isnumeric():
-            type_ = ' '.join(split[0:-1])
+            type = ' '.join(split[0:-1])
             level = split[-1]
 
         else:
-            type_ = strings[-1].replace(' Level Varies', '')
+            type = strings[-1].replace(' Level Varies', '')
             level = None
 
     else:
-        type_ = None
+        type = None
         level = None
 
-    return name, type_, level
+    return name, type, level
 
 
 def get_traits(soup: BeautifulSoup):
@@ -882,6 +925,36 @@ def get_traits(soup: BeautifulSoup):
             break
 
     return traits
+
+
+def normalize_traits(traits: [str]) -> [str]:
+    return list(map(normalize_trait, traits))
+
+
+def normalize_trait(trait: str) -> str:
+    prefixes = [
+        'additive',
+        'attached',
+        'capacity',
+        'deadly',
+        'fatal aim',
+        'fatal',
+        'jousting',
+        'legacy',
+        'modular',
+        'scatter',
+        'thrown',
+        'twin',
+        'two-hand',
+        'versatile',
+        'volley',
+    ]
+
+    for prefix in prefixes:
+        if trait.lower().startswith(prefix):
+            return trait[:len(prefix)]
+
+    return trait
 
 
 def get_description(title: BeautifulSoup):
@@ -945,7 +1018,7 @@ def get_sub_item_description(title: BeautifulSoup):
     return ' '.join([row.strip() for row in desc if row])
 
 
-def parse_price(price: str) -> int:
+def normalize_price(price: str) -> int:
     if not price:
         return 0
 
@@ -1089,9 +1162,21 @@ class Doc(Document):
     url = Keyword()
     name = Text()
     level = Integer()
-    category = Keyword()
-    type_ = Keyword()
+    category = Keyword(normalizer="lowercase")
+    type = Keyword(normalizer="lowercase")
     text = Text()
+    price = Object(
+        properties = {
+            'raw': Text(),
+            'normalized': Integer(),
+        }
+    )
+    traits = Object(
+        properties = {
+            'raw': Text(),
+            'normalized': Keyword(normalizer="lowercase")
+        }
+    )
 
     class Index:
         name = 'aon'
