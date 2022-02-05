@@ -16,11 +16,13 @@
             "elm-community/html-extra": "3.4.0",
             "elm-community/maybe-extra": "5.2.1",
             "elm-community/string-extra": "4.0.1",
+            "lattyware/elm-fontawesome": "5.0.0",
             "webbhuset/elm-json-decode": "1.1.0"
         },
         "indirect": {
             "elm/bytes": "1.0.8",
             "elm/file": "1.0.5",
+            "elm/svg": "1.0.1",
             "elm/time": "1.0.0",
             "elm/virtual-dom": "1.0.2"
         }
