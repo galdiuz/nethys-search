@@ -107,7 +107,7 @@ def build_url(category: str, id: int, params: [str] = []) -> str:
 def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type: str, url_params: [str] = []):
     title = soup.find('h1', class_='title')
 
-    name, title_type, level = get_title_data(title)
+    name, title_type, level, pfs = get_title_data(title)
     source = get_label_text(soup, 'Source')
 
     doc = Doc()
@@ -117,6 +117,7 @@ def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type: s
     doc.category = category
     doc.name = name
     doc.type = title_type or type
+    doc.pfs = pfs
     doc.text = title.parent.get_text(' ', strip=True)
     doc.source.normalized = normalize_source(source)
     doc.source.raw = source
@@ -423,7 +424,7 @@ def parse_eidolon(id: str, soup: BeautifulSoup):
 
 def parse_equipment(id: str, soup: BeautifulSoup):
     title = soup.find('h1', class_='title')
-    name, type, level = get_title_data(title)
+    name, type, level, pfs = get_title_data(title)
     has_sub_items = level[-1] == '+'
 
     if has_sub_items:
@@ -433,7 +434,7 @@ def parse_equipment(id: str, soup: BeautifulSoup):
 
             doc = parse_generic(id, soup, 'equipment', 'Equipment', 'Equipment')
 
-            name, type, level = get_title_data(sub_title)
+            name, type, level, pfs = get_title_data(sub_title)
             traits = get_traits(sub_title) or get_traits(soup)
 
             doc.meta.id = 'equipment-' + id + '-' + str(idx)
@@ -640,7 +641,7 @@ def parse_creature(id: str, soup: BeautifulSoup, url: str):
     doc = parse_generic(id, soup, 'creature', url, 'Creature')
 
     title = list(soup.find_all('h1', class_='title'))[1]
-    name, type, level = get_title_data(title)
+    name, type, level, pfs = get_title_data(title)
     traits = get_traits(soup)
 
     doc.name = name
@@ -924,7 +925,13 @@ def get_title_data(title: BeautifulSoup):
         type = None
         level = None
 
-    return name, type, level
+    img = title.find('img')
+    if img:
+        pfs = img['alt'].replace('PFS ', '') if img['alt'].startswith('PFS') else None
+    else:
+        pfs = None
+
+    return name, type, level, pfs
 
 
 def get_traits(soup: BeautifulSoup):
