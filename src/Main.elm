@@ -36,42 +36,49 @@ type alias Hit a =
 
 type alias Document =
     { id : Int
-    , url : String
     , category : String
     , name : String
-    , level : Maybe Int
     , type_ : String
-    , traits : List String
-    , breadcrumbs : Maybe String
+    , url : String
+    , abilities : List String
+    , abilityType : Maybe String
+    , actions : Maybe String
+    , activate : Maybe String
     , alignment : Maybe String
+    , area : Maybe String
+    , aspect : Maybe String
+    , breadcrumbs : Maybe String
+    , bulk : Maybe String
+    , cast : Maybe String
+    , components : List String
+    , cost : Maybe String
+    , creatureFamily : Maybe String
     , damage : Maybe String
-    , weaponCategory : Maybe String
-    , weaponGroup : Maybe String
+    , duration : Maybe String
+    , frequency : Maybe String
     , hands : Maybe String
+    , heighten : List String
+    , lessonType : Maybe String
+    , level : Maybe Int
+    , prerequisites : Maybe String
+    , price : Maybe String
+    , primaryCheck : Maybe String
     , range : Maybe String
     , reload : Maybe String
-    , traditions : List String
-    , components : List String
-    , actions : Maybe String
-    , duration : Maybe String
+    , requiredAbilities : Maybe String
     , savingThrow : Maybe String
-    , targets : Maybe String
-    , area : Maybe String
-    , price : Maybe String
-    , bulk : Maybe String
-    , usage : Maybe String
-    , prerequisites : Maybe String
-    , creatureFamily : Maybe String
-    , abilityType : Maybe String
+    , secondaryCasters : Maybe String
+    , secondaryChecks : Maybe String
     , source : Maybe String
     , spellList : Maybe String
-    , lessonType : Maybe String
-    , requiredAbilities : Maybe String
-    , abilities : List String
-    , aspect : Maybe String
-    , activate : Maybe String
+    , spoilers : Maybe String
+    , targets : Maybe String
+    , traditions : List String
+    , traits : List String
     , trigger : Maybe String
-    , frequency : Maybe String
+    , usage : Maybe String
+    , weaponCategory : Maybe String
+    , weaponGroup : Maybe String
     }
 
 
@@ -106,6 +113,7 @@ type Msg
     | ShowAdditionalInfoChanged Bool
     | ShowMenuPressed Bool
     | ShowQueryOptionsPressed Bool
+    | ShowSpoilersChanged Bool
     | ShowTraitsChanged Bool
     | ThemeSelected Theme
     | TraitFilterAdded String
@@ -137,6 +145,7 @@ type alias Model =
     , searchTraits : String
     , searchTypes : String
     , showResultAdditionalInfo : Bool
+    , showResultSpoilers : Bool
     , showResultTraits : Bool
     , theme : Theme
     , tracker : Maybe Int
@@ -173,6 +182,7 @@ init flags url navKey =
       , searchTraits = ""
       , searchTypes = ""
       , showResultAdditionalInfo = True
+      , showResultSpoilers = True
       , showResultTraits = True
       , theme = Dark
       , tracker = Nothing
@@ -181,6 +191,7 @@ init flags url navKey =
         |> updateModelFromQueryString url
     , Cmd.batch
         [ localStorage_get "show-additional-info"
+        , localStorage_get "show-spoilers"
         , localStorage_get "show-traits"
         , localStorage_get "theme"
         ]
@@ -246,6 +257,17 @@ update msg model =
 
                         Ok "0" ->
                             { model | showResultAdditionalInfo = False }
+
+                        _ ->
+                            model
+
+                Ok "show-spoilers" ->
+                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
+                        Ok "1" ->
+                            { model | showResultSpoilers = True }
+
+                        Ok "0" ->
+                            { model | showResultSpoilers = False }
 
                         _ ->
                             model
@@ -324,6 +346,13 @@ update msg model =
         ShowQueryOptionsPressed show ->
             ( { model | queryOptionsOpen = show }
             , Cmd.none
+            )
+
+        ShowSpoilersChanged value ->
+            ( { model | showResultSpoilers = value }
+            , saveToLocalStorage
+                "show-spoilers"
+                (if value then "1" else "0")
             )
 
         ShowTraitsChanged value ->
@@ -760,80 +789,94 @@ hitDecoder decoder =
 documentDecoder : Decode.Decoder Document
 documentDecoder =
     Field.require "id" Decode.int <| \id ->
-    Field.require "url" Decode.string <| \url ->
     Field.require "category" Decode.string <| \category ->
     Field.require "name" Decode.string <| \name ->
     Field.require "type" Decode.string <| \type_ ->
-    Field.attempt "level" Decode.int <| \level ->
-    Field.attemptAt [ "traits", "raw" ] (Decode.list Decode.string) <| \maybeTraits ->
-    Field.attempt "breadcrumbs" Decode.string <| \breadcrumbs ->
+    Field.require "url" Decode.string <| \url ->
+    Field.attempt "abilities" (Decode.list Decode.string) <| \abilities ->
+    Field.attempt "abilityType" Decode.string <| \abilityType ->
+    Field.attempt "actions" Decode.string <| \actions ->
+    Field.attempt "activate" Decode.string <| \activate ->
     Field.attempt "alignment" Decode.string <| \alignment ->
+    Field.attempt "area" Decode.string <| \area ->
+    Field.attempt "aspect" Decode.string <| \aspect ->
+    Field.attempt "breadcrumbs" Decode.string <| \breadcrumbs ->
+    Field.attempt "bulk" Decode.string <| \bulk ->
+    Field.attempt "cast" Decode.string <| \cast ->
+    Field.attempt "components" (Decode.list Decode.string) <| \components ->
+    Field.attempt "cost" Decode.string <| \cost ->
+    Field.attempt "creatureFamily" Decode.string <| \creatureFamily ->
     Field.attempt "damage" Decode.string <| \damage ->
-    Field.attempt "weaponCategory" Decode.string <| \weaponCategory ->
-    Field.attempt "weaponGroup" Decode.string <| \weaponGroup ->
+    Field.attempt "duration" Decode.string <| \duration ->
+    Field.attempt "frequency" Decode.string <| \frequency ->
     Field.attempt "hands" Decode.string <| \hands ->
+    Field.attempt "heighten" (Decode.list Decode.string) <| \heighten ->
+    Field.attempt "lessonType" Decode.string <| \lessonType ->
+    Field.attempt "level" Decode.int <| \level ->
+    Field.attempt "prerequisites" Decode.string <| \prerequisites ->
+    Field.attemptAt [ "price", "raw" ] Decode.string <| \price ->
+    Field.attempt "primaryCheck" Decode.string <| \primaryCheck ->
     Field.attempt "range" Decode.string <| \range ->
     Field.attempt "reload" Decode.string <| \reload ->
-    Field.attempt "traditions" (Decode.list Decode.string) <| \traditions ->
-    Field.attempt "components" (Decode.list Decode.string) <| \components ->
-    Field.attempt "actions" Decode.string <| \actions ->
-    Field.attempt "duration" Decode.string <| \duration ->
-    Field.attempt "targets" Decode.string <| \targets ->
-    Field.attempt "savingThrow" Decode.string <| \savingThrow ->
-    Field.attempt "area" Decode.string <| \area ->
-    Field.attemptAt [ "price", "raw" ] Decode.string <| \price ->
-    Field.attempt "bulk" Decode.string <| \bulk ->
-    Field.attempt "usage" Decode.string <| \usage ->
-    Field.attempt "prerequisites" Decode.string <| \prerequisites ->
-    Field.attempt "creatureFamily" Decode.string <| \creatureFamily ->
-    Field.attempt "abilityType" Decode.string <| \abilityType ->
-    Field.attemptAt [ "source", "normalized" ] Decode.string <| \source ->
-    Field.attempt "spellList" Decode.string <| \spellList ->
-    Field.attempt "lessonType" Decode.string <| \lessonType ->
     Field.attempt "requiredAbilities" Decode.string <| \requiredAbilities ->
-    Field.attempt "abilities" (Decode.list Decode.string) <| \abilities ->
-    Field.attempt "aspect" Decode.string <| \aspect ->
-    Field.attempt "activate" Decode.string <| \activate ->
+    Field.attempt "savingThrow" Decode.string <| \savingThrow ->
+    Field.attempt "secondaryCasters" Decode.string <| \secondaryCasters ->
+    Field.attempt "secondaryChecks" Decode.string <| \secondaryChecks ->
+    Field.attempt "spellList" Decode.string <| \spellList ->
+    Field.attempt "spoilers" Decode.string <| \spoilers ->
+    Field.attemptAt [ "source", "normalized" ] Decode.string <| \source ->
+    Field.attempt "targets" Decode.string <| \targets ->
+    Field.attempt "traditions" (Decode.list Decode.string) <| \traditions ->
+    Field.attemptAt [ "traits", "raw" ] (Decode.list Decode.string) <| \maybeTraits ->
     Field.attempt "trigger" Decode.string <| \trigger ->
-    Field.attempt "frequency" Decode.string <| \frequency ->
+    Field.attempt "usage" Decode.string <| \usage ->
+    Field.attempt "weaponCategory" Decode.string <| \weaponCategory ->
+    Field.attempt "weaponGroup" Decode.string <| \weaponGroup ->
     Decode.succeed
         { id = id
-        , url = url
         , category = category
-        , type_ = type_
         , name = name
-        , level = level
-        , traits = Maybe.withDefault [] maybeTraits
-        , breadcrumbs = breadcrumbs
+        , type_ = type_
+        , url = url
+        , abilities = Maybe.withDefault [] abilities
+        , abilityType = abilityType
+        , actions = actions
+        , activate = activate
         , alignment = alignment
+        , area = area
+        , aspect = aspect
+        , breadcrumbs = breadcrumbs
+        , bulk = bulk
+        , cast = cast
+        , components = Maybe.withDefault [] components
+        , cost = cost
+        , creatureFamily = creatureFamily
         , damage = damage
-        , weaponCategory = weaponCategory
-        , weaponGroup = weaponGroup
+        , duration = duration
+        , frequency = frequency
         , hands = hands
+        , heighten = Maybe.withDefault [] heighten
+        , lessonType = lessonType
+        , level = level
+        , prerequisites = prerequisites
+        , price = price
+        , primaryCheck = primaryCheck
         , range = range
         , reload = reload
-        , traditions = Maybe.withDefault [] traditions
-        , components = Maybe.withDefault [] components
-        , actions = actions
-        , duration = duration
+        , requiredAbilities = requiredAbilities
         , savingThrow = savingThrow
-        , targets = targets
-        , area = area
-        , price = price
-        , bulk = bulk
-        , usage = usage
-        , prerequisites = prerequisites
-        , creatureFamily = creatureFamily
-        , abilityType = abilityType
+        , secondaryCasters = secondaryCasters
+        , secondaryChecks = secondaryChecks
         , source = source
         , spellList = spellList
-        , lessonType = lessonType
-        , requiredAbilities = requiredAbilities
-        , abilities = Maybe.withDefault [] abilities
-        , aspect = aspect
-        , activate = activate
+        , spoilers = spoilers
+        , targets = targets
+        , traditions = Maybe.withDefault [] traditions
+        , traits = Maybe.withDefault [] maybeTraits
         , trigger = trigger
-        , frequency = frequency
+        , usage = usage
+        , weaponCategory = weaponCategory
+        , weaponGroup = weaponGroup
         }
 
 
@@ -964,6 +1007,11 @@ viewMenu model =
                     [ Html.h3
                         [ HA.class "subtitle" ]
                         [ Html.text "Result display" ]
+                    , viewCheckbox
+                        { checked = model.showResultSpoilers
+                        , onCheck = ShowSpoilersChanged
+                        , text = "Show spoiler warning"
+                        }
                     , viewCheckbox
                         { checked = model.showResultTraits
                         , onCheck = ShowTraitsChanged
@@ -1524,6 +1572,19 @@ viewSingleSearchResult model hit =
                 ]
             ]
 
+        , if model.showResultSpoilers then
+            Html.h3
+                [ HA.class "subtitle"
+                ]
+                [ hit.source.spoilers
+                    |> Maybe.map (\spoiler -> "May contain spoilers from " ++ spoiler)
+                    |> Maybe.withDefault ""
+                    |> Html.text
+                ]
+
+          else
+            Html.text ""
+
         , if model.showResultTraits then
             Html.div
                 [ HA.class "row"
@@ -1654,6 +1715,66 @@ viewSearchResultAdditionalInfo hit =
                         |> Maybe.map List.singleton
                         |> Maybe.withDefault []
 
+                "ritual" ->
+                    [ Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-medium"
+                        ]
+                        (List.filterMap identity
+                            [ Maybe.map
+                                (viewLabelAndText "Cast")
+                                hit.source.cast
+                            , Maybe.map
+                                (viewLabelAndText "Cost")
+                                hit.source.cost
+                            , Maybe.map
+                                (viewLabelAndText "Secondary Casters")
+                                hit.source.secondaryCasters
+                            ]
+                        )
+                    , Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-medium"
+                        ]
+                        (List.filterMap identity
+                            [ Maybe.map
+                                (viewLabelAndText "Primary Check")
+                                hit.source.primaryCheck
+                            , Maybe.map
+                                (viewLabelAndText "Secondary Checks")
+                                hit.source.secondaryChecks
+                            ]
+                        )
+                    , Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-medium"
+                        ]
+                        (List.filterMap identity
+                            [ Maybe.map
+                                (viewLabelAndText "Range")
+                                hit.source.range
+                            , Maybe.map
+                                (viewLabelAndText "Targets")
+                                hit.source.targets
+                            ]
+                        )
+                    , Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-medium"
+                        ]
+                        (List.filterMap identity
+                            [ Maybe.map
+                                (viewLabelAndText "Duration")
+                                hit.source.duration
+                            ]
+                        )
+                    , hit.source.heighten
+                        |> String.join ", "
+                        |> String.Extra.nonEmpty
+                        |> Maybe.map (viewLabelAndText "Heightened")
+                        |> Maybe.withDefault (Html.text "")
+                    ]
+
                 "rules" ->
                     hit.source.breadcrumbs
                         |> Maybe.map Html.text
@@ -1674,7 +1795,7 @@ viewSearchResultAdditionalInfo hit =
                             (List.filterMap identity
                                 [ Maybe.map
                                     (viewLabelAndText "Cast")
-                                    hit.source.actions
+                                    hit.source.cast
                                 , hit.source.components
                                     |> String.join ", "
                                     |> String.Extra.nonEmpty
@@ -1716,6 +1837,10 @@ viewSearchResultAdditionalInfo hit =
                                 ]
                             )
                                 |> Just
+                        , hit.source.heighten
+                            |> String.join ", "
+                            |> String.Extra.nonEmpty
+                            |> Maybe.map (viewLabelAndText "Heightened")
                         ]
 
                 "weapon" ->
@@ -2102,6 +2227,10 @@ css =
         font-variant: small-caps;
         line-height: 1rem;
         padding: 4px 9px;
+    }
+
+    .subtitle:empty {
+        display: none;
     }
 
     .title {
