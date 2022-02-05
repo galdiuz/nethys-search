@@ -108,6 +108,7 @@ def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type: s
     title = soup.find('h1', class_='title')
 
     name, title_type, level = get_title_data(title)
+    source = get_label_text(soup, 'Source')
 
     doc = Doc()
     doc.meta.id = category + '-' + id
@@ -117,7 +118,8 @@ def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type: s
     doc.name = name
     doc.type = title_type or type
     doc.text = title.parent.get_text(' ', strip=True)
-    doc.source = get_label_text(soup, 'Source')
+    doc.source.normalized = normalize_source(source)
+    doc.source.raw = source
     doc.spoilers = get_spoilers(soup)
     doc.level = level
 
@@ -273,6 +275,12 @@ def parse_background(id: str, soup: BeautifulSoup):
 
 def parse_bloodline(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'bloodline', 'Bloodlines', 'Sorcerer Bloodline')
+
+    doc.bloodMagic = split_comma(get_label_text(soup, 'Blood Magic'))
+    doc.bloodlineSpells = split_comma(get_label_text(soup, 'Bloodline Spells'))
+    doc.grantedSpells = split_comma(get_label_text(soup, 'Granted Spells'))
+    doc.skills = split_comma(get_label_text(soup, 'Bloodline Skills'))
+    doc.spellList = get_label_text(soup, 'Spell List')
 
     doc.save()
 
@@ -439,6 +447,9 @@ def parse_equipment(id: str, soup: BeautifulSoup):
             doc.bulk = get_label_text(sub_title, 'Bulk')
             doc.usage = get_label_text(soup, 'Usage')
             doc.activate = get_actions(soup, 'Activate')
+            doc.frequency = get_label_text(soup, 'Frequency')
+            doc.trigger = get_label_text(soup, 'Trigger')
+            doc.effect = get_label_text(soup, 'Effect')
             doc.traits.normalized = normalize_traits(traits)
             doc.traits.raw = traits
 
@@ -674,7 +685,7 @@ def parse_patron(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'patron', 'Patrons', 'Witch Patron Theme')
     traits = get_traits(soup)
 
-    doc.grantedSpell = get_label_text(soup, 'Patron Skill')
+    doc.grantedSpells = get_label_text(soup, 'Granted Spell')
     doc.hexCantrip = get_label_text(soup, 'Hex Cantrip')
     doc.skills = get_label_text(soup, 'Patron Skill')
     doc.spellList = get_label_text(soup, 'Spell List')
@@ -927,6 +938,18 @@ def get_traits(soup: BeautifulSoup):
     return traits
 
 
+def normalize_source(source: str) -> str:
+    if not source:
+        return source
+
+    index = source.find(' pg. ')
+
+    if index:
+        source = source[:index]
+
+    return source
+
+
 def normalize_traits(traits: [str]) -> [str]:
     return list(map(normalize_trait, traits))
 
@@ -1111,6 +1134,11 @@ def get_actions(soup, label):
 
                 break
 
+            if ';' in node.text:
+                parts.append(node.text.split(';')[0].strip())
+
+                break
+
             if node.name in ['br', 'hr', 'a']:
                 break
 
@@ -1169,6 +1197,12 @@ class Doc(Document):
         properties = {
             'raw': Text(),
             'normalized': Integer(),
+        }
+    )
+    source = Object(
+        properties = {
+            'raw': Text(),
+            'normalized': Keyword(normalizer="lowercase")
         }
     )
     traits = Object(
