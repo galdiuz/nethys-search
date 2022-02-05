@@ -33,7 +33,7 @@ def main():
     download_category('Domains')
     download_category('DruidicOrders')
     download_category('Eidolons')
-    download_category('Equipment')
+    download_category('Equipment', 25)
     download_category('Familiars')
     download_category('Familiars', params=['Specific=true'], path_suffix='-specific')
     download_category('Feats', 25)
@@ -65,7 +65,7 @@ def main():
     download_category('Spells', 25)
     download_category('Sources')
     download_category('Styles')
-    download_category('Tenets', 1)
+    download_category('Tenets')
     download_category('Traits')
     download_category('Vehicles')
     download_category('Ways')
@@ -73,12 +73,18 @@ def main():
     download_category('WeaponGroups')
 
 
-def download_category(category: str, max_failures: int = 3, params: [str] = [], path_suffix: str = '', id: int = 0):
+def download_category(category: str, max_failures: int = 5, params: [str] = [], path_suffix: str = '', id: int = None):
     path = inflection.dasherize(inflection.underscore(category)) + path_suffix
     Path(f"data/{path}").mkdir(parents=True, exist_ok=True)
 
+    exists = [ int(file_name.replace('.html', '')) for file_name in os.listdir(f'data/{path}/') ]
+
     if category == 'Monsters':
         Path(f"data/npcs").mkdir(parents=True, exist_ok=True)
+        exists = exists + [ int(file_name.replace('.html', '')) for file_name in os.listdir(f'data/npcs/') ]
+
+    if id == None:
+        id = max(exists) if exists else 0
 
     failures = 0
     just_switched = False
@@ -88,7 +94,7 @@ def download_category(category: str, max_failures: int = 3, params: [str] = [], 
         url = f"https://2e.aonprd.com/{category}.aspx?" + '&'.join([f"ID={id}"] + params)
         file_name = f"data/{path}/{id}.html"
 
-        if Path(file_name).is_file() or Path(file_name.replace('.html', '.404')).is_file():
+        if id in exists:
             failures = 0
 
             continue
@@ -131,8 +137,6 @@ def download_to_file(url: str, file_name: str):
     response = requests.get(url)
 
     if response.status_code == 500:
-        Path(file_name.replace('.html', '.404')).touch()
-
         return False
 
     if response.status_code != 200:
