@@ -37,7 +37,7 @@ type alias Hit a =
 type alias Document =
     { id : Int
     , url : String
-    , category : Category
+    , category : String
     , name : String
     , level : Maybe Int
     , type_ : String
@@ -61,49 +61,23 @@ type alias Document =
     , bulk : Maybe String
     , usage : Maybe String
     , prerequisites : Maybe String
+    , creatureFamily : Maybe String
+    , abilityType : Maybe String
+    , source : Maybe String
+    , spellList : Maybe String
+    , lessonType : Maybe String
+    , requiredAbilities : Maybe String
+    , abilities : List String
+    , aspect : Maybe String
+    , activate : Maybe String
+    , trigger : Maybe String
+    , frequency : Maybe String
     }
 
 
 type alias Flags =
     { elasticUrl : String
     }
-
-
-type Category
-    = Action
-    | Ancestry
-    | Archetype
-    | Armor
-    | ArmorGroup
-    | Background
-    | Cause
-    | Class
-    | Condition
-    | Curse
-    | Deity
-    | Disease
-    | Domain
-    | Equipment
-    | Feat
-    | Hazard
-    | Heritage
-    | Language
-    | Monster
-    | MonsterAbility
-    | MonsterFamily
-    | NPC
-    | Plane
-    | Relic
-    | Ritual
-    | Rules
-    | Shield
-    | Skill
-    | Spell
-    | Trait
-    | Way
-    | Weapon
-    | WeaponGroup
-    | Other
 
 
 type QueryType
@@ -787,7 +761,7 @@ documentDecoder : Decode.Decoder Document
 documentDecoder =
     Field.require "id" Decode.int <| \id ->
     Field.require "url" Decode.string <| \url ->
-    Field.require "category" categoryDecoder <| \category ->
+    Field.require "category" Decode.string <| \category ->
     Field.require "name" Decode.string <| \name ->
     Field.require "type" Decode.string <| \type_ ->
     Field.attempt "level" Decode.int <| \level ->
@@ -811,6 +785,17 @@ documentDecoder =
     Field.attempt "bulk" Decode.string <| \bulk ->
     Field.attempt "usage" Decode.string <| \usage ->
     Field.attempt "prerequisites" Decode.string <| \prerequisites ->
+    Field.attempt "creatureFamily" Decode.string <| \creatureFamily ->
+    Field.attempt "abilityType" Decode.string <| \abilityType ->
+    Field.attemptAt [ "source", "normalized" ] Decode.string <| \source ->
+    Field.attempt "spellList" Decode.string <| \spellList ->
+    Field.attempt "lessonType" Decode.string <| \lessonType ->
+    Field.attempt "requiredAbilities" Decode.string <| \requiredAbilities ->
+    Field.attempt "abilities" (Decode.list Decode.string) <| \abilities ->
+    Field.attempt "aspect" Decode.string <| \aspect ->
+    Field.attempt "activate" Decode.string <| \activate ->
+    Field.attempt "trigger" Decode.string <| \trigger ->
+    Field.attempt "frequency" Decode.string <| \frequency ->
     Decode.succeed
         { id = id
         , url = url
@@ -838,117 +823,18 @@ documentDecoder =
         , bulk = bulk
         , usage = usage
         , prerequisites = prerequisites
+        , creatureFamily = creatureFamily
+        , abilityType = abilityType
+        , source = source
+        , spellList = spellList
+        , lessonType = lessonType
+        , requiredAbilities = requiredAbilities
+        , abilities = Maybe.withDefault [] abilities
+        , aspect = aspect
+        , activate = activate
+        , trigger = trigger
+        , frequency = frequency
         }
-
-
-categoryDecoder : Decode.Decoder Category
-categoryDecoder =
-    Decode.string
-        |> Decode.andThen
-            (\str ->
-                case str of
-                    "action" ->
-                        Decode.succeed Action
-
-                    "ancestry" ->
-                        Decode.succeed Ancestry
-
-                    "archetype" ->
-                        Decode.succeed Archetype
-
-                    "armor" ->
-                        Decode.succeed Armor
-
-                    "armor-group" ->
-                        Decode.succeed ArmorGroup
-
-                    "background" ->
-                        Decode.succeed Background
-
-                    "cause" ->
-                        Decode.succeed Cause
-
-                    "class" ->
-                        Decode.succeed Class
-
-                    "condition" ->
-                        Decode.succeed Condition
-
-                    "curse" ->
-                        Decode.succeed Curse
-
-                    "deity" ->
-                        Decode.succeed Deity
-
-                    "disease" ->
-                        Decode.succeed Disease
-
-                    "domain" ->
-                        Decode.succeed Domain
-
-                    "equipment" ->
-                        Decode.succeed Equipment
-
-                    "feat" ->
-                        Decode.succeed Feat
-
-                    "hazard" ->
-                        Decode.succeed Hazard
-
-                    "heritage" ->
-                        Decode.succeed Heritage
-
-                    "language" ->
-                        Decode.succeed Language
-
-                    "monster" ->
-                        Decode.succeed Monster
-
-                    "monster-ability" ->
-                        Decode.succeed MonsterAbility
-
-                    "monster-family" ->
-                        Decode.succeed MonsterFamily
-
-                    "npc" ->
-                        Decode.succeed NPC
-
-                    "plane" ->
-                        Decode.succeed Plane
-
-                    "relic" ->
-                        Decode.succeed Relic
-
-                    "ritual" ->
-                        Decode.succeed Ritual
-
-                    "rules" ->
-                        Decode.succeed Rules
-
-                    "shield" ->
-                        Decode.succeed Shield
-
-                    "skill" ->
-                        Decode.succeed Skill
-
-                    "spell" ->
-                        Decode.succeed Spell
-
-                    "trait" ->
-                        Decode.succeed Trait
-
-                    "way" ->
-                        Decode.succeed Way
-
-                    "weapon" ->
-                        Decode.succeed Weapon
-
-                    "weapon-group" ->
-                        Decode.succeed WeaponGroup
-
-                    _ ->
-                        Decode.succeed Other
-            )
 
 
 getUrl : Document -> String
@@ -1600,6 +1486,11 @@ viewSearchResults model =
 
 viewSingleSearchResult : Model -> Hit Document -> Html msg
 viewSingleSearchResult model hit =
+    let
+        hasActionsInTitle : Bool
+        hasActionsInTitle =
+            List.member hit.source.category [ "action", "creature-ability", "feat" ]
+    in
     Html.section
         [ HA.class "column"
         , HA.class "gap-small"
@@ -1614,7 +1505,7 @@ viewSingleSearchResult model hit =
                     ]
                     [ Html.text hit.source.name
                     ]
-                , case ( hit.source.actions, List.member hit.source.category [ Action, Feat ]) of
+                , case ( hit.source.actions, hasActionsInTitle ) of
                     ( Just actions, True ) ->
                         viewTextWithActionIcons (" " ++ actions)
 
@@ -1659,18 +1550,32 @@ viewSearchResultAdditionalInfo hit =
         [ HA.class "column"
         , HA.class "gap-tiny"
         ]
-        (case hit.source.category of
-            Equipment ->
-                (List.filterMap identity
-                    [ Maybe.map
-                        (viewLabelAndText "Price")
-                        hit.source.price
+        (List.append
+            (hit.source.source
+                |> Maybe.map (viewLabelAndText "Source")
+                |> Maybe.map List.singleton
+                |> Maybe.withDefault []
+            )
+            (case hit.source.category of
+                "bloodline" ->
+                    hit.source.spellList
+                        |> Maybe.map (viewLabelAndText "Spell List")
+                        |> Maybe.map List.singleton
+                        |> Maybe.withDefault []
 
-                    , if List.any
-                        Maybe.Extra.isJust
-                        [ hit.source.hands, hit.source.usage, hit.source.bulk ]
-                      then
-                        Html.div
+                "creature" ->
+                    hit.source.creatureFamily
+                        |> Maybe.map (viewLabelAndText "Creature Family")
+                        |> Maybe.map List.singleton
+                        |> Maybe.withDefault []
+
+                "equipment" ->
+                    (List.filterMap identity
+                        [ Maybe.map
+                            (viewLabelAndText "Price")
+                            hit.source.price
+
+                        , Html.div
                             [ HA.class "row"
                             , HA.class "gap-medium"
                             ]
@@ -1686,47 +1591,83 @@ viewSearchResultAdditionalInfo hit =
                                     hit.source.bulk
                                 ]
                             )
-                            |> Just
+                                |> Just
 
-                      else
-                        Nothing
-                    ]
-                )
-
-            Feat ->
-                case hit.source.prerequisites of
-                    Just prerequisites ->
-                        [ viewLabelAndText "Prerequisites" prerequisites
+                        , Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-medium"
+                            ]
+                            (List.filterMap identity
+                                [ Maybe.map
+                                    (viewLabelAndText "Activate")
+                                    hit.source.activate
+                                , Maybe.map
+                                    (viewLabelAndText "Frequency")
+                                    hit.source.frequency
+                                , Maybe.map
+                                    (viewLabelAndText "Trigger")
+                                    hit.source.trigger
+                                ]
+                            )
+                                |> Just
                         ]
+                    )
 
-                    Nothing ->
-                        []
+                "familiar" ->
+                    hit.source.abilityType
+                        |> Maybe.map (viewLabelAndText "Ability Type")
+                        |> Maybe.map List.singleton
+                        |> Maybe.withDefault []
 
-            Rules ->
-                case hit.source.breadcrumbs of
-                    Just breadcrumbs ->
-                        [ Html.text breadcrumbs
-                        ]
-
-                    Nothing ->
-                        []
-
-            Spell ->
-                List.filterMap identity
-                    [ if List.isEmpty hit.source.traditions then
-                        Nothing
-
-                      else
-                        hit.source.traditions
+                "familiar-specific" ->
+                    (List.filterMap identity
+                        [ hit.source.requiredAbilities
+                            |> Maybe.map (viewLabelAndText "Required Number of Abilities")
+                        , hit.source.abilities
                             |> String.join ", "
-                            |> viewLabelAndText "Traditions"
+                            |> viewLabelAndText "Granted Abilities"
                             |> Just
+                        ]
+                    )
 
-                    , if Maybe.Extra.isNothing hit.source.actions && List.isEmpty hit.source.components then
-                        Nothing
+                "feat" ->
+                    hit.source.prerequisites
+                        |> Maybe.map (viewLabelAndText "Prerequisites")
+                        |> Maybe.map List.singleton
+                        |> Maybe.withDefault []
 
-                      else
-                        Html.div
+                "lesson" ->
+                    hit.source.lessonType
+                        |> Maybe.map (viewLabelAndText "Lesson Type")
+                        |> Maybe.map List.singleton
+                        |> Maybe.withDefault []
+
+                "patron" ->
+                    hit.source.spellList
+                        |> Maybe.map (viewLabelAndText "Spell List")
+                        |> Maybe.map List.singleton
+                        |> Maybe.withDefault []
+
+                "relic" ->
+                    hit.source.aspect
+                        |> Maybe.map (viewLabelAndText "Aspect")
+                        |> Maybe.map List.singleton
+                        |> Maybe.withDefault []
+
+                "rules" ->
+                    hit.source.breadcrumbs
+                        |> Maybe.map Html.text
+                        |> Maybe.map List.singleton
+                        |> Maybe.withDefault []
+
+                "spell" ->
+                    List.filterMap identity
+                        [ hit.source.traditions
+                            |> String.join ", "
+                            |> String.Extra.nonEmpty
+                            |> Maybe.map (viewLabelAndText "Traditions")
+
+                        , Html.div
                             [ HA.class "row"
                             , HA.class "gap-medium"
                             ]
@@ -1734,24 +1675,15 @@ viewSearchResultAdditionalInfo hit =
                                 [ Maybe.map
                                     (viewLabelAndText "Cast")
                                     hit.source.actions
-
-                                , if List.isEmpty hit.source.components then
-                                    Nothing
-
-                                  else
-                                    hit.source.components
-                                        |> String.join ", "
-                                        |> viewLabelAndText "Components"
-                                        |> Just
+                                , hit.source.components
+                                    |> String.join ", "
+                                    |> String.Extra.nonEmpty
+                                    |> Maybe.map (viewLabelAndText "Components")
                                 ]
                             )
-                            |> Just
+                                |> Just
 
-                    , if List.any
-                        Maybe.Extra.isJust
-                        [ hit.source.range, hit.source.targets, hit.source.area ]
-                      then
-                        Html.div
+                        , Html.div
                             [ HA.class "row"
                             , HA.class "gap-medium"
                             ]
@@ -1767,16 +1699,9 @@ viewSearchResultAdditionalInfo hit =
                                     hit.source.area
                                 ]
                             )
-                            |> Just
+                                |> Just
 
-                      else
-                        Nothing
-
-                    , if List.any
-                        Maybe.Extra.isJust
-                        [ hit.source.savingThrow, hit.source.duration ]
-                      then
-                        Html.div
+                        , Html.div
                             [ HA.class "row"
                             , HA.class "gap-medium"
                             ]
@@ -1790,34 +1715,32 @@ viewSearchResultAdditionalInfo hit =
                                     hit.source.savingThrow
                                 ]
                             )
-                            |> Just
+                                |> Just
+                        ]
 
-                      else
-                        Nothing
-                    ]
+                "weapon" ->
+                    (List.filterMap identity
+                        [ case hit.source.range of
+                            Just _ ->
+                                Just "Ranged"
 
-            Weapon ->
-                (List.filterMap identity
-                    [ case hit.source.range of
-                        Just _ ->
-                            Just "Ranged"
-
-                        Nothing ->
-                            Just "Melee"
-                    , hit.source.weaponCategory
-                    , hit.source.weaponGroup
-                    , Maybe.map (\hands -> hands ++ " hands") hit.source.hands
-                    , hit.source.damage
-                    , hit.source.range
-                    , Maybe.map (\reload -> "Reload " ++ reload) hit.source.reload
-                    ]
-                    |> List.map Html.text
-                    |> List.intersperse (Html.text ", ")
-                )
+                            Nothing ->
+                                Just "Melee"
+                        , hit.source.weaponCategory
+                        , hit.source.weaponGroup
+                        , Maybe.map (\hands -> hands ++ " hands") hit.source.hands
+                        , hit.source.damage
+                        , hit.source.range
+                        , Maybe.map (\reload -> "Reload " ++ reload) hit.source.reload
+                        ]
+                        |> List.map Html.text
+                        |> List.intersperse (Html.text ", ")
+                    )
 
 
-            _ ->
-                []
+                _ ->
+                    []
+            )
         )
 
 
