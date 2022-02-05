@@ -17,7 +17,7 @@ def main():
         for file_name in sorted(os.listdir(f'data/{dir_name}/')):
             file_path = f'data/{dir_name}/{file_name}'
 
-            if os.path.getsize(file_path) == 0 or file_name.endswith('.404'):
+            if os.path.getsize(file_path) == 0:
                 continue
 
             id = file_name.replace('.html', '')
@@ -741,11 +741,12 @@ def parse_ritual(id: str, soup: BeautifulSoup):
     doc.cast = get_label_text(soup, 'Cast')
     doc.cost = get_label_text(soup, 'Cost')
     doc.duration = get_label_text(soup, 'Duration')
+    doc.heighten = get_heighten(soup)
     doc.primaryCheck = get_label_text(soup, 'Primary Check')
     doc.range = get_label_text(soup, 'Range')
     doc.secondaryCasters = get_label_text(soup, 'Secondary Casters')
     doc.secondaryChecks = get_label_text(soup, 'Secondary Checks')
-    doc.target = get_label_text(soup, 'Target(s)')
+    doc.targets = get_label_text(soup, 'Target(s)')
     doc.traits.normalized = normalize_traits(traits)
     doc.traits.raw = traits
 
@@ -816,12 +817,13 @@ def parse_spell(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'spell', 'Spells', 'Spell')
     traits = get_traits(soup)
 
-    doc.actions = get_actions(soup, 'Cast')
     doc.area = get_label_text(soup, 'Area')
     doc.bloodlines = split_comma(get_label_text(soup, 'Bloodline'))
+    doc.cast = get_actions(soup, 'Cast')
     doc.components = get_label_links(soup, 'Cast')
     doc.deities = split_comma(get_label_text(soup, 'Deities')) or get_label_text(soup, 'Deity')
     doc.duration = get_label_text(soup, 'Duration')
+    doc.heighten = get_heighten(soup)
     doc.mystery = get_label_text(soup, 'Mystery')
     doc.patronTheme = get_label_text(soup, 'Patron Theme')
     doc.range = get_label_text(soup, 'Range')
@@ -1176,6 +1178,15 @@ def get_actions_from_title(title: BeautifulSoup):
 
     else:
         return None
+
+
+def get_heighten(soup: BeautifulSoup):
+    heighten = []
+
+    for node in soup.find_all('b', string=re.compile('Heightened (.*)')):
+        heighten.append(node.text.replace('Heightened (', '').replace(')', ''))
+
+    return heighten
 
 
 def get_spoilers(soup: BeautifulSoup):
