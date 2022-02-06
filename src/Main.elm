@@ -1,6 +1,8 @@
 port module Main exposing (main)
 
 import Browser
+import Browser.Dom
+import Browser.Events
 import Browser.Navigation
 import Data
 import FontAwesome.Attributes
@@ -100,6 +102,7 @@ type Theme
 
 type Msg
     = DebouncePassed Int
+    | GotQueryOptionsHeight Int
     | GotSearchResult (Result Http.Error (List (Hit Document)))
     | IncludeFilteredTraitsChanged Bool
     | IncludeFilteredTypesChanged Bool
@@ -122,6 +125,7 @@ type Msg
     | TypeFilterRemoved String
     | UrlChanged Url
     | UrlRequested Browser.UrlRequest
+    | WindowResized Int Int
 
 
 port localStorage_set : Encode.Value -> Cmd msg
@@ -139,6 +143,7 @@ type alias Model =
     , menuOpen : Bool
     , navKey : Browser.Navigation.Key
     , query : String
+    , queryOptionsHeight : Int
     , queryOptionsOpen : Bool
     , queryType : QueryType
     , searchResult : Maybe (Result Http.Error (List (Hit Document)))
@@ -176,6 +181,7 @@ init flags url navKey =
       , menuOpen = False
       , navKey = navKey
       , query = ""
+      , queryOptionsHeight = 0
       , queryOptionsOpen = False
       , queryType = Standard
       , searchResult = Nothing
@@ -201,7 +207,10 @@ init flags url navKey =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    localStorage_receive LocalStorageValueReceived
+    Sub.batch
+        [ Browser.Events.onResize WindowResized
+        , localStorage_receive LocalStorageValueReceived
+        ]
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -215,6 +224,11 @@ update msg model =
 
             else
                 ( model, Cmd.none )
+
+        GotQueryOptionsHeight height ->
+            ( { model | queryOptionsHeight = height }
+            , Cmd.none
+            )
 
         GotSearchResult result ->
             ( { model
@@ -323,12 +337,12 @@ update msg model =
 
         SearchTraitsChanged value ->
             ( { model | searchTraits = value }
-            , Cmd.none
+            , getQueryOptionsHeight
             )
 
         SearchTypesChanged value ->
             ( { model | searchTypes = value }
-            , Cmd.none
+            , getQueryOptionsHeight
             )
 
         ShowAdditionalInfoChanged value ->
@@ -345,7 +359,7 @@ update msg model =
 
         ShowQueryOptionsPressed show ->
             ( { model | queryOptionsOpen = show }
-            , Cmd.none
+            , getQueryOptionsHeight
             )
 
         ShowSpoilersChanged value ->
@@ -431,6 +445,20 @@ update msg model =
                     ( model
                     , Browser.Navigation.load url
                     )
+
+        WindowResized width height ->
+            ( model
+            , getQueryOptionsHeight
+            )
+
+
+getQueryOptionsHeight : Cmd Msg
+getQueryOptionsHeight =
+    Browser.Dom.getViewportOf "query-options-dummy"
+        |> Task.map .scene
+        |> Task.map .height
+        |> Task.map round
+        |> Task.attempt (Result.withDefault 0 >> GotQueryOptionsHeight)
 
 
 saveToLocalStorage : String -> String -> Cmd msg
@@ -909,10 +937,8 @@ view model =
             ]
         , FontAwesome.Styles.css
         , Html.div
-            [ HA.class "column"
-            , HA.class "align-center"
-            , HA.style "position" "relative"
-            , HA.style "min-height" "100%"
+            [ HA.class "body-container"
+            , HA.class "column"
             ]
             [ Html.button
                 [ HA.class "menu-open-button"
@@ -929,8 +955,8 @@ view model =
             , viewMenu model
             , Html.div
                 [ HA.class "column"
+                , HA.class "content-container"
                 , HA.class "gap-large"
-                , HA.class "content"
                 ]
                 [ viewTitle
                 , Html.main_
@@ -1100,6 +1126,7 @@ viewQuery model =
         [ HA.class "column"
         , HA.class "align-stretch"
         , HA.class "gap-tiny"
+        , HA.style "position" "relative"
         ]
         [ Html.div
             [ HA.style "position" "relative" ]
@@ -1146,11 +1173,22 @@ viewQuery model =
                 ]
             )
 
-        , if model.queryOptionsOpen then
-            viewQueryOptions model
+        , Html.div
+            [ HA.class "query-options-dummy"
+            , HA.id "query-options-dummy"
+            ]
+            [ viewQueryOptions model ]
 
-          else
-            Html.text ""
+        , Html.div
+            [ HA.class "query-options-container"
+            , HA.style "height"
+                (if model.queryOptionsOpen then
+                    String.fromInt model.queryOptionsHeight
+
+                 else "0"
+                )
+            ]
+            [ viewQueryOptions model ]
 
         , Html.div
             [ HA.class "row"
@@ -2070,6 +2108,13 @@ css =
         align-items: stretch;
     }
 
+    .body-container {
+        align-items: center;
+        min-height: 100%;
+        min-width: 400px;
+        position: relative;
+    }
+
     .bold {
         font-weight: 700;
     }
@@ -2079,7 +2124,7 @@ css =
         flex-direction: column;
     }
 
-    .content {
+    .content-container {
         box-sizing: border-box;
         max-width: 1000px;
         padding: 8px;
@@ -2157,7 +2202,7 @@ css =
         max-width: 400px;
         padding: 8px;
         position: absolute;
-        transition: transform ease-in-out 0.25s;
+        transition: transform ease-in-out 0.2s;
         width: 85%;
         z-index: 2;
     }
@@ -2208,6 +2253,16 @@ css =
 
     .query-input {
         font-size: var(--font-very-large);
+    }
+
+    .query-options-container {
+        transition: height ease-in-out 0.2s;
+        overflow: clip;
+    }
+
+    .query-options-dummy {
+        position: absolute;
+        visibility: hidden;
     }
 
     .scrollbox {
