@@ -68,6 +68,7 @@ type alias Document =
     , range : Maybe String
     , reload : Maybe String
     , requiredAbilities : Maybe String
+    , requirements : Maybe String
     , savingThrow : Maybe String
     , secondaryCasters : Maybe String
     , secondaryChecks : Maybe String
@@ -847,6 +848,7 @@ documentDecoder =
     Field.attempt "range" Decode.string <| \range ->
     Field.attempt "reload" Decode.string <| \reload ->
     Field.attempt "requiredAbilities" Decode.string <| \requiredAbilities ->
+    Field.attempt "requirements" Decode.string <| \requirements ->
     Field.attempt "savingThrow" Decode.string <| \savingThrow ->
     Field.attempt "secondaryCasters" Decode.string <| \secondaryCasters ->
     Field.attempt "secondaryChecks" Decode.string <| \secondaryChecks ->
@@ -892,6 +894,7 @@ documentDecoder =
         , range = range
         , reload = reload
         , requiredAbilities = requiredAbilities
+        , requirements = requirements
         , savingThrow = savingThrow
         , secondaryCasters = secondaryCasters
         , secondaryChecks = secondaryChecks
@@ -1838,6 +1841,10 @@ viewSearchResultAdditionalInfo hit =
                                     |> String.join ", "
                                     |> String.Extra.nonEmpty
                                     |> Maybe.map (viewLabelAndText "Components")
+                                , hit.source.trigger
+                                    |> Maybe.map (viewLabelAndText "Trigger")
+                                , hit.source.requirements
+                                    |> Maybe.map (viewLabelAndText "Requirements")
                                 ]
                             )
                                 |> Just
