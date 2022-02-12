@@ -304,22 +304,13 @@ update msg model =
             )
 
         QueryChanged str ->
-            if String.isEmpty (String.trim str) then
-                ( { model
-                    | query = str
-                    , searchResult = Nothing
-                  }
-                , updateUrl { model | query = str }
-                )
-
-            else
-                ( { model
-                    | query = str
-                    , debounce = model.debounce + 1
-                  }
-                , Process.sleep 250
-                    |> Task.perform (\_ -> DebouncePassed (model.debounce + 1))
-                )
+            ( { model
+                | query = str
+                , debounce = model.debounce + 1
+              }
+            , Process.sleep 250
+                |> Task.perform (\_ -> DebouncePassed (model.debounce + 1))
+            )
 
         QueryTypeSelected queryType ->
             ( model
@@ -531,17 +522,21 @@ buildSearchBody model =
           , Encode.object
                 [ ( "bool"
                   , encodeObjectMaybe
-                        [ Just
-                            ( "should"
-                            , Encode.list Encode.object
-                                (case model.queryType of
-                                    Standard ->
-                                        buildStandardQueryBody model.query
+                        [ if False then
+                            Nothing
 
-                                    ElasticsearchQueryString ->
-                                        buildElasticsearchQueryStringQueryBody model.query
+                          else
+                            Just
+                                ( "should"
+                                , Encode.list Encode.object
+                                    (case model.queryType of
+                                        Standard ->
+                                            buildStandardQueryBody model.query
+
+                                        ElasticsearchQueryString ->
+                                            buildElasticsearchQueryStringQueryBody model.query
+                                    )
                                 )
-                            )
 
                         , if List.isEmpty (buildSearchFilterTerms model) then
                             Nothing
@@ -563,7 +558,11 @@ buildSearchBody model =
                                     (List.map List.singleton (buildSearchMustNotTerms model))
                                 )
 
-                        , Just ( "minimum_should_match", Encode.int 1 )
+                        , if String.isEmpty model.query then
+                            Nothing
+
+                          else
+                            Just ( "minimum_should_match", Encode.int 1 )
                         ]
                   )
                 ]
@@ -754,20 +753,33 @@ getQueryParam url param =
 
 searchWithCurrentQuery : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 searchWithCurrentQuery ( model, cmd ) =
-    let
-        newTracker : Int
-        newTracker =
-            case model.tracker of
+    if String.isEmpty (String.trim model.query)
+        && Set.isEmpty model.filteredTraits
+        && Set.isEmpty model.filteredTypes
+    then
+        ( { model | searchResult = Nothing }
+        , Cmd.batch
+            [ cmd
+            , case model.tracker of
                 Just tracker ->
-                    tracker + 1
+                    Http.cancel ("search-" ++ String.fromInt tracker)
 
                 Nothing ->
-                    1
-    in
-    if String.isEmpty (String.trim model.query) then
-        ( model, cmd )
+                    Cmd.none
+            ]
+        )
 
     else
+        let
+            newTracker : Int
+            newTracker =
+                case model.tracker of
+                    Just tracker ->
+                        tracker + 1
+
+                    Nothing ->
+                        1
+        in
         ( { model | tracker = Just newTracker }
         , Cmd.batch
             [ cmd
@@ -1200,6 +1212,14 @@ viewQuery model =
             [ viewIncludeFilters model
             , viewExcludeFilters model
             ]
+
+        , if model.queryType == ElasticsearchQueryString then
+            Html.div
+                []
+                [ Html.text "Query type: Elasticsearch Query String" ]
+
+          else
+            Html.text ""
         ]
 
 
