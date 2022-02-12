@@ -1853,10 +1853,17 @@ viewSearchResultAdditionalInfo hit =
                     )
 
                 "feat" ->
-                    hit.source.prerequisites
-                        |> Maybe.map (viewLabelAndText "Prerequisites")
-                        |> Maybe.map List.singleton
-                        |> Maybe.withDefault []
+                    (List.filterMap identity
+                        [ hit.source.frequency
+                            |> Maybe.map (viewLabelAndText "Frequency")
+                        , hit.source.prerequisites
+                            |> Maybe.map (viewLabelAndText "Prerequisites")
+                        , hit.source.trigger
+                            |> Maybe.map (viewLabelAndText "Trigger")
+                        , hit.source.requirements
+                            |> Maybe.map (viewLabelAndText "Requirements")
+                        ]
+                    )
 
                 "lesson" ->
                     hit.source.lessonType
