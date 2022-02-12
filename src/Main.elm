@@ -17,9 +17,11 @@ import Http
 import Json.Decode as Decode
 import Json.Decode.Field as Field
 import Json.Encode as Encode
+import List.Extra
 import Maybe.Extra
 import Process
 import Regex
+import Result.Extra
 import Set exposing (Set)
 import String.Extra
 import Task
@@ -29,9 +31,16 @@ import Url.Parser
 import Url.Parser.Query
 
 
+type alias SearchResult =
+    { hits : List (Hit Document)
+    , total : Int
+    }
+
+
 type alias Hit a =
     { id : String
     , score : Float
+    , sort : Encode.Value
     , source : a
     }
 
@@ -104,16 +113,19 @@ type Theme
 type Msg
     = DebouncePassed Int
     | GotQueryOptionsHeight Int
-    | GotSearchResult (Result Http.Error (List (Hit Document)))
+    | GotSearchResult (Result Http.Error SearchResult)
     | IncludeFilteredTraitsChanged Bool
     | IncludeFilteredTypesChanged Bool
+    | LoadMorePressed
     | LocalStorageValueReceived Decode.Value
+    | NoOp
     | QueryChanged String
     | QueryTypeSelected QueryType
     | RemoveAllTraitFiltersPressed
     | RemoveAllTypeFiltersPressed
     | SearchTraitsChanged String
     | SearchTypesChanged String
+    | ScrollToTopPressed
     | ShowAdditionalInfoChanged Bool
     | ShowMenuPressed Bool
     | ShowQueryOptionsPressed Bool
@@ -147,7 +159,7 @@ type alias Model =
     , queryOptionsHeight : Int
     , queryOptionsOpen : Bool
     , queryType : QueryType
-    , searchResult : Maybe (Result Http.Error (List (Hit Document)))
+    , searchResults : List (Result Http.Error SearchResult)
     , searchTraits : String
     , searchTypes : String
     , showResultAdditionalInfo : Bool
@@ -185,7 +197,7 @@ init flags url navKey =
       , queryOptionsHeight = 0
       , queryOptionsOpen = False
       , queryType = Standard
-      , searchResult = Nothing
+      , searchResults = []
       , searchTraits = ""
       , searchTypes = ""
       , showResultAdditionalInfo = True
@@ -233,7 +245,10 @@ update msg model =
 
         GotSearchResult result ->
             ( { model
-                | searchResult = Just result
+                | searchResults =
+                    List.append
+                        (List.filter Result.Extra.isOk model.searchResults)
+                        [ result ]
                 , tracker = Nothing
               }
             , Cmd.none
@@ -248,6 +263,12 @@ update msg model =
             ( { model | includeFilteredTypes = value }
             , updateUrl { model | includeFilteredTypes = value }
             )
+
+        LoadMorePressed ->
+            ( model
+            , Cmd.none
+            )
+                |> searchWithCurrentQuery
 
         LocalStorageValueReceived value ->
             ( case Decode.decodeValue (Decode.field "key" Decode.string) value of
@@ -303,6 +324,11 @@ update msg model =
             , Cmd.none
             )
 
+        NoOp ->
+            ( model
+            , Cmd.none
+            )
+
         QueryChanged str ->
             ( { model
                 | query = str
@@ -335,6 +361,11 @@ update msg model =
         SearchTypesChanged value ->
             ( { model | searchTypes = value }
             , getQueryOptionsHeight
+            )
+
+        ScrollToTopPressed  ->
+            ( model
+            , Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0)
             )
 
         ShowAdditionalInfoChanged value ->
@@ -517,12 +548,12 @@ searchFields =
 
 buildSearchBody : Model -> Encode.Value
 buildSearchBody model =
-    Encode.object
+    encodeObjectMaybe
         [ ( "query"
           , Encode.object
                 [ ( "bool"
                   , encodeObjectMaybe
-                        [ if False then
+                        [ if String.isEmpty model.query then
                             Nothing
 
                           else
@@ -567,7 +598,16 @@ buildSearchBody model =
                   )
                 ]
           )
-        , ( "size", Encode.int 100 )
+            |> Just
+        , Just ( "size", Encode.int 50 )
+        , Just ( "sort", Encode.list Encode.string [ "_score", "category", "id" ] )
+        , model.searchResults
+            |> List.Extra.last
+            |> Maybe.andThen (Result.toMaybe)
+            |> Maybe.map .hits
+            |> Maybe.andThen List.Extra.last
+            |> Maybe.map .sort
+            |> Maybe.map (Tuple.pair "search_after")
         ]
 
 
@@ -740,6 +780,7 @@ updateModelFromQueryString url model =
                     |> Maybe.map (\_ -> False)
                 )
             |> Maybe.withDefault model.includeFilteredTraits
+        , searchResults = []
     }
 
 
@@ -757,7 +798,7 @@ searchWithCurrentQuery ( model, cmd ) =
         && Set.isEmpty model.filteredTraits
         && Set.isEmpty model.filteredTypes
     then
-        ( { model | searchResult = Nothing }
+        ( { model | searchResults = [] }
         , Cmd.batch
             [ cmd
             , case model.tracker of
@@ -780,7 +821,8 @@ searchWithCurrentQuery ( model, cmd ) =
                     Nothing ->
                         1
         in
-        ( { model | tracker = Just newTracker }
+        ( { model | tracker = Just newTracker
+          }
         , Cmd.batch
             [ cmd
 
@@ -810,9 +852,14 @@ encodeObjectMaybe list =
         |> Encode.object
 
 
-esResultDecoder : Decode.Decoder (List (Hit Document))
+esResultDecoder : Decode.Decoder SearchResult
 esResultDecoder =
-    Decode.at [ "hits", "hits" ] (Decode.list (hitDecoder documentDecoder))
+    Field.requireAt [ "hits", "hits" ] (Decode.list (hitDecoder documentDecoder)) <| \hits ->
+    Field.requireAt [ "hits", "total", "value" ] Decode.int <| \total ->
+    Decode.succeed
+        { hits = hits
+        , total = total
+        }
 
 
 hitDecoder : Decode.Decoder a -> Decode.Decoder (Hit a)
@@ -820,9 +867,11 @@ hitDecoder decoder =
     Field.require "_id" Decode.string <| \id ->
     Field.require "_score" Decode.float <| \score ->
     Field.require "_source" decoder <| \source ->
+    Field.require "sort" Decode.value <| \sort ->
     Decode.succeed
         { id = id
         , score = score
+        , sort = sort
         , source = source
         }
 
@@ -1124,7 +1173,11 @@ viewTitle =
         ]
         [ Html.h1
             []
-            [ Html.text "Nethys Search" ]
+            [ Html.a
+                [ HA.href "?"
+                ]
+                [ Html.text "Nethys Search" ]
+            ]
         , Html.div
             []
             [ Html.text "Search engine for "
@@ -1170,9 +1223,6 @@ viewQuery model =
             [ HA.class "row"
             , HA.class "gap-tiny"
             , HE.onClick (ShowQueryOptionsPressed (not model.queryOptionsOpen))
-            , HA.style "border-width" "0"
-            , HA.style "background-color" "transparent"
-            , HA.style "color" "var(--color-text)"
             , HA.style "align-self" "center"
             ]
             (if model.queryOptionsOpen then
@@ -1555,41 +1605,91 @@ viewRadioButton { checked, name, onInput, text } =
 
 
 
-viewSearchResults : Model -> Html msg
+viewSearchResults : Model -> Html Msg
 viewSearchResults model =
+    let
+        total : Maybe Int
+        total =
+            model.searchResults
+                |> List.head
+                |> Maybe.andThen Result.toMaybe
+                |> Maybe.map .total
+
+        resultCount : Int
+        resultCount =
+            model.searchResults
+                |> List.map Result.toMaybe
+                |> List.map (Maybe.map .hits)
+                |> List.map (Maybe.map List.length)
+                |> List.map (Maybe.withDefault 0)
+                |> List.sum
+    in
     Html.div
         [ HA.class "column"
         , HA.class "gap-large"
         , HA.style "min-height" "500px"
         ]
-        (if Maybe.Extra.isJust model.tracker then
-            [ Html.div
-                [ HA.class "loader"
-                ]
-                []
-            ]
+        (List.concat
+            [ case total of
+                Just 10000 ->
+                    [ Html.text ("10000+ results") ]
 
-        else
-            case model.searchResult of
-                Just (Ok []) ->
-                    [ Html.h2
-                        []
-                        [ Html.text "No matches"
-                        ]
-                    ]
-
-                Just (Ok hits) ->
-                    (List.map (viewSingleSearchResult model) hits)
-
-                Just (Err (Http.BadStatus 400)) ->
-                    [ Html.h2
-                        []
-                        [ Html.text "Error: Failed to parse query"
-                        ]
-                    ]
+                Just count ->
+                    [ Html.text (String.fromInt count ++ " results") ]
 
                 _ ->
                     []
+
+            , List.map
+                (\result ->
+                    case result of
+                        Ok r ->
+                            List.map (viewSingleSearchResult model) r.hits
+
+                        Err (Http.BadStatus 400) ->
+                            [ Html.h2
+                                []
+                                [ Html.text "Error: Failed to parse query" ]
+                            ]
+
+                        Err _ ->
+                            [ Html.h2
+                                []
+                                [ Html.text "Error: Search failed" ]
+                            ]
+                )
+                model.searchResults
+                |> List.concat
+
+            , if Maybe.Extra.isJust model.tracker then
+                [ Html.div
+                    [ HA.class "loader"
+                    ]
+                    []
+                ]
+
+              else if resultCount < Maybe.withDefault 0 total then
+                [ Html.button
+                    [ HE.onClick LoadMorePressed
+                    , HA.style "align-self" "center"
+                    ]
+                    [ Html.text "Load more" ]
+                ]
+
+              else
+                []
+
+            , if resultCount > 0 then
+                [ Html.button
+                    [ HE.onClick ScrollToTopPressed
+                    , HA.style "align-self" "center"
+                    ]
+                    [ Html.text "Scroll to top" ]
+                ]
+
+              else
+                []
+            ]
         )
 
 
@@ -2098,6 +2198,15 @@ css =
         text-decoration: underline;
     }
 
+    button {
+        border-width: 1px;
+        border-style: solid;
+        border-radius: 4px;
+        background-color: transparent;
+        color: var(--color-text);
+        font-size: var(--font-normal);
+    }
+
     h1 {
         font-size: 48px;
         font-weight: normal;
@@ -2236,18 +2345,14 @@ css =
 
     .menu-close-button {
         align-self: flex-end;
-        background-color: inherit;
         border: 0;
-        color: var(--color-text);
         font-size: 32px;
         margin-top: -8px;
         padding: 8px;
     }
 
     .menu-open-button {
-        background-color: transparent;
         border: 0;
-        color: var(--color-text);
         font-size: 32px;
         left: 0;
         padding: 8px;
