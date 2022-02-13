@@ -2123,10 +2123,13 @@ viewSearchResultAdditionalInfo hit =
                         |> Maybe.withDefault []
 
                 "relic" ->
-                    hit.source.aspect
-                        |> Maybe.map (viewLabelAndText "Aspect")
-                        |> Maybe.map List.singleton
-                        |> Maybe.withDefault []
+                    (List.filterMap identity
+                        [ hit.source.aspect
+                            |> Maybe.map (viewLabelAndText "Aspect")
+                        , hit.source.prerequisites
+                            |> Maybe.map (viewLabelAndText "Prerequisite")
+                        ]
+                    )
 
                 "ritual" ->
                     [ Html.div
