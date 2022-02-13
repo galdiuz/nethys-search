@@ -11,9 +11,6 @@ def main():
     Doc.init()
 
     for dir_name in sorted(os.listdir('data')):
-        # if not dir_name in ['monster-families']:
-        #     continue
-
         for file_name in sorted(os.listdir(f'data/{dir_name}/')):
             file_path = f'data/{dir_name}/{file_name}'
 
@@ -21,9 +18,6 @@ def main():
                 continue
 
             id = file_name.replace('.html', '')
-
-            if id != '1':
-                continue
 
             print(file_path)
 
@@ -242,6 +236,7 @@ def parse_armor(id: str, soup: BeautifulSoup):
     price = get_label_text(soup, 'Price')
     traits = split_comma(get_label_text(soup, 'Traits', '—'))
 
+    doc.type = 'Armor'
     doc.price.normalized = normalize_price(price)
     doc.price.raw = price
     doc.acBonus = get_label_text(soup, 'AC Bonus')
@@ -720,7 +715,7 @@ def parse_relic(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'relic', 'Relics', 'Relic')
     traits = get_traits(soup)
 
-    doc.prerequisites = get_label_text(soup, 'Preprequisite')
+    doc.prerequisites = get_label_text(soup, 'Prerequisite')
     doc.aspect = get_label_text(soup, 'Aspect')
     doc.traits.normalized = normalize_traits(traits)
     doc.traits.raw = traits
@@ -884,6 +879,7 @@ def parse_weapon(id: str, soup: BeautifulSoup):
     price = get_label_text(title, 'Price')
     traits = get_label_links(soup, 'Traits')
 
+    doc.type = 'Weapon'
     doc.ammunition = get_label_text(soup, 'Ammunition')
     doc.bulk = get_label_text(soup, 'Bulk')
     doc.damage = get_label_text(soup, 'Damage')
@@ -1086,7 +1082,7 @@ def get_label_text(soup, label, stop_at=';'):
 
     if node := soup.find_next('b', text=label):
         while node := node.next_sibling:
-            if node.name in ['br', 'hr', 'h2']:
+            if node.name in ['b', 'br', 'hr', 'h2']:
                 break
 
             elif node.text:
@@ -1206,7 +1202,6 @@ def get_spoilers(soup: BeautifulSoup):
 class Doc(Document):
     id = Integer()
     url = Keyword()
-    name = Text()
     level = Integer()
     category = Keyword(normalizer="lowercase")
     type = Keyword(normalizer="lowercase")
