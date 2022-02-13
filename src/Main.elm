@@ -104,6 +104,18 @@ type QueryType
     | ElasticsearchQueryString
 
 
+type SortDir
+    = Asc
+    | Desc
+
+
+type SortField
+    = Level
+    | Name
+    | Price
+    | Type
+
+
 type Theme
     = Dark
     | Light
@@ -121,6 +133,7 @@ type Msg
     | NoOp
     | QueryChanged String
     | QueryTypeSelected QueryType
+    | RemoveAllSortsPressed
     | RemoveAllTraitFiltersPressed
     | RemoveAllTypeFiltersPressed
     | SearchTraitsChanged String
@@ -131,6 +144,8 @@ type Msg
     | ShowQueryOptionsPressed Bool
     | ShowSpoilersChanged Bool
     | ShowTraitsChanged Bool
+    | SortAdded SortField SortDir
+    | SortRemoved SortField
     | ThemeSelected Theme
     | TraitFilterAdded String
     | TraitFilterRemoved String
@@ -165,6 +180,7 @@ type alias Model =
     , showResultAdditionalInfo : Bool
     , showResultSpoilers : Bool
     , showResultTraits : Bool
+    , sort : List ( SortField, SortDir )
     , theme : Theme
     , tracker : Maybe Int
     , url : Url
@@ -200,6 +216,7 @@ init flags url navKey =
       , searchResults = []
       , searchTraits = ""
       , searchTypes = ""
+      , sort = []
       , showResultAdditionalInfo = True
       , showResultSpoilers = True
       , showResultTraits = True
@@ -213,6 +230,7 @@ init flags url navKey =
         , localStorage_get "show-spoilers"
         , localStorage_get "show-traits"
         , localStorage_get "theme"
+        , getQueryOptionsHeight
         ]
     )
         |> searchWithCurrentQuery
@@ -343,6 +361,11 @@ update msg model =
             , updateUrl { model | queryType = queryType }
             )
 
+        RemoveAllSortsPressed ->
+            ( model
+            , updateUrl { model | sort = [] }
+            )
+
         RemoveAllTraitFiltersPressed ->
             ( model
             , updateUrl { model | filteredTraits = Set.empty }
@@ -397,6 +420,22 @@ update msg model =
             , saveToLocalStorage
                 "show-traits"
                 (if value then "1" else "0")
+            )
+
+        SortAdded field dir ->
+            ( model
+            , updateUrl
+                { model
+                    | sort =
+                        model.sort
+                            |> List.filter (Tuple.first >> (/=) field)
+                            |> (\list -> List.append list [ ( field, dir ) ])
+                }
+            )
+
+        SortRemoved field ->
+            ( model
+            , updateUrl { model | sort = List.filter (Tuple.first >> (/=) field) model.sort }
             )
 
         ThemeSelected theme ->
@@ -526,6 +565,14 @@ updateUrl ({ url } as model) =
                 |> Set.toList
                 |> String.join ","
               )
+            , ( "sort"
+              , model.sort
+                    |> List.map
+                        (\( field, dir ) ->
+                            sortFieldToString field ++ "-" ++ sortDirToString dir
+                        )
+                    |> String.join ","
+              )
             ]
                 |> List.filter (Tuple.second >> String.isEmpty >> not)
                 |> List.map (\(key, val) -> Url.Builder.string key val)
@@ -600,7 +647,31 @@ buildSearchBody model =
           )
             |> Just
         , Just ( "size", Encode.int 50 )
-        , Just ( "sort", Encode.list Encode.string [ "_score", "category", "id" ] )
+        , ( "sort"
+          , Encode.list identity
+                (if List.isEmpty model.sort then
+                    [ Encode.string "_score"
+                    , Encode.string "_doc"
+                    ]
+
+                 else
+                     List.append
+                        (List.map
+                            (\( field, dir ) ->
+                                Encode.object
+                                    [ ( sortFieldToQueryField field
+                                      , Encode.object
+                                            [ ( "order", Encode.string (sortDirToString dir) )
+                                            ]
+                                      )
+                                    ]
+                            )
+                            model.sort
+                        )
+                        [ Encode.string "id" ]
+                )
+          )
+            |> Just
         , model.searchResults
             |> List.Extra.last
             |> Maybe.andThen (Result.toMaybe)
@@ -609,6 +680,80 @@ buildSearchBody model =
             |> Maybe.map .sort
             |> Maybe.map (Tuple.pair "search_after")
         ]
+
+
+sortFieldToString : SortField -> String
+sortFieldToString field =
+    case field of
+        Level ->
+            "Level"
+
+        Name ->
+            "Name"
+
+        Price ->
+            "Price"
+
+        Type ->
+            "Type"
+
+
+sortFieldToQueryField : SortField -> String
+sortFieldToQueryField field =
+    case field of
+        Level ->
+            "level"
+
+        Name ->
+            "name.keyword"
+
+        Price ->
+            "price.normalized"
+
+        Type ->
+            "type"
+
+
+sortFieldFromString : String -> Maybe SortField
+sortFieldFromString str =
+    case str of
+        "Level" ->
+            Just Level
+
+        "Name" ->
+            Just Name
+
+        "Price" ->
+            Just Price
+
+        "Type" ->
+            Just Type
+
+        _ ->
+            Nothing
+
+
+sortDirToString : SortDir -> String
+sortDirToString dir =
+    case dir of
+        Asc ->
+            "asc"
+
+        Desc ->
+            "desc"
+
+
+sortDirFromString : String -> Maybe SortDir
+sortDirFromString str =
+    case str of
+        "asc" ->
+            Just Asc
+
+        "desc" ->
+            Just Desc
+
+        _ ->
+            Nothing
 
 
 buildSearchFilterTerms : Model -> List ( String, Encode.Value )
@@ -781,6 +926,25 @@ updateModelFromQueryString url model =
                 )
             |> Maybe.withDefault model.includeFilteredTraits
         , searchResults = []
+        , sort =
+            getQueryParam url "sort"
+                |> String.Extra.nonEmpty
+                |> Maybe.map (String.split ",")
+                |> Maybe.map
+                    (List.filterMap
+                        (\str ->
+                            case String.split "-" str of
+                                [ field, dir ] ->
+                                    Maybe.map2
+                                        Tuple.pair
+                                        (sortFieldFromString field)
+                                        (sortDirFromString dir)
+
+                                _ ->
+                                    Nothing
+                        )
+                    )
+                |> Maybe.withDefault []
     }
 
 
@@ -865,12 +1029,12 @@ esResultDecoder =
 hitDecoder : Decode.Decoder a -> Decode.Decoder (Hit a)
 hitDecoder decoder =
     Field.require "_id" Decode.string <| \id ->
-    Field.require "_score" Decode.float <| \score ->
+    Field.require "_score" (Decode.maybe Decode.float) <| \score ->
     Field.require "_source" decoder <| \source ->
     Field.require "sort" Decode.value <| \sort ->
     Decode.succeed
         { id = id
-        , score = score
+        , score = Maybe.withDefault 0 score
         , sort = sort
         , source = source
         }
@@ -1255,6 +1419,14 @@ viewQuery model =
             ]
             [ viewQueryOptions model ]
 
+        , if model.queryType == ElasticsearchQueryString then
+            Html.div
+                []
+                [ Html.text "Query type: Elasticsearch Query String" ]
+
+          else
+            Html.text ""
+
         , Html.div
             [ HA.class "row"
             , HA.class "gap-medium"
@@ -1263,13 +1435,26 @@ viewQuery model =
             , viewExcludeFilters model
             ]
 
-        , if model.queryType == ElasticsearchQueryString then
-            Html.div
-                []
-                [ Html.text "Query type: Elasticsearch Query String" ]
+        , if List.isEmpty model.sort then
+            Html.text ""
 
           else
-            Html.text ""
+            Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-baseline"
+                ]
+                (List.concat
+                    [ [ Html.text "Sort by:" ]
+                    , List.map
+                        (\( field, dir ) ->
+                            Html.button
+                                [ HE.onClick (SortRemoved field) ]
+                                [ Html.text (sortFieldToString field ++ " " ++ sortDirToString dir) ]
+                        )
+                        model.sort
+                    ]
+                )
         ]
 
 
@@ -1563,6 +1748,66 @@ viewQueryOptions model =
                     (List.filter
                         (String.toLower >> String.contains (String.toLower model.searchTraits))
                         Data.traits
+                    )
+                )
+            ]
+
+        , Html.div
+            [ HA.class "option-container"
+            ]
+            [ Html.h3
+                []
+                [ Html.text "Sort results" ]
+            , Html.div
+                [ HA.class "row"
+                , HA.class "gap-medium"
+                ]
+                (List.append
+                    [ Html.button
+                        [ HE.onClick RemoveAllSortsPressed ]
+                        [ Html.text "Reset selection" ]
+                    ]
+                    (List.map
+                        (\field ->
+                            Html.div
+                                [ HA.class "row"
+                                , HA.class "gap-tiny"
+                                , HA.class "align-baseline"
+                                ]
+                                [ Html.text (sortFieldToString field ++ ":")
+                                , Html.button
+                                    [ HE.onClick
+                                        (if List.member ( field, Asc ) model.sort then
+                                            (SortRemoved field)
+
+                                         else
+                                            (SortAdded field Asc)
+                                        )
+                                    , HAE.attributeIf
+                                        (not <| List.member ( field, Asc ) model.sort)
+                                        (HA.class "excluded")
+                                    ]
+                                    [ Html.text "Asc" ]
+                                , Html.button
+                                    [ HE.onClick
+                                        (if List.member ( field, Desc ) model.sort then
+                                            (SortRemoved field)
+
+                                         else
+                                            (SortAdded field Desc)
+                                        )
+                                    , HAE.attributeIf
+                                        (not <| List.member ( field, Desc ) model.sort)
+                                        (HA.class "excluded")
+                                    ]
+                                    [ Html.text "Desc" ]
+                                ]
+                        )
+                        [ Level
+                        , Name
+                        , Price
+                        , Type
+                        ]
                     )
                 )
             ]
@@ -2214,6 +2459,10 @@ css =
         font-size: var(--font-normal);
     }
 
+    button.excluded {
+        color: var(--color-inactive-text);
+    }
+
     h1 {
         font-size: 48px;
         font-weight: normal;
@@ -2473,7 +2722,7 @@ css =
     .trait.excluded {
         background-color: var(--color-element-inactive-bg);
         border-color: var(--color-element-inactive-border);
-        color: #999999;
+        color: var(--color-inactive-text);
     }
 
     .trait-alignment {
@@ -2536,6 +2785,7 @@ cssDark =
         --color-subelement-bg: #806e45;
         --color-subelement-text: #111111;
         --color-icon: #cccccc;
+        --color-inactive-text: #999999;
         --color-text: #eeeeee;
     }
     """
@@ -2558,6 +2808,7 @@ cssLight =
         --color-subelement-bg: #cbc18f;
         --color-subelement-text: #111111;
         --color-icon: #111111;
+        --color-inactive-text: #999999;
         --color-text: #111111;
     }
     """
@@ -2580,6 +2831,7 @@ cssPaper =
         --color-subelement-bg: #dbd0bc;
         --color-subelement-text: #111111;
         --color-icon: #111111;
+        --color-inactive-text: #999999;
         --color-text: #111111;
     }
     """
