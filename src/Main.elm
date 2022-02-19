@@ -3135,6 +3135,8 @@ css =
     }
 
     .query-options-dummy {
+        opacity: 0;
+        pointer-events: none;
         position: absolute;
         visibility: hidden;
     }
