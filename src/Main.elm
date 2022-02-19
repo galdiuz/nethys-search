@@ -51,11 +51,12 @@ type alias Document =
     , name : String
     , type_ : String
     , url : String
-    , abilities : List String
     , abilityType : Maybe String
+    , ac : Maybe Int
     , actions : Maybe String
     , activate : Maybe String
     , alignment : Maybe String
+    , ammunition : Maybe String
     , area : Maybe String
     , aspect : Maybe String
     , breadcrumbs : Maybe String
@@ -66,15 +67,20 @@ type alias Document =
     , creatureFamily : Maybe String
     , damage : Maybe String
     , duration : Maybe String
+    , familiarAbilities : List String
+    , fort : Maybe Int
     , frequency : Maybe String
     , hands : Maybe String
     , heighten : List String
+    , hp : Maybe Int
     , lessonType : Maybe String
     , level : Maybe Int
+    , perception : Maybe Int
     , prerequisites : Maybe String
     , price : Maybe String
     , primaryCheck : Maybe String
     , range : Maybe String
+    , ref : Maybe Int
     , reload : Maybe String
     , requiredAbilities : Maybe String
     , requirements : Maybe String
@@ -91,6 +97,7 @@ type alias Document =
     , usage : Maybe String
     , weaponCategory : Maybe String
     , weaponGroup : Maybe String
+    , will : Maybe Int
     }
 
 
@@ -110,10 +117,24 @@ type SortDir
 
 
 type SortField
-    = Level
+    = AC
+    | Bulk
+    | Fortitude
+    | HP
+    | Level
     | Name
+    | Perception
     | Price
+    | Range
+    | Reflex
     | Type
+    | Will
+    | Str
+    | Dex
+    | Con
+    | Int
+    | Wis
+    | Cha
 
 
 type Theme
@@ -130,6 +151,7 @@ type Msg
     | IncludeFilteredTypesChanged Bool
     | LoadMorePressed
     | LocalStorageValueReceived Decode.Value
+    | MenuOpenDelayPassed
     | NoOp
     | QueryChanged String
     | QueryTypeSelected QueryType
@@ -140,6 +162,7 @@ type Msg
     | SearchTypesChanged String
     | ScrollToTopPressed
     | ShowAdditionalInfoChanged Bool
+    | ShowEqsHelpPressed Bool
     | ShowMenuPressed Bool
     | ShowQueryOptionsPressed Bool
     | ShowSpoilersChanged Bool
@@ -164,12 +187,14 @@ port localStorage_receive : (Decode.Value -> msg) -> Sub msg
 type alias Model =
     { debounce : Int
     , elasticUrl : String
+    , eqsHelpOpen : Bool
     , filteredTraits : Set String
     , filteredTypes : Set String
     , includeFilteredTraits : Bool
     , includeFilteredTypes : Bool
     , menuOpen : Bool
     , navKey : Browser.Navigation.Key
+    , overlayActive : Bool
     , query : String
     , queryOptionsHeight : Int
     , queryOptionsOpen : Bool
@@ -203,12 +228,14 @@ init : Flags -> Url -> Browser.Navigation.Key -> ( Model, Cmd Msg )
 init flags url navKey =
     ( { debounce = 0
       , elasticUrl = flags.elasticUrl
+      , eqsHelpOpen = False
       , filteredTraits = Set.empty
       , filteredTypes = Set.empty
       , includeFilteredTraits = True
       , includeFilteredTypes = True
       , menuOpen = False
       , navKey = navKey
+      , overlayActive = False
       , query = ""
       , queryOptionsHeight = 0
       , queryOptionsOpen = False
@@ -342,6 +369,11 @@ update msg model =
             , Cmd.none
             )
 
+        MenuOpenDelayPassed ->
+            ( { model | overlayActive = True }
+            , Cmd.none
+            )
+
         NoOp ->
             ( model
             , Cmd.none
@@ -398,9 +430,21 @@ update msg model =
                 (if value then "1" else "0")
             )
 
+        ShowEqsHelpPressed show ->
+            ( { model | eqsHelpOpen = show }
+            , getQueryOptionsHeight
+            )
+
         ShowMenuPressed show ->
-            ( { model | menuOpen = show }
-            , Cmd.none
+            ( { model
+                | menuOpen = show
+                , overlayActive = False
+              }
+            , if show then
+                Process.sleep 250
+                    |> Task.perform (\_ -> MenuOpenDelayPassed)
+              else
+                Cmd.none
             )
 
         ShowQueryOptionsPressed show ->
@@ -588,7 +632,7 @@ searchFields : List String
 searchFields =
     [ "name"
     , "text^0.1"
-    , "traits.raw"
+    , "trait_raw"
     , "type"
     ]
 
@@ -685,49 +729,175 @@ buildSearchBody model =
 sortFieldToString : SortField -> String
 sortFieldToString field =
     case field of
+        AC ->
+            "AC"
+
+        Bulk ->
+            "Bulk"
+
+        Cha ->
+            "Charisma"
+
+        Con ->
+            "Constitution"
+
+        Dex ->
+            "Dexterity"
+
+        Fortitude ->
+            "Fortitude"
+
+        HP ->
+            "HP"
+
+        Int ->
+            "Intelligence"
+
         Level ->
             "Level"
 
         Name ->
             "Name"
 
+        Perception ->
+            "Perception"
+
         Price ->
             "Price"
 
+        Range ->
+            "Range"
+
+        Reflex ->
+            "Reflex"
+
+        Str ->
+            "Strength"
+
         Type ->
             "Type"
+
+        Wis ->
+            "Wisdom"
+
+        Will ->
+            "Will"
 
 
 sortFieldToQueryField : SortField -> String
 sortFieldToQueryField field =
     case field of
+        AC ->
+            "ac"
+
+        Bulk ->
+            "bulk"
+
+        Cha ->
+            "charisma"
+
+        Con ->
+            "constitution"
+
+        Dex ->
+            "dexterity"
+
+        Fortitude ->
+            "fortitude_save"
+
+        HP ->
+            "hp"
+
+        Int ->
+            "intelligence"
+
         Level ->
             "level"
 
         Name ->
             "name.keyword"
 
+        Perception ->
+            "perception"
+
         Price ->
-            "price.normalized"
+            "price"
+
+        Range ->
+            "range"
+
+        Reflex ->
+            "reflex_save"
+
+        Str ->
+            "strength"
 
         Type ->
             "type"
+
+        Will ->
+            "will_save"
+
+        Wis ->
+            "wisdom"
 
 
 sortFieldFromString : String -> Maybe SortField
 sortFieldFromString str =
     case str of
+        "AC" ->
+            Just AC
+
+        "Bulk" ->
+            Just Bulk
+
+        "Charisma" ->
+            Just Cha
+
+        "Constitution" ->
+            Just Con
+
+        "Dexterity" ->
+            Just Dex
+
+        "Fortitude" ->
+            Just Fortitude
+
+        "HP" ->
+            Just HP
+
+        "Intelligence" ->
+            Just Int
+
         "Level" ->
             Just Level
 
         "Name" ->
             Just Name
 
+        "Perception" ->
+            Just Perception
+
         "Price" ->
             Just Price
 
+        "Range" ->
+            Just Range
+
+        "Reflex" ->
+            Just Reflex
+
+        "Strength" ->
+            Just Str
+
         "Type" ->
             Just Type
+
+        "Will" ->
+            Just Will
+
+        "Wisdom" ->
+            Just Wis
 
         _ ->
             Nothing
@@ -765,7 +935,7 @@ buildSearchFilterTerms model =
         Just
             ( "terms"
             , Encode.object
-                [ ( "traits.normalized"
+                [ ( "trait"
                   , Encode.list Encode.string (Set.toList model.filteredTraits)
                   )
                 ]
@@ -796,7 +966,7 @@ buildSearchMustNotTerms model =
         Just
             ( "terms"
             , Encode.object
-                [ ( "traits.normalized"
+                [ ( "trait"
                   , Encode.list Encode.string (Set.toList model.filteredTraits)
                   )
                 ]
@@ -1047,57 +1217,65 @@ documentDecoder =
     Field.require "name" Decode.string <| \name ->
     Field.require "type" Decode.string <| \type_ ->
     Field.require "url" Decode.string <| \url ->
-    Field.attempt "abilities" (Decode.list Decode.string) <| \abilities ->
-    Field.attempt "abilityType" Decode.string <| \abilityType ->
+    Field.attempt "ability_type" Decode.string <| \abilityType ->
+    Field.attempt "ac" Decode.int <| \ac ->
     Field.attempt "actions" Decode.string <| \actions ->
     Field.attempt "activate" Decode.string <| \activate ->
     Field.attempt "alignment" Decode.string <| \alignment ->
+    Field.attempt "ammunition" Decode.string <| \ammunition ->
     Field.attempt "area" Decode.string <| \area ->
     Field.attempt "aspect" Decode.string <| \aspect ->
     Field.attempt "breadcrumbs" Decode.string <| \breadcrumbs ->
-    Field.attempt "bulk" Decode.string <| \bulk ->
+    Field.attempt "bulk_raw" Decode.string <| \bulk ->
     Field.attempt "cast" Decode.string <| \cast ->
-    Field.attempt "components" (Decode.list Decode.string) <| \components ->
+    Field.attempt "component" (Decode.list Decode.string) <| \components ->
     Field.attempt "cost" Decode.string <| \cost ->
-    Field.attempt "creatureFamily" Decode.string <| \creatureFamily ->
+    Field.attempt "creature_family" Decode.string <| \creatureFamily ->
     Field.attempt "damage" Decode.string <| \damage ->
     Field.attempt "duration" Decode.string <| \duration ->
+    Field.attempt "familiar_ability" (Decode.list Decode.string) <| \familiarAbilities ->
+    Field.attempt "fortitude_save" Decode.int <| \fort ->
     Field.attempt "frequency" Decode.string <| \frequency ->
     Field.attempt "hands" Decode.string <| \hands ->
     Field.attempt "heighten" (Decode.list Decode.string) <| \heighten ->
-    Field.attempt "lessonType" Decode.string <| \lessonType ->
+    Field.attempt "hp" Decode.int <| \hp ->
+    Field.attempt "lesson_type" Decode.string <| \lessonType ->
     Field.attempt "level" Decode.int <| \level ->
-    Field.attempt "prerequisites" Decode.string <| \prerequisites ->
-    Field.attemptAt [ "price", "raw" ] Decode.string <| \price ->
+    Field.attempt "perception" Decode.int <| \perception ->
+    Field.attempt "prerequisite" Decode.string <| \prerequisites ->
+    Field.attempt "price_raw" Decode.string <| \price ->
     Field.attempt "primaryCheck" Decode.string <| \primaryCheck ->
-    Field.attempt "range" Decode.string <| \range ->
-    Field.attempt "reload" Decode.string <| \reload ->
-    Field.attempt "requiredAbilities" Decode.string <| \requiredAbilities ->
-    Field.attempt "requirements" Decode.string <| \requirements ->
-    Field.attempt "savingThrow" Decode.string <| \savingThrow ->
-    Field.attempt "secondaryCasters" Decode.string <| \secondaryCasters ->
-    Field.attempt "secondaryChecks" Decode.string <| \secondaryChecks ->
-    Field.attempt "spellList" Decode.string <| \spellList ->
+    Field.attempt "range_raw" Decode.string <| \range ->
+    Field.attempt "reflex_save" Decode.int <| \ref ->
+    Field.attempt "reload_raw" Decode.string <| \reload ->
+    Field.attempt "required_abilities" Decode.string <| \requiredAbilities ->
+    Field.attempt "requirement" Decode.string <| \requirements ->
+    Field.attempt "saving_throw" Decode.string <| \savingThrow ->
+    Field.attempt "secondary_casters_raw" Decode.string <| \secondaryCasters ->
+    Field.attempt "secondary_check" Decode.string <| \secondaryChecks ->
+    Field.attempt "source" Decode.string <| \source ->
+    Field.attempt "spell_list" Decode.string <| \spellList ->
     Field.attempt "spoilers" Decode.string <| \spoilers ->
-    Field.attemptAt [ "source", "normalized" ] Decode.string <| \source ->
-    Field.attempt "targets" Decode.string <| \targets ->
-    Field.attempt "traditions" (Decode.list Decode.string) <| \traditions ->
-    Field.attemptAt [ "traits", "raw" ] (Decode.list Decode.string) <| \maybeTraits ->
+    Field.attempt "target" Decode.string <| \targets ->
+    Field.attempt "tradition" (Decode.list Decode.string) <| \traditions ->
+    Field.attempt "trait_raw" (Decode.list Decode.string) <| \maybeTraits ->
     Field.attempt "trigger" Decode.string <| \trigger ->
     Field.attempt "usage" Decode.string <| \usage ->
-    Field.attempt "weaponCategory" Decode.string <| \weaponCategory ->
-    Field.attempt "weaponGroup" Decode.string <| \weaponGroup ->
+    Field.attempt "weapon_category" Decode.string <| \weaponCategory ->
+    Field.attempt "weapon_group" Decode.string <| \weaponGroup ->
+    Field.attempt "will_save" Decode.int <| \will ->
     Decode.succeed
         { id = id
         , category = category
         , name = name
         , type_ = type_
         , url = url
-        , abilities = Maybe.withDefault [] abilities
         , abilityType = abilityType
+        , ac = ac
         , actions = actions
         , activate = activate
         , alignment = alignment
+        , ammunition = ammunition
         , area = area
         , aspect = aspect
         , breadcrumbs = breadcrumbs
@@ -1108,15 +1286,20 @@ documentDecoder =
         , creatureFamily = creatureFamily
         , damage = damage
         , duration = duration
+        , familiarAbilities = Maybe.withDefault [] familiarAbilities
+        , fort = fort
         , frequency = frequency
         , hands = hands
         , heighten = Maybe.withDefault [] heighten
+        , hp = hp
         , lessonType = lessonType
         , level = level
+        , perception = perception
         , prerequisites = prerequisites
         , price = price
         , primaryCheck = primaryCheck
         , range = range
+        , ref = ref
         , reload = reload
         , requiredAbilities = requiredAbilities
         , requirements = requirements
@@ -1133,6 +1316,7 @@ documentDecoder =
         , usage = usage
         , weaponCategory = weaponCategory
         , weaponGroup = weaponGroup
+        , will = will
         }
 
 
@@ -1178,6 +1362,7 @@ view model =
                 [ HA.class "menu-overlay"
                 , HAE.attributeIf (not model.menuOpen) (HA.class "menu-overlay-hidden")
                 , HE.onClick (ShowMenuPressed False)
+                , HAE.attributeIf (model.overlayActive) (HE.onMouseOver (ShowMenuPressed False))
                 ]
                 []
             , viewMenu model
@@ -1209,6 +1394,7 @@ viewMenu model =
         [ Html.button
             [ HA.class "menu-close-button"
             , HE.onClick (ShowMenuPressed False)
+            , HAE.attributeIf (model.overlayActive) (HE.onMouseOver (ShowMenuPressed False))
             ]
             [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times
             ]
@@ -1292,14 +1478,6 @@ viewMenu model =
                         [ HA.href "https://2e.aonprd.com/" ]
                         [ Html.text "Archives of Nethys" ]
                     , Html.text ", the System Reference Document for Pathfinder Second Edition."
-                    ]
-                , viewFaq
-                    "What is Elasticsearch Query String?"
-                    [ Html.text "A query syntax to write advanced queries. For more information on how to use it see the "
-                    , Html.a
-                        [ HA.href "https://www.elastic.co/guide/en/elasticsearch/reference/7.15/query-dsl-query-string-query.html#query-string-syntax" ]
-                        [ Html.text "documentation" ]
-                    , Html.text "."
                     ]
                 , viewFaq
                     "How can I contact you?"
@@ -1422,7 +1600,30 @@ viewQuery model =
         , if model.queryType == ElasticsearchQueryString then
             Html.div
                 []
-                [ Html.text "Query type: Elasticsearch Query String" ]
+                [ Html.text "Query type: Complex" ]
+
+          else if stringContainsChar model.query ":()\"" then
+            Html.div
+                [ HA.class "option-container"
+                , HA.class "row"
+                , HA.class "align-center"
+                , HA.class "nowrap"
+                ]
+                [ Html.div
+                    [ HA.style "font-size" "24px"
+                    , HA.style "padding" "4px"
+                    ]
+                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.exclamation ]
+                , Html.div
+                    [ HE.onClick (QueryTypeSelected ElasticsearchQueryString)
+                    ]
+                    [ Html.text "Your query contains characters that can be used with the complex query type, but you are currently using the standard query type. Would you like to "
+                    , Html.button
+                        []
+                        [ Html.text "switch to complex query type" ]
+                    , Html.text "?"
+                    ]
+                ]
 
           else
             Html.text ""
@@ -1562,255 +1763,432 @@ viewQueryOptions model =
         [ HA.class "column"
         , HA.class "gap-small"
         ]
-        [ Html.div
-            [ HA.class "option-container"
-            ]
-            [ Html.h3
-                []
-                [ Html.text "Query type" ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "align-baseline"
-                , HA.class "gap-medium"
-                ]
-                [ viewRadioButton
-                    { checked = model.queryType == Standard
-                    , name = "query-type"
-                    , onInput = QueryTypeSelected Standard
-                    , text = "Standard Query"
-                    }
-                , viewRadioButton
-                    { checked = model.queryType == ElasticsearchQueryString
-                    , name = "query-type"
-                    , onInput = QueryTypeSelected ElasticsearchQueryString
-                    , text = "Elasticsearch Query String"
-                    }
-                ]
-            ]
+        [ viewQueryType model
+        , viewFilterTypes model
+        , viewFilterTraits model
+        , viewSortResults model
+        ]
 
+
+viewQueryType : Model -> Html Msg
+viewQueryType model =
+    Html.div
+        [ HA.class "option-container"
+        , HA.class "column"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Query type" ]
         , Html.div
-            [ HA.class "option-container"
+            [ HA.class "row"
+            , HA.class "align-baseline"
+            , HA.class "gap-medium"
             ]
-            [ Html.h3
-                []
-                [ Html.text "Filter types" ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "align-baseline"
-                , HA.class "gap-medium"
-                ]
-                [ viewRadioButton
-                    { checked = model.includeFilteredTypes
-                    , name = "filter-types"
-                    , onInput = IncludeFilteredTypesChanged True
-                    , text = "Include selected"
-                    }
-                , viewRadioButton
-                    { checked = not model.includeFilteredTypes
-                    , name = "filter-types"
-                    , onInput = IncludeFilteredTypesChanged False
-                    , text = "Exclude selected"
-                    }
-                , Html.button
-                    [ HE.onClick RemoveAllTypeFiltersPressed ]
-                    [ Html.text "Reset selection" ]
-                ]
+            [ viewRadioButton
+                { checked = model.queryType == Standard
+                , name = "query-type"
+                , onInput = QueryTypeSelected Standard
+                , text = "Standard"
+                }
+            , viewRadioButton
+                { checked = model.queryType == ElasticsearchQueryString
+                , name = "query-type"
+                , onInput = QueryTypeSelected ElasticsearchQueryString
+                , text = "Complex"
+                }
+            , Html.button
+                [ HE.onClick (ShowEqsHelpPressed (not model.eqsHelpOpen)) ]
+                (if model.eqsHelpOpen then
+                    [ Html.text "Hide help" ]
 
-            , Html.div
-                [ HA.style "position" "relative"
-                ]
-                [ Html.input
-                    [ HA.placeholder "Search among types"
-                    , HA.type_ "text"
-                    , HA.value model.searchTypes
-                    , HE.onInput SearchTypesChanged
-                    ]
-                    []
-                , if String.isEmpty model.searchTypes then
-                    Html.text ""
-
-                  else
-                    Html.button
-                        [ HA.class "input-button"
-                        , HE.onClick (SearchTypesChanged "")
-                        ]
-                        [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
-                ]
-
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "scrollbox"
-                ]
-                (List.map
-                    (\type_ ->
-                        Html.button
-                            [ HA.class "filter-type"
-                            , HAE.attributeIf
-                                (xor
-                                    model.includeFilteredTypes
-                                    (Set.member type_ model.filteredTypes)
-                                    && not (Set.isEmpty model.filteredTypes)
-                                )
-                                (HA.class "excluded")
-                            , HE.onClick
-                                (if Set.member type_ model.filteredTypes then
-                                    TypeFilterRemoved type_
-
-                                 else
-                                    TypeFilterAdded type_
-                                )
-                            ]
-                            [ Html.text type_ ]
-                    )
-                    (List.filter
-                        (String.toLower >> String.contains (String.toLower model.searchTypes))
-                        Data.types
-                    )
+                 else
+                    [ Html.text "Show help" ]
                 )
             ]
-
-        , Html.div
-            [ HA.class "option-container"
-            ]
-            [ Html.h3
-                []
-                [ Html.text "Filter traits" ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "align-baseline"
-                , HA.class "gap-medium"
+        , if model.eqsHelpOpen then
+            Html.div
+                [ HA.class "column"
+                , HA.class "gap-small"
                 ]
-                [ viewRadioButton
-                    { checked = model.includeFilteredTraits
-                    , name = "filter-traits"
-                    , onInput = IncludeFilteredTraitsChanged True
-                    , text = "Include selected"
-                    }
-                , viewRadioButton
-                    { checked = not model.includeFilteredTraits
-                    , name = "filter-traits"
-                    , onInput = IncludeFilteredTraitsChanged False
-                    , text = "Exclude selected"
-                    }
-                , Html.button
-                    [ HE.onClick RemoveAllTraitFiltersPressed ]
-                    [ Html.text "Reset selection" ]
-                ]
-
-            , Html.div
-                [ HA.style "position" "relative"
-                ]
-                [ Html.input
-                    [ HA.placeholder "Search among traits"
-                    , HA.value model.searchTraits
-                    , HA.type_ "text"
-                    , HE.onInput SearchTraitsChanged
-                    ]
+                [ Html.div
                     []
-                , if String.isEmpty model.searchTraits then
-                    Html.text ""
-
-                  else
-                    Html.button
-                        [ HA.class "input-button"
-                        , HE.onClick (SearchTraitsChanged "")
-                        ]
-                        [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
-                ]
-
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "scrollbox"
-                ]
-                (List.map
-                    (\type_ ->
-                        Html.button
-                            [ HA.class "trait"
-                            , HAE.attributeIf
-                                (xor
-                                    model.includeFilteredTraits
-                                    (Set.member type_ model.filteredTraits)
-                                    && not (Set.isEmpty model.filteredTraits)
-                                )
-                                (HA.class "excluded")
-                            , HE.onClick
-                                (if Set.member type_ model.filteredTraits then
-                                    TraitFilterRemoved type_
-
-                                 else
-                                    TraitFilterAdded type_
-                                )
-                            ]
-                            [ Html.text type_ ]
-                    )
-                    (List.filter
-                        (String.toLower >> String.contains (String.toLower model.searchTraits))
-                        Data.traits
-                    )
-                )
-            ]
-
-        , Html.div
-            [ HA.class "option-container"
-            ]
-            [ Html.h3
-                []
-                [ Html.text "Sort results" ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-medium"
-                ]
-                (List.append
-                    [ Html.button
-                        [ HE.onClick RemoveAllSortsPressed ]
-                        [ Html.text "Reset selection" ]
+                    [ Html.text "With the complex query type you can write queries using Elasticsearch Query String syntax. The general idea is that you can search in specific fields by searching "
+                    , Html.span
+                        [ HA.class "monospace" ]
+                        [ Html.text "field:value" ]
+                    , Html.text ". For full documentation on how the query syntax works see "
+                    , Html.a
+                        [ HA.href "https://www.elastic.co/guide/en/elasticsearch/reference/7.15/query-dsl-query-string-query.html#query-string-syntax" ]
+                        [ Html.text "Elasticsearch's documentation" ]
+                    , Html.text ". See below for a list of available fields. [n] means the field is numeric and supports range queries."
                     ]
-                    (List.map
-                        (\field ->
-                            Html.div
+                , Html.div
+                    [ HA.class "scrollbox"
+                    ]
+                    [ Html.div
+                        [ HA.class "column"
+                        , HA.class "gap-tiny"
+                        ]
+                        (List.append
+                            [ Html.div
                                 [ HA.class "row"
-                                , HA.class "gap-tiny"
-                                , HA.class "align-baseline"
+                                , HA.class "gap-medium"
                                 ]
-                                [ Html.text (sortFieldToString field ++ ":")
-                                , Html.button
-                                    [ HE.onClick
-                                        (if List.member ( field, Asc ) model.sort then
-                                            (SortRemoved field)
-
-                                         else
-                                            (SortAdded field Asc)
-                                        )
-                                    , HAE.attributeIf
-                                        (not <| List.member ( field, Asc ) model.sort)
-                                        (HA.class "excluded")
+                                [ Html.div
+                                    [ HA.class "bold"
+                                    , HA.style "width" "35%"
+                                    , HA.style "max-width" "200px"
                                     ]
-                                    [ Html.text "Asc" ]
-                                , Html.button
-                                    [ HE.onClick
-                                        (if List.member ( field, Desc ) model.sort then
-                                            (SortRemoved field)
-
-                                         else
-                                            (SortAdded field Desc)
-                                        )
-                                    , HAE.attributeIf
-                                        (not <| List.member ( field, Desc ) model.sort)
-                                        (HA.class "excluded")
+                                    [ Html.text "Field" ]
+                                , Html.div
+                                    [ HA.class "bold"
+                                    , HA.style "max-width" "60%"
                                     ]
-                                    [ Html.text "Desc" ]
+                                    [ Html.text "Description" ]
                                 ]
+                            ]
+                            (List.map
+                                (\( field, desc ) ->
+                                    Html.div
+                                        [ HA.class "row"
+                                        , HA.class "gap-medium"
+                                        ]
+                                        [ Html.div
+                                            [ HA.style "width" "35%"
+                                            , HA.style "max-width" "200px"
+                                            , HA.style "word-break" "break-all"
+                                            , HA.class "monospace"
+                                            ]
+                                            [ Html.text field ]
+                                        , Html.div
+                                            [ HA.style "max-width" "60%"
+                                            ]
+                                            [ Html.text desc ]
+                                        ]
+                                )
+                                Data.fields
+                            )
                         )
-                        [ Level
-                        , Name
-                        , Price
-                        , Type
-                        ]
-                    )
-                )
+                    ]
+                , Html.h3
+                    []
+                    [ Html.text "Example queries" ]
+                , Html.div
+                    []
+                    [ Html.div
+                        []
+                        [ Html.text "Spells or cantrips unique to the arcane tradition:" ]
+                    , Html.div
+                        [ HA.class "monospace" ]
+                        [ Html.text "tradition:(arcane -divine -occult -primal) type:(spell OR cantrip)" ]
+                    ]
+                , Html.div
+                    []
+                    [ Html.div
+                        []
+                        [ Html.text "Evil deities with dagger as their favored weapon:" ]
+                    , Html.div
+                        [ HA.class "monospace" ]
+                        [ Html.text "alignment:?E favored_weapon:dagger" ]
+                    ]
+                , Html.div
+                    []
+                    [ Html.div
+                        []
+                        [ Html.text "Non-consumable items between 500 and 1000 gp:" ]
+                    , Html.div
+                        [ HA.class "monospace" ]
+                        [ Html.text "price:[50000 TO 100000] NOT trait:consumable" ]
+                    ]
+                , Html.div
+                    []
+                    [ Html.div
+                        []
+                        [ Html.text "Spells up to level 5 with a range of at least 100 feet that are granted by any sorcerer bloodline:" ]
+                    , Html.div
+                        [ HA.class "monospace" ]
+                        [ Html.text "type:spell level:<=5 range:>=100 bloodline:*" ]
+                    ]
+                , Html.div
+                    []
+                    [ Html.div
+                        []
+                        [ Html.text "Rules pages that mention 'mental damage':" ]
+                    , Html.div
+                        [ HA.class "monospace" ]
+                        [ Html.text "\"mental damage\" type:rules" ]
+                    ]
+                , Html.div
+                    []
+                    [ Html.div
+                        []
+                        [ Html.text "Weapons with finesse and either disarm or trip:" ]
+                    , Html.div
+                        [ HA.class "monospace" ]
+                        [ Html.text "type:weapon trait:finesse trait:(disarm OR trip)" ]
+                    ]
+                ]
+
+          else
+            Html.text ""
+        ]
+
+
+viewFilterTypes : Model -> Html Msg
+viewFilterTypes model =
+    Html.div
+        [ HA.class "option-container"
+        , HA.class "column"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Filter types" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "align-baseline"
+            , HA.class "gap-medium"
             ]
+            [ viewRadioButton
+                { checked = model.includeFilteredTypes
+                , name = "filter-types"
+                , onInput = IncludeFilteredTypesChanged True
+                , text = "Include selected"
+                }
+            , viewRadioButton
+                { checked = not model.includeFilteredTypes
+                , name = "filter-types"
+                , onInput = IncludeFilteredTypesChanged False
+                , text = "Exclude selected"
+                }
+            , Html.button
+                [ HE.onClick RemoveAllTypeFiltersPressed ]
+                [ Html.text "Reset selection" ]
+            ]
+
+        , Html.div
+            [ HA.style "position" "relative"
+            ]
+            [ Html.input
+                [ HA.placeholder "Search among types"
+                , HA.type_ "text"
+                , HA.value model.searchTypes
+                , HE.onInput SearchTypesChanged
+                ]
+                []
+            , if String.isEmpty model.searchTypes then
+                Html.text ""
+
+              else
+                Html.button
+                    [ HA.class "input-button"
+                    , HE.onClick (SearchTypesChanged "")
+                    ]
+                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+            ]
+
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "scrollbox"
+            ]
+            (List.map
+                (\type_ ->
+                    Html.button
+                        [ HA.class "filter-type"
+                        , HAE.attributeIf
+                            (xor
+                                model.includeFilteredTypes
+                                (Set.member type_ model.filteredTypes)
+                                && not (Set.isEmpty model.filteredTypes)
+                            )
+                            (HA.class "excluded")
+                        , HE.onClick
+                            (if Set.member type_ model.filteredTypes then
+                                TypeFilterRemoved type_
+
+                             else
+                                TypeFilterAdded type_
+                            )
+                        ]
+                        [ Html.text type_ ]
+                )
+                (List.filter
+                    (String.toLower >> String.contains (String.toLower model.searchTypes))
+                    Data.types
+                )
+            )
+        ]
+
+
+viewFilterTraits : Model -> Html Msg
+viewFilterTraits model =
+    Html.div
+        [ HA.class "option-container"
+        , HA.class "column"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Filter traits" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "align-baseline"
+            , HA.class "gap-medium"
+            ]
+            [ viewRadioButton
+                { checked = model.includeFilteredTraits
+                , name = "filter-traits"
+                , onInput = IncludeFilteredTraitsChanged True
+                , text = "Include selected"
+                }
+            , viewRadioButton
+                { checked = not model.includeFilteredTraits
+                , name = "filter-traits"
+                , onInput = IncludeFilteredTraitsChanged False
+                , text = "Exclude selected"
+                }
+            , Html.button
+                [ HE.onClick RemoveAllTraitFiltersPressed ]
+                [ Html.text "Reset selection" ]
+            ]
+
+        , Html.div
+            [ HA.style "position" "relative"
+            ]
+            [ Html.input
+                [ HA.placeholder "Search among traits"
+                , HA.value model.searchTraits
+                , HA.type_ "text"
+                , HE.onInput SearchTraitsChanged
+                ]
+                []
+            , if String.isEmpty model.searchTraits then
+                Html.text ""
+
+              else
+                Html.button
+                    [ HA.class "input-button"
+                    , HE.onClick (SearchTraitsChanged "")
+                    ]
+                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+            ]
+
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "scrollbox"
+            ]
+            (List.map
+                (\type_ ->
+                    Html.button
+                        [ HA.class "trait"
+                        , HAE.attributeIf
+                            (xor
+                                model.includeFilteredTraits
+                                (Set.member type_ model.filteredTraits)
+                                && not (Set.isEmpty model.filteredTraits)
+                            )
+                            (HA.class "excluded")
+                        , HE.onClick
+                            (if Set.member type_ model.filteredTraits then
+                                TraitFilterRemoved type_
+
+                             else
+                                TraitFilterAdded type_
+                            )
+                        ]
+                        [ Html.text type_ ]
+                )
+                (List.filter
+                    (String.toLower >> String.contains (String.toLower model.searchTraits))
+                    Data.traits
+                )
+            )
+        ]
+
+
+viewSortResults : Model -> Html Msg
+viewSortResults model =
+    Html.div
+        [ HA.class "option-container"
+        , HA.class "column"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Sort results" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-large"
+            ]
+            (List.append
+                [ Html.button
+                    [ HE.onClick RemoveAllSortsPressed ]
+                    [ Html.text "Reset selection" ]
+                ]
+                (List.map
+                    (\field ->
+                        Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HA.class "align-baseline"
+                            ]
+                            [ Html.text (sortFieldToString field)
+                            , Html.button
+                                [ HE.onClick
+                                    (if List.member ( field, Asc ) model.sort then
+                                        (SortRemoved field)
+
+                                     else
+                                        (SortAdded field Asc)
+                                    )
+                                , HA.class
+                                    (if List.member ( field, Asc ) model.sort then
+                                        "active"
+
+                                     else
+                                        "excluded"
+                                    )
+                                ]
+                                [ Html.text "Asc" ]
+                            , Html.button
+                                [ HE.onClick
+                                    (if List.member ( field, Desc ) model.sort then
+                                        (SortRemoved field)
+
+                                     else
+                                        (SortAdded field Desc)
+                                    )
+                                , HA.class
+                                    (if List.member ( field, Desc ) model.sort then
+                                        "active"
+
+                                     else
+                                        "excluded"
+                                    )
+                                ]
+                                [ Html.text "Desc" ]
+                            ]
+                    )
+                    [ Name
+                    , Level
+                    , Type
+                    , Price
+                    , Bulk
+                    , Range
+                    , HP
+                    , Perception
+                    , AC
+                    , Fortitude
+                    , Reflex
+                    , Will
+                    -- , Str
+                    -- , Dex
+                    -- , Con
+                    -- , Int
+                    -- , Wis
+                    -- , Cha
+                    ]
+                )
+            )
         ]
 
 
@@ -2024,6 +2402,17 @@ viewSearchResultAdditionalInfo hit =
                 |> Maybe.withDefault []
             )
             (case hit.source.category of
+                "action" ->
+                    (List.filterMap identity
+                        [ hit.source.frequency
+                            |> Maybe.map (viewLabelAndText "Frequency")
+                        , hit.source.trigger
+                            |> Maybe.map (viewLabelAndText "Trigger")
+                        , hit.source.requirements
+                            |> Maybe.map (viewLabelAndText "Requirements")
+                        ]
+                    )
+
                 "bloodline" ->
                     hit.source.spellList
                         |> Maybe.map (viewLabelAndText "Spell List")
@@ -2031,10 +2420,45 @@ viewSearchResultAdditionalInfo hit =
                         |> Maybe.withDefault []
 
                 "creature" ->
-                    hit.source.creatureFamily
-                        |> Maybe.map (viewLabelAndText "Creature Family")
-                        |> Maybe.map List.singleton
-                        |> Maybe.withDefault []
+                    (List.filterMap identity
+                        [ hit.source.creatureFamily
+                            |> Maybe.map (viewLabelAndText "Creature Family")
+                        , Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-medium"
+                            ]
+                            (List.filterMap identity
+                                [ hit.source.hp
+                                    |> Maybe.map String.fromInt
+                                    |> Maybe.map (viewLabelAndText "HP")
+                                , hit.source.perception
+                                    |> Maybe.map numberWithSign
+                                    |> Maybe.map (viewLabelAndText "Perception")
+                                ]
+                            )
+                                |> Just
+                        , Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-medium"
+                            ]
+                            (List.filterMap identity
+                                [ hit.source.ac
+                                    |> Maybe.map String.fromInt
+                                    |> Maybe.map (viewLabelAndText "AC")
+                                , hit.source.fort
+                                    |> Maybe.map numberWithSign
+                                    |> Maybe.map (viewLabelAndText "Fort")
+                                , hit.source.ref
+                                    |> Maybe.map numberWithSign
+                                    |> Maybe.map (viewLabelAndText "Ref")
+                                , hit.source.will
+                                    |> Maybe.map numberWithSign
+                                    |> Maybe.map (viewLabelAndText "Will")
+                                ]
+                            )
+                                |> Just
+                        ]
+                    )
 
                 "equipment" ->
                     (List.filterMap identity
@@ -2090,7 +2514,7 @@ viewSearchResultAdditionalInfo hit =
                     (List.filterMap identity
                         [ hit.source.requiredAbilities
                             |> Maybe.map (viewLabelAndText "Required Number of Abilities")
-                        , hit.source.abilities
+                        , hit.source.familiarAbilities
                             |> String.join ", "
                             |> viewLabelAndText "Granted Abilities"
                             |> Just
@@ -2265,21 +2689,49 @@ viewSearchResultAdditionalInfo hit =
 
                 "weapon" ->
                     (List.filterMap identity
-                        [ case hit.source.range of
-                            Just _ ->
-                                Just "Ranged"
-
-                            Nothing ->
-                                Just "Melee"
-                        , hit.source.weaponCategory
-                        , hit.source.weaponGroup
-                        , Maybe.map (\hands -> hands ++ " hands") hit.source.hands
-                        , hit.source.damage
-                        , hit.source.range
-                        , Maybe.map (\reload -> "Reload " ++ reload) hit.source.reload
+                        [ Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-medium"
+                            ]
+                            (List.filterMap identity
+                                [ hit.source.price
+                                    |> Maybe.map (viewLabelAndText "Price")
+                                , hit.source.damage
+                                    |> Maybe.map (viewLabelAndText "Damage")
+                                , hit.source.bulk
+                                    |> Maybe.map (viewLabelAndText "Bulk")
+                                ]
+                            )
+                                |> Just
+                        , Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-medium"
+                            ]
+                            (List.filterMap identity
+                                [ hit.source.hands
+                                    |> Maybe.map (viewLabelAndText "Hands")
+                                , hit.source.range
+                                    |> Maybe.map (viewLabelAndText "Range")
+                                , hit.source.reload
+                                    |> Maybe.map (viewLabelAndText "Reload")
+                                ]
+                            )
+                                |> Just
+                        , hit.source.ammunition
+                            |> Maybe.map (viewLabelAndText "Ammunition")
+                        , Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-medium"
+                            ]
+                            (List.filterMap identity
+                                [ hit.source.weaponCategory
+                                    |> Maybe.map (viewLabelAndText "Category")
+                                , hit.source.weaponGroup
+                                    |> Maybe.map (viewLabelAndText "Group")
+                                ]
+                            )
+                                |> Just
                         ]
-                        |> List.map Html.text
-                        |> List.intersperse (Html.text ", ")
                     )
 
 
@@ -2287,6 +2739,15 @@ viewSearchResultAdditionalInfo hit =
                     []
             )
         )
+
+
+numberWithSign : Int -> String
+numberWithSign int =
+    if int >= 0 then
+        "+" ++ String.fromInt int
+
+    else
+        String.fromInt int
 
 
 viewLabelAndText : String -> String -> Html msg
@@ -2419,6 +2880,15 @@ viewTrait trait =
         [ Html.text trait ]
 
 
+stringContainsChar : String -> String -> Bool
+stringContainsChar str chars =
+    String.any
+        (\char ->
+            String.contains (String.fromChar char) str
+        )
+        chars
+
+
 css : String
 css =
     """
@@ -2460,6 +2930,11 @@ css =
         background-color: transparent;
         color: var(--color-text);
         font-size: var(--font-normal);
+    }
+
+    button.active {
+        background-color: var(--color-text);
+        color: var(--color-bg);
     }
 
     button.excluded {
@@ -2560,7 +3035,7 @@ css =
         gap: var(--gap-medium);
     }
 
-    .gap-medium.row {
+    .gap-medium.row, .gap-large.row {
         row-gap: var(--gap-tiny);
     }
 
@@ -2632,12 +3107,20 @@ css =
         pointer-events: none;
     }
 
+    .monospace {
+        background-color: var(--color-bg-secondary);
+        font-family: monospace;
+        font-size: var(--font-normal);
+    }
+
+    .nowrap {
+        flex-wrap: nowrap;
+    }
+
     .option-container {
         border-style: solid;
         border-width: 1px;
         background-color: var(--color-container-bg);
-        display: flex;
-        flex-direction: column;
         gap: var(--gap-small);
         padding: 8px;
     }
@@ -2657,6 +3140,7 @@ css =
     }
 
     .scrollbox {
+        background-color: var(--color-bg-secondary);
         border-color: #767676;
         border-radius: 4px;
         border-style: solid;
@@ -2776,6 +3260,7 @@ cssDark =
     """
     :root {
         --color-bg: #111111;
+        --color-bg-secondary: #282828;
         --color-container-bg: #333333;
         --color-container-border: #eeeeee;
         --color-element-bg: #522e2c;
@@ -2799,6 +3284,7 @@ cssLight =
     """
     :root {
         --color-bg: #eeeeee;
+        --color-bg-secondary: #cccccc;
         --color-container-bg: #dddddd;
         --color-container-border: #111111;
         --color-element-bg: #6f413e;
@@ -2822,6 +3308,7 @@ cssPaper =
     """
     :root {
         --color-bg: #f1ece5;
+        --color-bg-secondary: #cccccc;
         --color-container-bg: #dddddd;
         --color-container-border: #111111;
         --color-element-bg: #5d0000;
