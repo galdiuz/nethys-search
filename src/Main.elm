@@ -3131,7 +3131,7 @@ css =
 
     .query-options-container {
         transition: height ease-in-out 0.2s;
-        overflow: clip;
+        overflow: hidden;
     }
 
     .query-options-dummy {
