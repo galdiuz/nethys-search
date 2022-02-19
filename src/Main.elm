@@ -1475,7 +1475,9 @@ viewMenu model =
                     "What is this?"
                     [ Html.text "A search engine that searches "
                     , Html.a
-                        [ HA.href "https://2e.aonprd.com/" ]
+                        [ HA.href "https://2e.aonprd.com/"
+                        , HA.target "_blank"
+                        ]
                         [ Html.text "Archives of Nethys" ]
                     , Html.text ", the System Reference Document for Pathfinder Second Edition."
                     ]
@@ -1483,7 +1485,9 @@ viewMenu model =
                     "How can I contact you?"
                     [ Html.text "You can send me an email (nethys-search <at> galdiuz.com), message me on Discord (Galdiuz#7937), or "
                     , Html.a
-                        [ HA.href "https://github.com/galdiuz/nethys-search/issues" ]
+                        [ HA.href "https://github.com/galdiuz/nethys-search/issues"
+                        , HA.target "_blank"
+                        ]
                         [ Html.text "submit an issue on GitHub" ]
                     , Html.text "."
                     ]
@@ -1524,7 +1528,9 @@ viewTitle =
             []
             [ Html.text "Search engine for "
             , Html.a
-                [ HA.href "https://2e.aonprd.com/" ]
+                [ HA.href "https://2e.aonprd.com/"
+                , HA.target "_blank"
+                ]
                 [ Html.text "2e.aonprd.com" ]
             ]
         ]
@@ -1818,7 +1824,9 @@ viewQueryType model =
                         [ Html.text "field:value" ]
                     , Html.text ". For full documentation on how the query syntax works see "
                     , Html.a
-                        [ HA.href "https://www.elastic.co/guide/en/elasticsearch/reference/7.15/query-dsl-query-string-query.html#query-string-syntax" ]
+                        [ HA.href "https://www.elastic.co/guide/en/elasticsearch/reference/7.15/query-dsl-query-string-query.html#query-string-syntax"
+                        , HA.target "_blank"
+                        ]
                         [ Html.text "Elasticsearch's documentation" ]
                     , Html.text ". See below for a list of available fields. [n] means the field is numeric and supports range queries."
                     ]
