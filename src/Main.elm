@@ -51,6 +51,7 @@ type alias Document =
     , name : String
     , type_ : String
     , url : String
+    , abilities : List String
     , abilityType : Maybe String
     , ac : Maybe Int
     , actions : Maybe String
@@ -76,6 +77,7 @@ type alias Document =
     , duration : Maybe String
     , familiarAbilities : List String
     , favoredWeapon : Maybe String
+    , feats : List String
     , fort : Maybe Int
     , frequency : Maybe String
     , hands : Maybe String
@@ -1084,6 +1086,7 @@ documentDecoder =
     Field.require "name" Decode.string <| \name ->
     Field.require "type" Decode.string <| \type_ ->
     Field.require "url" Decode.string <| \url ->
+    Field.attempt "ability" stringListDecoder <| \abilities ->
     Field.attempt "ability_type" Decode.string <| \abilityType ->
     Field.attempt "ac" Decode.int <| \ac ->
     Field.attempt "actions" Decode.string <| \actions ->
@@ -1107,8 +1110,9 @@ documentDecoder =
     Field.attempt "divine_font" Decode.string <| \divineFont ->
     Field.attempt "domain" (Decode.list Decode.string) <| \domains ->
     Field.attempt "duration" Decode.string <| \duration ->
-    Field.attempt "familiar_ability" (Decode.list Decode.string) <| \familiarAbilities ->
+    Field.attempt "familiar_ability" stringListDecoder <| \familiarAbilities ->
     Field.attempt "favored_weapon" Decode.string <| \favoredWeapon ->
+    Field.attempt "feat" stringListDecoder <| \feats ->
     Field.attempt "fortitude_save" Decode.int <| \fort ->
     Field.attempt "frequency" Decode.string <| \frequency ->
     Field.attempt "hands" Decode.string <| \hands ->
@@ -1154,6 +1158,7 @@ documentDecoder =
         , name = name
         , type_ = type_
         , url = url
+        , abilities = Maybe.withDefault [] abilities
         , abilityType = abilityType
         , ac = ac
         , actions = actions
@@ -1179,6 +1184,7 @@ documentDecoder =
         , duration = duration
         , familiarAbilities = Maybe.withDefault [] familiarAbilities
         , favoredWeapon = favoredWeapon
+        , feats = Maybe.withDefault [] feats
         , fort = fort
         , frequency = frequency
         , hands = hands
@@ -2412,6 +2418,19 @@ viewSearchResultAdditionalInfo hit =
                             |> Maybe.map (viewLabelAndText "Trigger")
                         , hit.source.requirements
                             |> Maybe.map (viewLabelAndText "Requirements")
+                        ]
+
+                "background" ->
+                    Maybe.Extra.values
+                        [ hit.source.abilities
+                            |> nonEmptyList
+                            |> Maybe.map (viewLabelAndPluralizedText "Ability" "Abilities")
+                        , hit.source.feats
+                            |> nonEmptyList
+                            |> Maybe.map (viewLabelAndPluralizedText "Feat" "Feats")
+                        , hit.source.skills
+                            |> nonEmptyList
+                            |> Maybe.map (viewLabelAndPluralizedText "Skill" "Skills")
                         ]
 
                 "bloodline" ->

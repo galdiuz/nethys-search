@@ -76,6 +76,7 @@ fields =
     , ( "duration", "Duration of spell or poison" )
     , ( "familiar_ability", "Abilities granted by specific familiars" )
     , ( "favored_weapon", "Deity's favored weapon" )
+    , ( "feat", "Related feat" )
     , ( "follower_alignment", "Deity's follower alignments" )
     , ( "fort", "[n] Alias for 'fortitude_save'" )
     , ( "fortitude", "[n] Alias for 'fortitude_save'" )

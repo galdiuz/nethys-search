@@ -264,7 +264,23 @@ def parse_background(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'background', 'Backgrounds', 'Background')
     traits = get_traits(soup)
 
+    abilities = []
+    for ability in ['Strength', 'Dexterity', 'Constitution', 'Intelligence', 'Wisdom', 'Charisma']:
+        if soup.find('b', text=ability):
+            abilities.append(ability)
+
+    feats = []
+    for node in soup.find_all('a', href=re.compile('Feats')):
+        feats.append(node.text)
+
+    skills = []
+    for node in soup.find_all('a', href=re.compile('Skills')):
+        skills.append(node.text)
+
+    doc.ability = abilities
+    doc.feat = feats
     doc.region = get_label_text(soup, 'Region')
+    doc.skill = skills
     doc.trait = normalize_traits(traits)
     doc.trait_raw = traits
 
