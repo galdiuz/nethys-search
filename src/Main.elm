@@ -56,6 +56,7 @@ type alias Document =
     , ac : Maybe Int
     , actions : Maybe String
     , activate : Maybe String
+    , advancedDomainSpell : Maybe String
     , alignment : Maybe String
     , ammunition : Maybe String
     , area : Maybe String
@@ -74,6 +75,7 @@ type alias Document =
     , dexterity : Maybe Int
     , divineFont : Maybe String
     , domains : List String
+    , domainSpell : Maybe String
     , duration : Maybe String
     , familiarAbilities : List String
     , favoredWeapon : Maybe String
@@ -1091,6 +1093,7 @@ documentDecoder =
     Field.attempt "ac" Decode.int <| \ac ->
     Field.attempt "actions" Decode.string <| \actions ->
     Field.attempt "activate" Decode.string <| \activate ->
+    Field.attempt "advanced_domain_spell" Decode.string <| \advancedDomainSpell ->
     Field.attempt "alignment" Decode.string <| \alignment ->
     Field.attempt "ammunition" Decode.string <| \ammunition ->
     Field.attempt "area" Decode.string <| \area ->
@@ -1109,6 +1112,7 @@ documentDecoder =
     Field.attempt "dexterity" Decode.int <| \dexterity ->
     Field.attempt "divine_font" Decode.string <| \divineFont ->
     Field.attempt "domain" (Decode.list Decode.string) <| \domains ->
+    Field.attempt "domain_spell" Decode.string <| \domainSpell ->
     Field.attempt "duration" Decode.string <| \duration ->
     Field.attempt "familiar_ability" stringListDecoder <| \familiarAbilities ->
     Field.attempt "favored_weapon" Decode.string <| \favoredWeapon ->
@@ -1163,6 +1167,7 @@ documentDecoder =
         , ac = ac
         , actions = actions
         , activate = activate
+        , advancedDomainSpell = advancedDomainSpell
         , alignment = alignment
         , ammunition = ammunition
         , area = area
@@ -1181,6 +1186,7 @@ documentDecoder =
         , dexterity = dexterity
         , divineFont = divineFont
         , domains = Maybe.withDefault [] domains
+        , domainSpell = domainSpell
         , duration = duration
         , familiarAbilities = Maybe.withDefault [] familiarAbilities
         , favoredWeapon = favoredWeapon
@@ -2526,6 +2532,25 @@ viewSearchResultAdditionalInfo hit =
                         , hit.source.domains
                             |> nonEmptyList
                             |> Maybe.map (viewLabelAndPluralizedText "Domain" "Domains")
+                        ]
+
+                "domain" ->
+                    Maybe.Extra.values
+                        [ hit.source.deities
+                            |> nonEmptyList
+                            |> Maybe.map (viewLabelAndPluralizedText "Deity" "Deities")
+                        , Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-medium"
+                            ]
+                            (Maybe.Extra.values
+                                [ hit.source.domainSpell
+                                    |> Maybe.map (viewLabelAndText "Domain Spell")
+                                , hit.source.advancedDomainSpell
+                                    |> Maybe.map (viewLabelAndText "Advanced Domain Spell")
+                                ]
+                            )
+                                |> Just
                         ]
 
                 "equipment" ->
