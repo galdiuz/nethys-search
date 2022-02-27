@@ -59,22 +59,34 @@ type alias Document =
     , ammunition : Maybe String
     , area : Maybe String
     , aspect : Maybe String
+    , bloodlines : List String
     , breadcrumbs : Maybe String
     , bulk : Maybe String
     , cast : Maybe String
+    , charisma : Maybe Int
     , components : List String
+    , constitution : Maybe Int
     , cost : Maybe String
     , creatureFamily : Maybe String
     , damage : Maybe String
+    , deities : List String
+    , dexterity : Maybe Int
+    , divineFont : Maybe String
+    , domains : List String
     , duration : Maybe String
     , familiarAbilities : List String
+    , favoredWeapon : Maybe String
     , fort : Maybe Int
     , frequency : Maybe String
     , hands : Maybe String
     , heighten : List String
     , hp : Maybe Int
+    , immunities : List String
+    , intelligence : Maybe Int
     , lessonType : Maybe String
     , level : Maybe Int
+    , mysteries : List String
+    , patronThemes : List String
     , perception : Maybe Int
     , prerequisites : Maybe String
     , price : Maybe String
@@ -84,20 +96,25 @@ type alias Document =
     , reload : Maybe String
     , requiredAbilities : Maybe String
     , requirements : Maybe String
+    , resistances : List String
     , savingThrow : Maybe String
     , secondaryCasters : Maybe String
     , secondaryChecks : Maybe String
+    , skills : List String
     , source : Maybe String
     , spellList : Maybe String
     , spoilers : Maybe String
+    , strength : Maybe Int
     , targets : Maybe String
     , traditions : List String
     , traits : List String
     , trigger : Maybe String
     , usage : Maybe String
+    , weaknesses : List String
     , weaponCategory : Maybe String
     , weaponGroup : Maybe String
     , will : Maybe Int
+    , wisdom : Maybe Int
     }
 
 
@@ -114,27 +131,6 @@ type QueryType
 type SortDir
     = Asc
     | Desc
-
-
-type SortField
-    = AC
-    | Bulk
-    | Fortitude
-    | HP
-    | Level
-    | Name
-    | Perception
-    | Price
-    | Range
-    | Reflex
-    | Type
-    | Will
-    | Str
-    | Dex
-    | Con
-    | Int
-    | Wis
-    | Cha
 
 
 type Theme
@@ -167,8 +163,11 @@ type Msg
     | ShowQueryOptionsPressed Bool
     | ShowSpoilersChanged Bool
     | ShowTraitsChanged Bool
-    | SortAdded SortField SortDir
-    | SortRemoved SortField
+    | SortAbilityChanged String
+    | SortAdded String SortDir
+    | SortRemoved String
+    | SortResistanceChanged String
+    | SortWeaknessChanged String
     | ThemeSelected Theme
     | TraitFilterAdded String
     | TraitFilterRemoved String
@@ -202,10 +201,13 @@ type alias Model =
     , searchResults : List (Result Http.Error SearchResult)
     , searchTraits : String
     , searchTypes : String
+    , selectedSortAbility : String
+    , selectedSortResistance : String
+    , selectedSortWeakness : String
     , showResultAdditionalInfo : Bool
     , showResultSpoilers : Bool
     , showResultTraits : Bool
-    , sort : List ( SortField, SortDir )
+    , sort : List ( String, SortDir )
     , theme : Theme
     , tracker : Maybe Int
     , url : Url
@@ -243,10 +245,13 @@ init flags url navKey =
       , searchResults = []
       , searchTraits = ""
       , searchTypes = ""
-      , sort = []
+      , selectedSortAbility = "strength"
+      , selectedSortResistance = "acid"
+      , selectedSortWeakness = "acid"
       , showResultAdditionalInfo = True
       , showResultSpoilers = True
       , showResultTraits = True
+      , sort = []
       , theme = Dark
       , tracker = Nothing
       , url = url
@@ -466,6 +471,11 @@ update msg model =
                 (if value then "1" else "0")
             )
 
+        SortAbilityChanged value ->
+            ( { model | selectedSortAbility = value }
+            , Cmd.none
+            )
+
         SortAdded field dir ->
             ( model
             , updateUrl
@@ -480,6 +490,16 @@ update msg model =
         SortRemoved field ->
             ( model
             , updateUrl { model | sort = List.filter (Tuple.first >> (/=) field) model.sort }
+            )
+
+        SortResistanceChanged value ->
+            ( { model | selectedSortResistance = value }
+            , Cmd.none
+            )
+
+        SortWeaknessChanged value ->
+            ( { model | selectedSortWeakness = value }
+            , Cmd.none
             )
 
         ThemeSelected theme ->
@@ -613,7 +633,7 @@ updateUrl ({ url } as model) =
               , model.sort
                     |> List.map
                         (\( field, dir ) ->
-                            sortFieldToString field ++ "-" ++ sortDirToString dir
+                            sortFieldToLabel field ++ "-" ++ sortDirToString dir
                         )
                     |> String.join ","
               )
@@ -703,7 +723,7 @@ buildSearchBody model =
                         (List.map
                             (\( field, dir ) ->
                                 Encode.object
-                                    [ ( sortFieldToQueryField field
+                                    [ ( field
                                       , Encode.object
                                             [ ( "order", Encode.string (sortDirToString dir) )
                                             ]
@@ -726,181 +746,19 @@ buildSearchBody model =
         ]
 
 
-sortFieldToString : SortField -> String
-sortFieldToString field =
-    case field of
-        AC ->
-            "AC"
-
-        Bulk ->
-            "Bulk"
-
-        Cha ->
-            "Charisma"
-
-        Con ->
-            "Constitution"
-
-        Dex ->
-            "Dexterity"
-
-        Fortitude ->
-            "Fortitude"
-
-        HP ->
-            "HP"
-
-        Int ->
-            "Intelligence"
-
-        Level ->
-            "Level"
-
-        Name ->
-            "Name"
-
-        Perception ->
-            "Perception"
-
-        Price ->
-            "Price"
-
-        Range ->
-            "Range"
-
-        Reflex ->
-            "Reflex"
-
-        Str ->
-            "Strength"
-
-        Type ->
-            "Type"
-
-        Wis ->
-            "Wisdom"
-
-        Will ->
-            "Will"
+sortFieldFromLabel : String -> Maybe String
+sortFieldFromLabel field =
+    Data.sortFields
+        |> List.Extra.find (Tuple.second >> (==) field)
+        |> Maybe.map Tuple.first
 
 
-sortFieldToQueryField : SortField -> String
-sortFieldToQueryField field =
-    case field of
-        AC ->
-            "ac"
-
-        Bulk ->
-            "bulk"
-
-        Cha ->
-            "charisma"
-
-        Con ->
-            "constitution"
-
-        Dex ->
-            "dexterity"
-
-        Fortitude ->
-            "fortitude_save"
-
-        HP ->
-            "hp"
-
-        Int ->
-            "intelligence"
-
-        Level ->
-            "level"
-
-        Name ->
-            "name.keyword"
-
-        Perception ->
-            "perception"
-
-        Price ->
-            "price"
-
-        Range ->
-            "range"
-
-        Reflex ->
-            "reflex_save"
-
-        Str ->
-            "strength"
-
-        Type ->
-            "type"
-
-        Will ->
-            "will_save"
-
-        Wis ->
-            "wisdom"
-
-
-sortFieldFromString : String -> Maybe SortField
-sortFieldFromString str =
-    case str of
-        "AC" ->
-            Just AC
-
-        "Bulk" ->
-            Just Bulk
-
-        "Charisma" ->
-            Just Cha
-
-        "Constitution" ->
-            Just Con
-
-        "Dexterity" ->
-            Just Dex
-
-        "Fortitude" ->
-            Just Fortitude
-
-        "HP" ->
-            Just HP
-
-        "Intelligence" ->
-            Just Int
-
-        "Level" ->
-            Just Level
-
-        "Name" ->
-            Just Name
-
-        "Perception" ->
-            Just Perception
-
-        "Price" ->
-            Just Price
-
-        "Range" ->
-            Just Range
-
-        "Reflex" ->
-            Just Reflex
-
-        "Strength" ->
-            Just Str
-
-        "Type" ->
-            Just Type
-
-        "Will" ->
-            Just Will
-
-        "Wisdom" ->
-            Just Wis
-
-        _ ->
-            Nothing
+sortFieldToLabel : String -> String
+sortFieldToLabel field =
+    Data.sortFields
+        |> List.Extra.find (Tuple.first >> (==) field)
+        |> Maybe.map Tuple.second
+        |> Maybe.withDefault field
 
 
 sortDirToString : SortDir -> String
@@ -954,7 +812,7 @@ buildSearchFilterTerms model =
                 ]
             )
     ]
-        |> List.filterMap identity
+        |> Maybe.Extra.values
 
 
 buildSearchMustNotTerms : Model -> List ( String, Encode.Value )
@@ -985,7 +843,7 @@ buildSearchMustNotTerms model =
                 ]
             )
     ]
-        |> List.filterMap identity
+        |> Maybe.Extra.values
 
 
 buildStandardQueryBody : String -> List (List ( String, Encode.Value ))
@@ -1107,7 +965,7 @@ updateModelFromQueryString url model =
                                 [ field, dir ] ->
                                     Maybe.map2
                                         Tuple.pair
-                                        (sortFieldFromString field)
+                                        (sortFieldFromLabel field)
                                         (sortDirFromString dir)
 
                                 _ ->
@@ -1182,7 +1040,7 @@ searchWithCurrentQuery ( model, cmd ) =
 
 encodeObjectMaybe : List (Maybe ( String, Encode.Value )) -> Encode.Value
 encodeObjectMaybe list =
-    List.filterMap identity list
+    Maybe.Extra.values list
         |> Encode.object
 
 
@@ -1210,6 +1068,15 @@ hitDecoder decoder =
         }
 
 
+stringListDecoder : Decode.Decoder (List String)
+stringListDecoder =
+    Decode.oneOf
+        [ Decode.list Decode.string
+        , Decode.string
+            |> Decode.map List.singleton
+        ]
+
+
 documentDecoder : Decode.Decoder Document
 documentDecoder =
     Field.require "id" Decode.int <| \id ->
@@ -1226,21 +1093,33 @@ documentDecoder =
     Field.attempt "area" Decode.string <| \area ->
     Field.attempt "aspect" Decode.string <| \aspect ->
     Field.attempt "breadcrumbs" Decode.string <| \breadcrumbs ->
+    Field.attempt "bloodline" stringListDecoder <| \bloodlines ->
     Field.attempt "bulk_raw" Decode.string <| \bulk ->
     Field.attempt "cast" Decode.string <| \cast ->
+    Field.attempt "charisma" Decode.int <| \charisma ->
     Field.attempt "component" (Decode.list Decode.string) <| \components ->
+    Field.attempt "constitution" Decode.int <| \constitution ->
     Field.attempt "cost" Decode.string <| \cost ->
     Field.attempt "creature_family" Decode.string <| \creatureFamily ->
     Field.attempt "damage" Decode.string <| \damage ->
+    Field.attempt "deity" stringListDecoder <| \deities ->
+    Field.attempt "dexterity" Decode.int <| \dexterity ->
+    Field.attempt "divine_font" Decode.string <| \divineFont ->
+    Field.attempt "domain" (Decode.list Decode.string) <| \domains ->
     Field.attempt "duration" Decode.string <| \duration ->
     Field.attempt "familiar_ability" (Decode.list Decode.string) <| \familiarAbilities ->
+    Field.attempt "favored_weapon" Decode.string <| \favoredWeapon ->
     Field.attempt "fortitude_save" Decode.int <| \fort ->
     Field.attempt "frequency" Decode.string <| \frequency ->
     Field.attempt "hands" Decode.string <| \hands ->
     Field.attempt "heighten" (Decode.list Decode.string) <| \heighten ->
     Field.attempt "hp" Decode.int <| \hp ->
+    Field.attempt "immunity" (Decode.list Decode.string) <| \immunities ->
+    Field.attempt "intelligence" Decode.int <| \intelligence ->
     Field.attempt "lesson_type" Decode.string <| \lessonType ->
     Field.attempt "level" Decode.int <| \level ->
+    Field.attempt "mystery" stringListDecoder <| \mysteries ->
+    Field.attempt "patron_theme" stringListDecoder <| \patronThemes ->
     Field.attempt "perception" Decode.int <| \perception ->
     Field.attempt "prerequisite" Decode.string <| \prerequisites ->
     Field.attempt "price_raw" Decode.string <| \price ->
@@ -1250,20 +1129,25 @@ documentDecoder =
     Field.attempt "reload_raw" Decode.string <| \reload ->
     Field.attempt "required_abilities" Decode.string <| \requiredAbilities ->
     Field.attempt "requirement" Decode.string <| \requirements ->
+    Field.attempt "resistance_raw" (Decode.list Decode.string) <| \resistances ->
     Field.attempt "saving_throw" Decode.string <| \savingThrow ->
     Field.attempt "secondary_casters_raw" Decode.string <| \secondaryCasters ->
     Field.attempt "secondary_check" Decode.string <| \secondaryChecks ->
+    Field.attempt "skill" stringListDecoder <| \skills ->
     Field.attempt "source" Decode.string <| \source ->
     Field.attempt "spell_list" Decode.string <| \spellList ->
     Field.attempt "spoilers" Decode.string <| \spoilers ->
+    Field.attempt "strength" Decode.int <| \strength ->
     Field.attempt "target" Decode.string <| \targets ->
     Field.attempt "tradition" (Decode.list Decode.string) <| \traditions ->
     Field.attempt "trait_raw" (Decode.list Decode.string) <| \maybeTraits ->
     Field.attempt "trigger" Decode.string <| \trigger ->
     Field.attempt "usage" Decode.string <| \usage ->
+    Field.attempt "weakness_raw" (Decode.list Decode.string) <| \weaknesses ->
     Field.attempt "weapon_category" Decode.string <| \weaponCategory ->
     Field.attempt "weapon_group" Decode.string <| \weaponGroup ->
     Field.attempt "will_save" Decode.int <| \will ->
+    Field.attempt "wisdom" Decode.int <| \wisdom ->
     Decode.succeed
         { id = id
         , category = category
@@ -1279,21 +1163,33 @@ documentDecoder =
         , area = area
         , aspect = aspect
         , breadcrumbs = breadcrumbs
+        , bloodlines = Maybe.withDefault [] bloodlines
         , bulk = bulk
         , cast = cast
+        , charisma = charisma
         , components = Maybe.withDefault [] components
+        , constitution = constitution
         , cost = cost
         , creatureFamily = creatureFamily
         , damage = damage
+        , deities = Maybe.withDefault [] deities
+        , dexterity = dexterity
+        , divineFont = divineFont
+        , domains = Maybe.withDefault [] domains
         , duration = duration
         , familiarAbilities = Maybe.withDefault [] familiarAbilities
+        , favoredWeapon = favoredWeapon
         , fort = fort
         , frequency = frequency
         , hands = hands
         , heighten = Maybe.withDefault [] heighten
         , hp = hp
+        , immunities = Maybe.withDefault [] immunities
+        , intelligence = intelligence
         , lessonType = lessonType
         , level = level
+        , mysteries = Maybe.withDefault [] mysteries
+        , patronThemes = Maybe.withDefault [] patronThemes
         , perception = perception
         , prerequisites = prerequisites
         , price = price
@@ -1303,20 +1199,25 @@ documentDecoder =
         , reload = reload
         , requiredAbilities = requiredAbilities
         , requirements = requirements
+        , resistances = Maybe.withDefault [] resistances
         , savingThrow = savingThrow
         , secondaryCasters = secondaryCasters
         , secondaryChecks = secondaryChecks
+        , skills = Maybe.withDefault [] skills
         , source = source
         , spellList = spellList
         , spoilers = spoilers
+        , strength = strength
         , targets = targets
         , traditions = Maybe.withDefault [] traditions
         , traits = Maybe.withDefault [] maybeTraits
         , trigger = trigger
         , usage = usage
+        , weaknesses = Maybe.withDefault [] weaknesses
         , weaponCategory = weaponCategory
         , weaponGroup = weaponGroup
         , will = will
+        , wisdom = wisdom
         }
 
 
@@ -1657,7 +1558,7 @@ viewQuery model =
                         (\( field, dir ) ->
                             Html.button
                                 [ HE.onClick (SortRemoved field) ]
-                                [ Html.text (sortFieldToString field ++ " " ++ sortDirToString dir) ]
+                                [ Html.text (sortFieldToLabel field ++ " " ++ sortDirToString dir) ]
                         )
                         model.sort
                     ]
@@ -1832,6 +1733,8 @@ viewQueryType model =
                     ]
                 , Html.div
                     [ HA.class "scrollbox"
+                    , HA.class "column"
+                    , HA.class "gap-medium"
                     ]
                     [ Html.div
                         [ HA.class "column"
@@ -1877,6 +1780,21 @@ viewQueryType model =
                                 Data.fields
                             )
                         )
+                    , Html.div
+                        [ HA.class "column" ]
+                        [ Html.text "Valid types for resistance and weakness:"
+                        , Html.div
+                            []
+                            (List.map
+                                (\type_ ->
+                                    Html.span
+                                        [ HA.class "monospace" ]
+                                        [ Html.text type_ ]
+                                )
+                                Data.damageTypes
+                                |> List.intersperse (Html.text ", ")
+                            )
+                        ]
                     ]
                 , Html.h3
                     []
@@ -1934,6 +1852,15 @@ viewQueryType model =
                     , Html.div
                         [ HA.class "monospace" ]
                         [ Html.text "type:weapon trait:finesse trait:(disarm OR trip)" ]
+                    ]
+                , Html.div
+                    []
+                    [ Html.div
+                        []
+                        [ Html.text "Creatures resistant to fire but not all damage:" ]
+                    , Html.div
+                        [ HA.class "monospace" ]
+                        [ Html.text "resistance.fire:* NOT resistance.all:*" ]
                     ]
                 ]
 
@@ -2127,77 +2054,144 @@ viewSortResults model =
             [ HA.class "row"
             , HA.class "gap-large"
             ]
-            (List.append
-                [ Html.button
-                    [ HE.onClick RemoveAllSortsPressed ]
-                    [ Html.text "Reset selection" ]
-                ]
-                (List.map
+            (List.concat
+                [ [ Html.button
+                        [ HE.onClick RemoveAllSortsPressed ]
+                        [ Html.text "Reset selection" ]
+                  ]
+                , (List.map
                     (\field ->
                         Html.div
                             [ HA.class "row"
                             , HA.class "gap-tiny"
                             , HA.class "align-baseline"
                             ]
-                            [ Html.text (sortFieldToString field)
-                            , Html.button
-                                [ HE.onClick
-                                    (if List.member ( field, Asc ) model.sort then
-                                        (SortRemoved field)
-
-                                     else
-                                        (SortAdded field Asc)
-                                    )
-                                , HA.class
-                                    (if List.member ( field, Asc ) model.sort then
-                                        "active"
-
-                                     else
-                                        "excluded"
-                                    )
+                            (List.append
+                                [ Html.text (sortFieldToLabel field)
                                 ]
-                                [ Html.text "Asc" ]
-                            , Html.button
-                                [ HE.onClick
-                                    (if List.member ( field, Desc ) model.sort then
-                                        (SortRemoved field)
-
-                                     else
-                                        (SortAdded field Desc)
-                                    )
-                                , HA.class
-                                    (if List.member ( field, Desc ) model.sort then
-                                        "active"
-
-                                     else
-                                        "excluded"
-                                    )
-                                ]
-                                [ Html.text "Desc" ]
-                            ]
+                                (viewSortButtons model field)
+                            )
                     )
-                    [ Name
-                    , Level
-                    , Type
-                    , Price
-                    , Bulk
-                    , Range
-                    , HP
-                    , Perception
-                    , AC
-                    , Fortitude
-                    , Reflex
-                    , Will
-                    -- , Str
-                    -- , Dex
-                    -- , Con
-                    -- , Int
-                    -- , Wis
-                    -- , Cha
+                    [ "name.keyword"
+                    , "level"
+                    , "type"
+                    , "price"
+                    , "bulk"
+                    , "range"
+                    , "hp"
+                    , "ac"
+                    , "fortitude_save"
+                    , "reflex_save"
+                    , "will_save"
+                    , "perception"
                     ]
-                )
+                  )
+                , [ Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HA.class "align-baseline"
+                        ]
+                        (List.append
+                            [ Html.select
+                                [ HE.onInput SortAbilityChanged ]
+                                (List.map
+                                    (\ability ->
+                                        Html.option
+                                            [ HA.value ability ]
+                                            [ Html.text (sortFieldToLabel ability) ]
+                                    )
+                                    [ "strength"
+                                    , "dexterity"
+                                    , "constitution"
+                                    , "intelligence"
+                                    , "wisdom"
+                                    , "charisma"
+                                    ]
+                                )
+                            ]
+                            (viewSortButtons model (model.selectedSortAbility))
+                        )
+                  , Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HA.class "align-baseline"
+                        ]
+                        (List.append
+                            [ Html.select
+                                [ HE.onInput SortResistanceChanged ]
+                                (List.map
+                                    (\type_ ->
+                                        Html.option
+                                            [ HA.value type_ ]
+                                            [ Html.text (sortFieldToLabel ("resistance." ++ type_)) ]
+                                    )
+                                    Data.damageTypes
+                                )
+                            ]
+                            (viewSortButtons model ("resistance." ++ model.selectedSortResistance))
+                        )
+                  , Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HA.class "align-baseline"
+                        ]
+                        (List.append
+                            [ Html.select
+                                [ HE.onInput SortWeaknessChanged ]
+                                (List.map
+                                    (\type_ ->
+                                        Html.option
+                                            [ HA.value type_ ]
+                                            [ Html.text (sortFieldToLabel ("weakness." ++ type_)) ]
+                                    )
+                                    Data.damageTypes
+                                )
+                            ]
+                            (viewSortButtons model ("weakness." ++ model.selectedSortWeakness))
+                        )
+                  ]
+                ]
             )
         ]
+
+
+viewSortButtons : Model -> String -> List (Html Msg)
+viewSortButtons model field =
+    [ Html.button
+        [ HE.onClick
+            (if List.member ( field, Asc ) model.sort then
+                (SortRemoved field)
+
+             else
+                (SortAdded field Asc)
+            )
+        , HA.class
+            (if List.member ( field, Asc ) model.sort then
+                "active"
+
+             else
+                "excluded"
+            )
+        ]
+        [ Html.text "Asc" ]
+    , Html.button
+        [ HE.onClick
+            (if List.member ( field, Desc ) model.sort then
+                (SortRemoved field)
+
+             else
+                (SortAdded field Desc)
+            )
+        , HA.class
+            (if List.member ( field, Desc ) model.sort then
+                "active"
+
+             else
+                "excluded"
+            )
+        ]
+        [ Html.text "Desc" ]
+    ]
 
 
 viewCheckbox : { checked : Bool, onCheck : Bool -> msg, text : String } -> Html msg
@@ -2411,7 +2405,7 @@ viewSearchResultAdditionalInfo hit =
             )
             (case hit.source.category of
                 "action" ->
-                    (List.filterMap identity
+                    Maybe.Extra.values
                         [ hit.source.frequency
                             |> Maybe.map (viewLabelAndText "Frequency")
                         , hit.source.trigger
@@ -2419,7 +2413,6 @@ viewSearchResultAdditionalInfo hit =
                         , hit.source.requirements
                             |> Maybe.map (viewLabelAndText "Requirements")
                         ]
-                    )
 
                 "bloodline" ->
                     hit.source.spellList
@@ -2428,29 +2421,18 @@ viewSearchResultAdditionalInfo hit =
                         |> Maybe.withDefault []
 
                 "creature" ->
-                    (List.filterMap identity
+                    Maybe.Extra.values
                         [ hit.source.creatureFamily
                             |> Maybe.map (viewLabelAndText "Creature Family")
                         , Html.div
                             [ HA.class "row"
                             , HA.class "gap-medium"
                             ]
-                            (List.filterMap identity
+                            (Maybe.Extra.values
                                 [ hit.source.hp
                                     |> Maybe.map String.fromInt
                                     |> Maybe.map (viewLabelAndText "HP")
-                                , hit.source.perception
-                                    |> Maybe.map numberWithSign
-                                    |> Maybe.map (viewLabelAndText "Perception")
-                                ]
-                            )
-                                |> Just
-                        , Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            (List.filterMap identity
-                                [ hit.source.ac
+                                , hit.source.ac
                                     |> Maybe.map String.fromInt
                                     |> Maybe.map (viewLabelAndText "AC")
                                 , hit.source.fort
@@ -2462,55 +2444,104 @@ viewSearchResultAdditionalInfo hit =
                                 , hit.source.will
                                     |> Maybe.map numberWithSign
                                     |> Maybe.map (viewLabelAndText "Will")
+                                , hit.source.perception
+                                    |> Maybe.map numberWithSign
+                                    |> Maybe.map (viewLabelAndText "Perception")
+                                ]
+                            )
+                                |> Just
+                        , Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-medium"
+                            ]
+                            (Maybe.Extra.values
+                                [ hit.source.strength
+                                    |> Maybe.map numberWithSign
+                                    |> Maybe.map (viewLabelAndText "Str")
+                                , hit.source.dexterity
+                                    |> Maybe.map numberWithSign
+                                    |> Maybe.map (viewLabelAndText "Dex")
+                                , hit.source.constitution
+                                    |> Maybe.map numberWithSign
+                                    |> Maybe.map (viewLabelAndText "Con")
+                                , hit.source.intelligence
+                                    |> Maybe.map numberWithSign
+                                    |> Maybe.map (viewLabelAndText "Int")
+                                , hit.source.wisdom
+                                    |> Maybe.map numberWithSign
+                                    |> Maybe.map (viewLabelAndText "Wis")
+                                , hit.source.charisma
+                                    |> Maybe.map numberWithSign
+                                    |> Maybe.map (viewLabelAndText "Cha")
+                                ]
+                            )
+                                |> Just
+                        , Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-medium"
+                            ]
+                            (Maybe.Extra.values
+                                [ hit.source.immunities
+                                    |> nonEmptyList
+                                    |> Maybe.map (viewLabelAndPluralizedText "Immunity" "Immunities")
+                                , hit.source.resistances
+                                    |> nonEmptyList
+                                    |> Maybe.map (viewLabelAndPluralizedText "Resistance" "Resistances")
+                                , hit.source.weaknesses
+                                    |> nonEmptyList
+                                    |> Maybe.map (viewLabelAndPluralizedText "Weakness" "Weaknesses")
                                 ]
                             )
                                 |> Just
                         ]
-                    )
+
+                "deity" ->
+                    Maybe.Extra.values
+                        [ hit.source.divineFont
+                            |> Maybe.map (viewLabelAndText "Divine Font")
+                        , hit.source.skills
+                            |> nonEmptyList
+                            |> Maybe.map (viewLabelAndPluralizedText "Divine Skill" "Divine Skills")
+                        , hit.source.favoredWeapon
+                            |> Maybe.map (viewLabelAndText "Favored Weapon")
+                        , hit.source.domains
+                            |> nonEmptyList
+                            |> Maybe.map (viewLabelAndPluralizedText "Domain" "Domains")
+                        ]
 
                 "equipment" ->
-                    (List.filterMap identity
-                        [ Maybe.map
-                            (viewLabelAndText "Price")
-                            hit.source.price
-
+                    Maybe.Extra.values
+                        [ hit.source.price
+                            |> Maybe.map (viewLabelAndText "Price")
                         , Html.div
                             [ HA.class "row"
                             , HA.class "gap-medium"
                             ]
-                            (List.filterMap identity
-                                [ Maybe.map
-                                    (viewLabelAndText "Hands")
-                                    hit.source.hands
-                                , Maybe.map
-                                    (viewLabelAndText "Usage")
-                                    hit.source.usage
-                                , Maybe.map
-                                    (viewLabelAndText "Bulk")
-                                    hit.source.bulk
+                            (Maybe.Extra.values
+                                [ hit.source.hands
+                                    |> Maybe.map (viewLabelAndText "Hands")
+                                , hit.source.usage
+                                    |> Maybe.map (viewLabelAndText "Usage")
+                                , hit.source.bulk
+                                    |> Maybe.map (viewLabelAndText "Bulk")
                                 ]
                             )
                                 |> Just
-
                         , Html.div
                             [ HA.class "row"
                             , HA.class "gap-medium"
                             ]
-                            (List.filterMap identity
-                                [ Maybe.map
-                                    (viewLabelAndText "Activate")
-                                    hit.source.activate
-                                , Maybe.map
-                                    (viewLabelAndText "Frequency")
-                                    hit.source.frequency
-                                , Maybe.map
-                                    (viewLabelAndText "Trigger")
-                                    hit.source.trigger
+                            (Maybe.Extra.values
+                                [ hit.source.activate
+                                    |> Maybe.map (viewLabelAndText "Activate")
+                                , hit.source.frequency
+                                    |> Maybe.map (viewLabelAndText "Frequency")
+                                , hit.source.trigger
+                                    |> Maybe.map (viewLabelAndText "Trigger")
                                 ]
                             )
                                 |> Just
                         ]
-                    )
 
                 "familiar" ->
                     hit.source.abilityType
@@ -2519,18 +2550,16 @@ viewSearchResultAdditionalInfo hit =
                         |> Maybe.withDefault []
 
                 "familiar-specific" ->
-                    (List.filterMap identity
+                    Maybe.Extra.values
                         [ hit.source.requiredAbilities
                             |> Maybe.map (viewLabelAndText "Required Number of Abilities")
                         , hit.source.familiarAbilities
-                            |> String.join ", "
-                            |> viewLabelAndText "Granted Abilities"
-                            |> Just
+                            |> nonEmptyList
+                            |> Maybe.map (viewLabelAndPluralizedText "Granted Ability" "Granted Abilities")
                         ]
-                    )
 
                 "feat" ->
-                    (List.filterMap identity
+                    Maybe.Extra.values
                         [ hit.source.frequency
                             |> Maybe.map (viewLabelAndText "Frequency")
                         , hit.source.prerequisites
@@ -2540,7 +2569,6 @@ viewSearchResultAdditionalInfo hit =
                         , hit.source.requirements
                             |> Maybe.map (viewLabelAndText "Requirements")
                         ]
-                    )
 
                 "lesson" ->
                     hit.source.lessonType
@@ -2555,65 +2583,56 @@ viewSearchResultAdditionalInfo hit =
                         |> Maybe.withDefault []
 
                 "relic" ->
-                    (List.filterMap identity
+                    Maybe.Extra.values
                         [ hit.source.aspect
                             |> Maybe.map (viewLabelAndText "Aspect")
                         , hit.source.prerequisites
                             |> Maybe.map (viewLabelAndText "Prerequisite")
                         ]
-                    )
 
                 "ritual" ->
                     [ Html.div
                         [ HA.class "row"
                         , HA.class "gap-medium"
                         ]
-                        (List.filterMap identity
-                            [ Maybe.map
-                                (viewLabelAndText "Cast")
-                                hit.source.cast
-                            , Maybe.map
-                                (viewLabelAndText "Cost")
-                                hit.source.cost
-                            , Maybe.map
-                                (viewLabelAndText "Secondary Casters")
-                                hit.source.secondaryCasters
+                        (Maybe.Extra.values
+                            [ hit.source.cast
+                                |> Maybe.map (viewLabelAndText "Cast")
+                            , hit.source.cost
+                                |> Maybe.map (viewLabelAndText "Cost")
+                            , hit.source.secondaryCasters
+                                |> Maybe.map (viewLabelAndText "Secondary Casters")
                             ]
                         )
                     , Html.div
                         [ HA.class "row"
                         , HA.class "gap-medium"
                         ]
-                        (List.filterMap identity
-                            [ Maybe.map
-                                (viewLabelAndText "Primary Check")
-                                hit.source.primaryCheck
-                            , Maybe.map
-                                (viewLabelAndText "Secondary Checks")
-                                hit.source.secondaryChecks
+                        (Maybe.Extra.values
+                            [ hit.source.primaryCheck
+                                |> Maybe.map (viewLabelAndText "Primary Check")
+                            , hit.source.secondaryChecks
+                                |> Maybe.map (viewLabelAndText "Secondary Checks")
                             ]
                         )
                     , Html.div
                         [ HA.class "row"
                         , HA.class "gap-medium"
                         ]
-                        (List.filterMap identity
-                            [ Maybe.map
-                                (viewLabelAndText "Range")
-                                hit.source.range
-                            , Maybe.map
-                                (viewLabelAndText "Targets")
-                                hit.source.targets
+                        (Maybe.Extra.values
+                            [ hit.source.range
+                                |> Maybe.map (viewLabelAndText "Range")
+                            , hit.source.targets
+                                |> Maybe.map (viewLabelAndText "Targets")
                             ]
                         )
                     , Html.div
                         [ HA.class "row"
                         , HA.class "gap-medium"
                         ]
-                        (List.filterMap identity
-                            [ Maybe.map
-                                (viewLabelAndText "Duration")
-                                hit.source.duration
+                        (Maybe.Extra.values
+                            [ hit.source.duration
+                                |> Maybe.map (viewLabelAndText "Duration")
                             ]
                         )
                     , hit.source.heighten
@@ -2630,24 +2649,45 @@ viewSearchResultAdditionalInfo hit =
                         |> Maybe.withDefault []
 
                 "spell" ->
-                    List.filterMap identity
+                    Maybe.Extra.values
                         [ hit.source.traditions
-                            |> String.join ", "
-                            |> String.Extra.nonEmpty
-                            |> Maybe.map (viewLabelAndText "Traditions")
+                            |> nonEmptyList
+                            |> Maybe.map (viewLabelAndPluralizedText "Tradition" "Traditions")
 
                         , Html.div
                             [ HA.class "row"
                             , HA.class "gap-medium"
                             ]
-                            (List.filterMap identity
-                                [ Maybe.map
-                                    (viewLabelAndText "Cast")
-                                    hit.source.cast
+                            (Maybe.Extra.values
+                                [ hit.source.bloodlines
+                                    |> nonEmptyList
+                                    |> Maybe.map (viewLabelAndPluralizedText "Bloodline" "Bloodlines")
+                                , hit.source.domains
+                                    |> nonEmptyList
+                                    |> Maybe.map (viewLabelAndPluralizedText "Domain" "Domains")
+                                , hit.source.mysteries
+                                    |> nonEmptyList
+                                    |> Maybe.map (viewLabelAndPluralizedText "Mystery" "Mysteries")
+                                , hit.source.patronThemes
+                                    |> nonEmptyList
+                                    |> Maybe.map (viewLabelAndPluralizedText "Patron Theme" "Patron Themes")
+                                , hit.source.deities
+                                    |> nonEmptyList
+                                    |> Maybe.map (viewLabelAndPluralizedText "Deity" "Deities")
+                                ]
+                            )
+                                |> Just
+
+                        , Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-medium"
+                            ]
+                            (Maybe.Extra.values
+                                [ hit.source.cast
+                                    |> Maybe.map (viewLabelAndText "Cast")
                                 , hit.source.components
-                                    |> String.join ", "
-                                    |> String.Extra.nonEmpty
-                                    |> Maybe.map (viewLabelAndText "Components")
+                                    |> nonEmptyList
+                                    |> Maybe.map (viewLabelAndPluralizedText "Component" "Components")
                                 , hit.source.trigger
                                     |> Maybe.map (viewLabelAndText "Trigger")
                                 , hit.source.requirements
@@ -2660,16 +2700,13 @@ viewSearchResultAdditionalInfo hit =
                             [ HA.class "row"
                             , HA.class "gap-medium"
                             ]
-                            (List.filterMap identity
-                                [ Maybe.map
-                                    (viewLabelAndText "Range")
-                                    hit.source.range
-                                , Maybe.map
-                                    (viewLabelAndText "Targets")
-                                    hit.source.targets
-                                , Maybe.map
-                                    (viewLabelAndText "Area")
-                                    hit.source.area
+                            (Maybe.Extra.values
+                                [ hit.source.range
+                                    |> Maybe.map (viewLabelAndText "Range")
+                                , hit.source.targets
+                                    |> Maybe.map (viewLabelAndText "Targets")
+                                , hit.source.area
+                                    |> Maybe.map (viewLabelAndText "Area")
                                 ]
                             )
                                 |> Just
@@ -2678,14 +2715,11 @@ viewSearchResultAdditionalInfo hit =
                             [ HA.class "row"
                             , HA.class "gap-medium"
                             ]
-                            (List.filterMap identity
-                                [ Maybe.map
-                                    (viewLabelAndText "Duration")
-                                    hit.source.duration
-
-                                , Maybe.map
-                                    (viewLabelAndText "Saving Throw")
-                                    hit.source.savingThrow
+                            (Maybe.Extra.values
+                                [ hit.source.duration
+                                    |> Maybe.map (viewLabelAndText "Duration")
+                                , hit.source.savingThrow
+                                    |> Maybe.map (viewLabelAndText "Saving Throw")
                                 ]
                             )
                                 |> Just
@@ -2696,52 +2730,47 @@ viewSearchResultAdditionalInfo hit =
                         ]
 
                 "weapon" ->
-                    (List.filterMap identity
-                        [ Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            (List.filterMap identity
-                                [ hit.source.price
-                                    |> Maybe.map (viewLabelAndText "Price")
-                                , hit.source.damage
-                                    |> Maybe.map (viewLabelAndText "Damage")
-                                , hit.source.bulk
-                                    |> Maybe.map (viewLabelAndText "Bulk")
-                                ]
-                            )
-                                |> Just
-                        , Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            (List.filterMap identity
-                                [ hit.source.hands
-                                    |> Maybe.map (viewLabelAndText "Hands")
-                                , hit.source.range
-                                    |> Maybe.map (viewLabelAndText "Range")
-                                , hit.source.reload
-                                    |> Maybe.map (viewLabelAndText "Reload")
-                                ]
-                            )
-                                |> Just
-                        , hit.source.ammunition
-                            |> Maybe.map (viewLabelAndText "Ammunition")
-                        , Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            (List.filterMap identity
-                                [ hit.source.weaponCategory
-                                    |> Maybe.map (viewLabelAndText "Category")
-                                , hit.source.weaponGroup
-                                    |> Maybe.map (viewLabelAndText "Group")
-                                ]
-                            )
-                                |> Just
+                    [ Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-medium"
                         ]
-                    )
-
+                        (Maybe.Extra.values
+                            [ hit.source.price
+                                |> Maybe.map (viewLabelAndText "Price")
+                            , hit.source.damage
+                                |> Maybe.map (viewLabelAndText "Damage")
+                            , hit.source.bulk
+                                |> Maybe.map (viewLabelAndText "Bulk")
+                            ]
+                        )
+                    , Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-medium"
+                        ]
+                        (Maybe.Extra.values
+                            [ hit.source.hands
+                                |> Maybe.map (viewLabelAndText "Hands")
+                            , hit.source.range
+                                |> Maybe.map (viewLabelAndText "Range")
+                            , hit.source.reload
+                                |> Maybe.map (viewLabelAndText "Reload")
+                            ]
+                        )
+                    , hit.source.ammunition
+                        |> Maybe.map (viewLabelAndText "Ammunition")
+                        |> Maybe.withDefault (Html.text "")
+                    , Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-medium"
+                        ]
+                        (Maybe.Extra.values
+                            [ hit.source.weaponCategory
+                                |> Maybe.map (viewLabelAndText "Category")
+                            , hit.source.weaponGroup
+                                |> Maybe.map (viewLabelAndText "Group")
+                            ]
+                        )
+                    ]
 
                 _ ->
                     []
@@ -2758,6 +2787,15 @@ numberWithSign int =
         String.fromInt int
 
 
+nonEmptyList : List a -> Maybe (List a)
+nonEmptyList list =
+    if List.isEmpty list then
+        Nothing
+
+    else
+        Just list
+
+
 viewLabelAndText : String -> String -> Html msg
 viewLabelAndText label text =
     Html.div
@@ -2766,6 +2804,18 @@ viewLabelAndText label text =
         , Html.text " "
         , viewTextWithActionIcons text
         ]
+
+
+viewLabelAndPluralizedText : String -> String -> List String -> Html msg
+viewLabelAndPluralizedText singular plural strings =
+    viewLabelAndText
+        (if List.length strings > 1 then
+            plural
+
+         else
+            singular
+        )
+        (String.join ", " strings)
 
 
 viewLabel : String -> Html msg
@@ -2972,6 +3022,10 @@ css =
         color: var(--color-text);
         padding: 4px;
         width: 100%;
+    }
+
+    select {
+        font-size: var(--font-normal);
     }
 
     .align-baseline {

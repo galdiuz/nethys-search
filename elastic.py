@@ -344,11 +344,11 @@ def parse_deity(id: str, soup: BeautifulSoup):
     doc.name = title.text.split('[')[0].strip()
     alignment = title.text.split('[')[1].strip(']')
 
+    doc.ability = split_on(get_label_text(soup, 'Divine Ability'), ' or ')
     doc.alignment = alignment
     doc.anathema = get_label_text(soup, 'Anathema')
     doc.area_of_concern = get_label_text(soup, 'Areas of Concern')
     doc.cleric_spell = get_label_text(soup, 'Cleric Spells')
-    doc.divine_ability = split_on(get_label_text(soup, 'Divine Ability'), ' or ')
     doc.divine_font = get_label_text(soup, 'Divine Font')
     doc.skill = split_on(get_label_text(soup, 'Divine Skill'), ' or ')
     doc.domain = split_comma(get_label_text(soup, 'Domains')) + split_comma(get_label_text(soup, 'Alternate Domains'))
@@ -643,6 +643,8 @@ def parse_creature(id: str, soup: BeautifulSoup, url: str):
     title = list(soup.find_all('h1', class_='title'))[1]
     name, type, level, pfs = get_title_data(title)
     traits = get_traits(soup)
+    resistances = split_comma_special(get_label_text(soup, 'Resistances', ''))
+    weaknesses = split_comma_special(get_label_text(soup, 'Weaknesses', ''))
 
     doc.name = name
     doc.type = type
@@ -673,8 +675,10 @@ def parse_creature(id: str, soup: BeautifulSoup, url: str):
     doc.will_save = get_label_text(soup, 'Will', ';,(')
     doc.hp = get_label_text(soup, 'HP', ';,(')
     doc.immunity = split_comma(get_label_text(soup, 'Immunities'))
-    doc.resistance = split_comma(get_label_text(soup, 'Resistances'))
-    doc.weakness = split_comma(get_label_text(soup, 'Weaknesses'))
+    doc.resistance = normalize_resistance(resistances)
+    doc.resistance_raw = resistances
+    doc.weakness = normalize_resistance(weaknesses)
+    doc.weakness_raw = weaknesses
 
     titles = list(soup.find_all('h1', class_='title'))
     if len(titles) >= 3:
@@ -712,7 +716,7 @@ def parse_plane(id: str, soup: BeautifulSoup):
 
 
 def parse_racket(id: str, soup: BeautifulSoup):
-    doc = parse_generic(id, soup, 'racket', 'Rackets', 'Rogue Rackets')
+    doc = parse_generic(id, soup, 'racket', 'Rackets', 'Rogue Racket')
 
     doc.save()
 
@@ -810,7 +814,7 @@ def parse_skill(id: str, soup: BeautifulSoup):
     title = soup.find('h1', class_='title')
 
     doc.name = title.text.split('(')[0].strip()
-    doc.attribute = title.text.split('(')[1].strip(')')
+    doc.ability = title.text.split('(')[1].strip(')')
 
     doc.save()
 
@@ -831,6 +835,7 @@ def parse_spell(id: str, soup: BeautifulSoup):
     doc.cast = get_actions(soup, 'Cast')
     doc.component = get_label_links(soup, 'Cast')
     doc.deity = split_comma(get_label_text(soup, 'Deities')) or get_label_text(soup, 'Deity')
+    doc.domain = get_label_text(soup, 'Domain')
     doc.duration = get_label_text(soup, 'Duration')
     doc.heighten = get_heighten(soup)
     doc.mystery = get_label_text(soup, 'Mystery')
@@ -1126,8 +1131,99 @@ def normalize_range(value: str) -> int:
     return number
 
 
+def normalize_resistance(values: str):
+    if not values:
+        return None
+
+    resistances = {}
+
+    for resistance in values:
+        match = re.match(r'^([\w ]+)( \(except (.*)\))? (\d+)( \(except (.*)\)?)?', resistance)
+
+        if match:
+            type = match.group(1)
+            value = int(match.group(4))
+            exceptions = match.group(3) or match.group(6)
+
+            type = (type
+                .replace(' damage', '')
+                .replace(' energy', '')
+                .replace('all physical', 'physical')
+                .replace(' ', '_')
+            )
+
+            types = translate_damage_types(type, exceptions)
+
+            for type in types:
+                resistances[type] = value
+
+    return resistances
+
+
+def translate_damage_types(value: str, exceptions: str):
+    if value == 'physical':
+        types = physical_types()
+
+    elif value == 'energy':
+        types = energy_types()
+
+    elif value == 'all':
+        types = all_types()
+
+    elif value in all_types():
+        types = [value]
+
+    else:
+        types = []
+
+    if exceptions:
+        exceptions = (exceptions
+            .replace(' or ', ',')
+            .replace(';', ',')
+            .replace(' ', '_')
+            .split(',')
+        )
+        exceptions = [ ex.strip('_') for ex in exceptions ]
+
+        types = [ type for type in types if type not in exceptions ]
+
+    return types
+
+
 def split_comma(string):
     return split_on(string, ',')
+
+
+def split_comma_special(value: str):
+    if not value:
+        return None
+
+    values = []
+    in_parentheses = False
+    part = ''
+
+    for c in value:
+        if c == ',' and not in_parentheses:
+            values.append(part.strip())
+            part = ''
+
+        elif c == '(':
+            in_parentheses = True
+            part += c
+
+        elif c == ')':
+            in_parentheses = False
+            part += c
+
+        else:
+            part += c
+
+    if part:
+        values.append(part.rstrip(';').strip())
+
+    values = [ value.replace(' )', ')').replace(' ,', ',').replace(' ;', ';').replace('non- ', 'non-') for value in values ]
+
+    return values
 
 
 def split_on(string, split):
@@ -1281,11 +1377,42 @@ def get_stages(soup: BeautifulSoup):
     stages = [stage for stage in stages if stage]
 
     return stages
-    return stages if stages else None
+
+
+def physical_types():
+    return ['bludgeoning', 'physical', 'piercing', 'slashing']
+
+
+def energy_types():
+    return ['acid', 'cold', 'electricity', 'fire', 'sonic', 'positive', 'negative', 'force']
+
+
+def alignment_types():
+    return['chaotic', 'evil', 'good', 'lawful']
+
+
+def material_types():
+    return ['cold_iron', 'orichalcum', 'silver']
+
+
+def other_types():
+    return ['area', 'bleed', 'mental', 'poison', 'precision', 'splash']
+
+
+def all_types():
+    return ['all'] + physical_types() + energy_types() + alignment_types() + material_types() + other_types()
 
 
 class Alias(Field):
     name = "alias"
+
+
+def damageTypesObject():
+    fields = {}
+    for type in all_types():
+        fields[type] = Integer()
+
+    return Object(properties=fields)
 
 
 class Doc(Document):
@@ -1318,6 +1445,7 @@ class Doc(Document):
     reflex_save = Integer()
     reload = Integer()
     required_abilities = Integer()
+    resistance = damageTypesObject()
     secondary_casters = Integer()
     source = Keyword(normalizer="lowercase")
     str = Alias(path="strength")
@@ -1326,6 +1454,7 @@ class Doc(Document):
     trait = Keyword(normalizer="lowercase")
     type = Keyword(normalizer="lowercase")
     url = Keyword()
+    weakness = damageTypesObject()
     will = Alias(path="will_save")
     will_save = Integer()
     wis = Alias(path="wisdom")

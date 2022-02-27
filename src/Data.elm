@@ -1,9 +1,43 @@
 module Data exposing (..)
 
+import String.Extra
+
+
+damageTypes : List String
+damageTypes =
+    [ "acid"
+    , "all"
+    , "area"
+    , "bleed"
+    , "bludgeoning"
+    , "chaotic"
+    , "cold"
+    , "cold_iron"
+    , "electricity"
+    , "evil"
+    , "fire"
+    , "force"
+    , "good"
+    , "lawful"
+    , "mental"
+    , "negative"
+    , "orichalcum"
+    , "physical"
+    , "piercing"
+    , "poison"
+    , "positive"
+    , "precision"
+    , "silver"
+    , "slashing"
+    , "sonic"
+    , "splash"
+    ]
+
 
 fields : List ( String, String )
 fields =
-    [ ( "ability_type", "Familiar ability type (Familiar / Master)" )
+    [ ( "ability", "Ability related to a deity or skill" )
+    , ( "ability_type", "Familiar ability type (Familiar / Master)" )
     , ( "ac", "[n] Armor class of an armor, creature, or shield" )
     , ( "actions", "Actions required to use an action, feat, or creature ability" )
     , ( "activate", "Activation requirements of an item" )
@@ -14,7 +48,6 @@ fields =
     , ( "area", "Area of a spell" )
     , ( "armor_group", "Armor group" )
     , ( "aspect", "Relic gift aspect type" )
-    , ( "attribute", "Skill attribute" )
     , ( "bloodline", "Sorcerer bloodlines associated with a spell" )
     , ( "bloodline_spell", "Sorcerer bloodline's spells" )
     , ( "bulk", "Item bulk ('L' is 0.1)" )
@@ -36,12 +69,10 @@ fields =
     , ( "dex_cap", "[n] Armor dex cap" )
     , ( "dexterity", "Dexterity" )
     , ( "disable", "Hazard disable requirements" )
-    , ( "divine_ability", "Deity's divine ability" )
     , ( "divine_font", "Deity's divine font" )
-    , ( "divine_skill", "Deity's divine skill" )
     , ( "divinity", "Plane divinities" )
     , ( "domain_spell", "Domain spell" )
-    , ( "domains", "Deity domains" )
+    , ( "domain", "Domains related to deity or spell" )
     , ( "duration", "Duration of spell or poison" )
     , ( "familiar_ability", "Abilities granted by specific familiars" )
     , ( "favored_weapon", "Deity's favored weapon" )
@@ -83,7 +114,8 @@ fields =
     , ( "reload", "[n] Weapon reload" )
     , ( "required_abilities", "[n] Number of required familiar abilities for a specific familiar" )
     , ( "requirement", "Requirements" )
-    , ( "resistance", "Resistances" )
+    , ( "resistance.<type>", "[n] Resistance to <type>. See list of valid types below. Use resistance.\\* to match any type." )
+    , ( "resistance_raw", "Resistances exactly as written" )
     , ( "saving_throw", "Saving throw for a disease, poison, or spell" )
     , ( "secondary_casters", "[n] Secondary casters for a ritual" )
     , ( "secondary_check", "Secondary checks for a ritual" )
@@ -104,12 +136,13 @@ fields =
     , ( "target", "Spell targets" )
     , ( "text", "All text on a page" )
     , ( "tradition", "Traditions of spell or summoner eidolon" )
-    , ( "trait", "Traits (with values removed, e.g. 'Deadly d6' is normalized as 'Deadly')" )
-    , ( "trait_raw", "Traits (exactly as written)" )
+    , ( "trait", "Traits with values removed, e.g. 'Deadly d6' is normalized as 'Deadly'" )
+    , ( "trait_raw", "Traits exactly as written" )
     , ( "trigger", "Trigger" )
     , ( "type", "Type" )
     , ( "usage", "Usage of curse or item" )
-    , ( "weakness", "Weaknesses" )
+    , ( "weakness.<type>", "[n] Weakness to <type>. See list of valid types below. Use weakness.\\* to match any type." )
+    , ( "weakness_raw", "Weaknesses exactly as written" )
     , ( "weapon_category", "Weapon category (Simple / Martial / Advanced / Ammunition)" )
     , ( "weapon_group", "Weapon group" )
     , ( "will", "[n] Alias for 'will_save'" )
@@ -117,6 +150,47 @@ fields =
     , ( "wis", "[n] Alias for 'wisdom'" )
     , ( "wisdom", "[n] Wisdom" )
     ]
+
+
+sortFields : List ( String, String )
+sortFields =
+    [ ( "ac", "AC" )
+    , ( "bulk", "Bulk" )
+    , ( "charisma", "Charisma" )
+    , ( "constitution", "Constitution" )
+    , ( "dexterity", "Dexterity" )
+    , ( "fortitude_save", "Fortitude" )
+    , ( "hp", "HP" )
+    , ( "intelligence", "Intelligence" )
+    , ( "level", "Level" )
+    , ( "name.keyword", "Name" )
+    , ( "perception", "Perception" )
+    , ( "price", "Price" )
+    , ( "range", "Range" )
+    , ( "reflex_save", "Reflex" )
+    , ( "strength", "Strength" )
+    , ( "type", "Type" )
+    , ( "will_save", "Will" )
+    , ( "wisdom", "Wisdom" )
+    ]
+        |> List.append
+            (List.map
+                (\type_ ->
+                    ( "resistance." ++ type_
+                    , (type_ |> String.Extra.humanize) ++ " resistance"
+                    )
+                )
+                damageTypes
+            )
+        |> List.append
+            (List.map
+                (\type_ ->
+                    ( "weakness." ++ type_
+                    , (type_ |> String.Extra.humanize) ++ " weakness"
+                    )
+                )
+                damageTypes
+            )
 
 
 traits : List String
@@ -566,7 +640,7 @@ types =
     , "Oracle Mystery"
     , "Plane"
     , "Ritual"
-    , "Rogue Rackets"
+    , "Rogue Racket"
     , "Rules"
     , "Shield"
     , "Skill"
