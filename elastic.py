@@ -661,6 +661,9 @@ def parse_creature(id: str, soup: BeautifulSoup, url: str):
     traits = get_traits(soup)
     resistances = split_comma_special(get_label_text(soup, 'Resistances', ''))
     weaknesses = split_comma_special(get_label_text(soup, 'Weaknesses', ''))
+    fort_save = int(get_label_text(soup, 'Fort', ';,('))
+    reflex_save = int(get_label_text(soup, 'Ref', ';,('))
+    will_save = int(get_label_text(soup, 'Will', ';,('))
 
     doc.name = name
     doc.type = type
@@ -686,15 +689,45 @@ def parse_creature(id: str, soup: BeautifulSoup, url: str):
     doc.charisma = get_label_text(soup, 'Cha')
 
     doc.ac = get_label_text(soup, 'AC', ';,( ')
-    doc.fortitude_save = get_label_text(soup, 'Fort', ';,(')
-    doc.reflex_save = get_label_text(soup, 'Ref', ';,(')
-    doc.will_save = get_label_text(soup, 'Will', ';,(')
+    doc.fortitude_save = fort_save
+    doc.reflex_save = reflex_save
+    doc.will_save = will_save
     doc.hp = get_label_text(soup, 'HP', ';,(')
     doc.immunity = split_comma(get_label_text(soup, 'Immunities'))
     doc.resistance = normalize_resistance(resistances)
     doc.resistance_raw = resistances
     doc.weakness = normalize_resistance(weaknesses)
     doc.weakness_raw = weaknesses
+
+    strongest_save_mod = max(fort_save, reflex_save, will_save)
+    weakest_save_mod = min(fort_save, reflex_save, will_save)
+    strongest_save = []
+    weakest_save = []
+
+    if fort_save == strongest_save_mod:
+        strongest_save.append('fort')
+        strongest_save.append('fortitude')
+
+    if reflex_save == strongest_save_mod:
+        strongest_save.append('ref')
+        strongest_save.append('reflex')
+
+    if will_save == strongest_save_mod:
+        strongest_save.append('will')
+
+    if fort_save == weakest_save_mod:
+        weakest_save.append('fort')
+        weakest_save.append('fortitude')
+
+    if reflex_save == weakest_save_mod:
+        weakest_save.append('ref')
+        weakest_save.append('reflex')
+
+    if will_save == weakest_save_mod:
+        weakest_save.append('will')
+
+    doc.strongest_save = strongest_save
+    doc.weakest_save = weakest_save
 
     titles = list(soup.find_all('h1', class_='title'))
     if len(titles) >= 3:
