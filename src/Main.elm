@@ -740,6 +740,11 @@ buildSearchBody model =
                 )
           )
             |> Just
+        , ( "_source"
+          , Encode.object
+            [ ( "excludes", Encode.list Encode.string [ "text" ] ) ]
+          )
+            |> Just
         , model.searchResults
             |> List.Extra.last
             |> Maybe.andThen (Result.toMaybe)
