@@ -1,0 +1,52 @@
+<script>
+var script = document.createElement('script');
+script.src = 'http://localhost:8000/app.js';
+script.onload = function () {
+    class ElmApp extends HTMLElement {
+        constructor() {
+            super();
+
+            this.attachShadow({mode: 'open'});
+
+            let container = document.createElement('div');
+            this.shadowRoot.appendChild(container);
+
+            let app = Elm.Main.init({
+                node: container,
+                flags: {
+                    currentUrl: location.href,
+                    elasticUrl: "http://localhost:9200/aon",
+                }
+            });
+
+            app.ports.localStorage_get.subscribe(function (key) {
+                let value = localStorage.getItem(key);
+                app.ports.localStorage_receive.send({key: key, value: value});
+            });
+
+            app.ports.localStorage_set.subscribe(function (data) {
+                localStorage.setItem(data.key, data.value);
+            });
+
+            window.addEventListener('popstate', function () {
+                app.ports.navigation_urlChanged.send(location.href);
+            });
+
+            app.ports.navigation_pushUrl.subscribe(function (url) {
+                history.pushState([], '', url);
+                app.ports.navigation_urlChanged.send(location.href);
+            });
+
+            app.ports.navigation_loadUrl.subscribe(function (url) {
+                location.href = url;
+            });
+        }
+    }
+
+    customElements.define('nethys-search', ElmApp);
+
+    let nethysSearch = document.createElement('nethys-search');
+    document.getElementById('main').appendChild(nethysSearch);
+};
+document.head.appendChild(script);
+</script>

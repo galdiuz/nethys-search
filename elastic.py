@@ -98,6 +98,17 @@ def build_url(category: str, id: int, params: [str] = []) -> str:
     return f'{category}.aspx?' + '&'.join([f"ID={id}"] + params)
 
 
+def dasherize(string: str) -> str:
+    # print('before:', string)
+    string.strip()
+    string = re.sub(r'[A-Z]', (lambda m: '-' + m.group(0)), string)
+    string = re.sub(r'[^a-zA-Z0-9]+', '-', string)
+    string = string.lower().strip('-')
+    # print('after:', string)
+
+    return string
+
+
 def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type: str, url_params: [str] = []):
     title = soup.find('h1', class_='title')
 
@@ -105,9 +116,9 @@ def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type: s
     source = get_label_text(soup, 'Source')
 
     doc = Doc()
-    doc.meta.id = category + '-' + id
+    doc.meta.id = category + '-' + dasherize(name)
     doc.id = id
-    doc.url = build_url(url, id, url_params)
+    doc.url = dasherize(name)
     doc.category = category
     doc.name = name.strip()
     doc.type = title_type or type
@@ -816,15 +827,26 @@ def parse_rules(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'rules', 'Rules', 'Rules')
 
     title = soup.find('h1', class_='title')
+    name, title_type, level, pfs = get_title_data(title)
+    source = get_label_text(soup, 'Source')
 
     breadcrumbs = []
     if node := title.previous_sibling:
         while node := node.previous_sibling:
+            if node.text == ' / ':
+                continue
             breadcrumbs.append(node.text)
 
-    if breadcrumbs:
-        breadcrumbs.reverse()
-        doc.breadcrumbs = ''.join(breadcrumbs)
+    breadcrumbs.append(normalize_source(source))
+    breadcrumbs.reverse()
+    doc.breadcrumbs = breadcrumbs
+
+    id = dasherize('-'.join(['rules'] + breadcrumbs + [name]))
+    doc.meta.id = id
+
+    markdown = get_markdown(title)
+    markdown = markdown.replace('<document id="rules-', f'<document id="{id}-')
+    doc.markdown = markdown
 
     doc.save()
 
@@ -1396,6 +1418,30 @@ def get_heighten(soup: BeautifulSoup):
         heighten.append(node.text.replace('Heightened (', '').replace(')', ''))
 
     return heighten
+
+
+def get_markdown(title: BeautifulSoup):
+    node = title
+    markdown = ''
+    title_level = None
+
+    while node := node.next_sibling:
+        if node.name == 'b' and not title_level:
+            markdown += '**' + node.text + '**'
+
+        elif node.name == 'br' and not title_level:
+            markdown += "\n"
+
+        elif node.name == 'h1':
+            link = node.find('a')
+            a = 'rules-' + dasherize(link.text)
+            markdown += f'\n\n<document id="{a}" />'
+            title_level = 1
+
+        elif not title_level:
+            markdown += node.text
+
+    return markdown
 
 
 def get_senses(per):
