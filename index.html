@@ -9,19 +9,55 @@
 </head>
 <body>
     <script>
-        var app = Elm.Main.init({
+        let container = document.createElement('div');
+        document.body.appendChild(container);
+        let app = Elm.NethysSearch.init({
+            node: container,
             flags: {
-                elasticUrl: "http://localhost:9200/aon"
+                currentUrl: location.href,
+                elasticUrl: "http://localhost:9200/aon",
+                showHeader: true,
             }
         });
 
-        app.ports.localStorage_get.subscribe(function (key) {
-            var value = localStorage.getItem(key);
+        app.ports.document_setTitle.subscribe(title => {
+            if (title) {
+                document.title = title + ' - Nethys Search';
+            } else {
+                document.title = 'Nethys Search';
+            }
+        });
+
+        app.ports.document_getNodeHeight.subscribe(id => {
+            window.requestAnimationFrame(() => {
+                let element = document.getElementById(id);
+                app.ports.document_receiveNodeHeight.send({
+                    'id': id,
+                    'height': element.scrollHeight,
+                });
+            });
+        });
+
+        app.ports.localStorage_get.subscribe(key => {
+            let value = localStorage.getItem(key);
             app.ports.localStorage_receive.send({key: key, value: value});
         });
 
-        app.ports.localStorage_set.subscribe(function (data) {
+        app.ports.localStorage_set.subscribe(data => {
             localStorage.setItem(data.key, data.value);
+        });
+
+        window.addEventListener('popstate', () => {
+            app.ports.navigation_urlChanged.send(location.href);
+        });
+
+        app.ports.navigation_pushUrl.subscribe(url => {
+            history.pushState([], '', url);
+            app.ports.navigation_urlChanged.send(location.href);
+        });
+
+        app.ports.navigation_loadUrl.subscribe(url => {
+            location.href = url;
         });
     </script>
 </body>

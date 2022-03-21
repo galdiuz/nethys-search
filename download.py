@@ -58,7 +58,7 @@ def main():
     download_category('Relics')
     download_category('ResearchFields')
     download_category('Rituals')
-    download_category('Rules')
+    download_category('Rules', 25)
     download_category('Shields')
     download_category('SiegeWeapons')
     download_category('Skills')

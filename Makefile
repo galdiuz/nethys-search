@@ -1,6 +1,7 @@
 SHELL = /bin/sh
 BUILD_PATH = app.js
-MAIN_FILE = src/Main.elm
+MAIN_FILE = src/NethysSearch.elm
+ELM_FLAGS =
 
 .PHONY: help
 help: ## Show this help message
@@ -9,7 +10,7 @@ help: ## Show this help message
 
 .PHONY: elm
 elm: ## Build elm
-	elm make $(MAIN_FILE) --output=$(BUILD_PATH)
+	elm make $(MAIN_FILE) $(ELM_FLAGS) --output=$(BUILD_PATH)
 
 
 .PHONY: elm-live

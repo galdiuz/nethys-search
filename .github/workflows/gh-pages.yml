@@ -24,7 +24,7 @@ jobs:
           elm-version: 0.19.1
 
       - name: Build Elm
-        run: make elm
+        run: make elm ELM_FLAGS="--optimize"
 
       - name: Replace commit hash and Elasticsearch URL
         run: |

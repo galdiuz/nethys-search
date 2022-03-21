@@ -1,9 +1,8 @@
-port module Main exposing (main)
+port module NethysSearch exposing (main)
 
 import Browser
 import Browser.Dom
 import Browser.Events
-import Browser.Navigation
 import Data
 import FontAwesome.Attributes
 import FontAwesome.Icon
@@ -46,8 +45,7 @@ type alias Hit a =
 
 
 type alias Document =
-    { id : Int
-    , category : String
+    { category : String
     , name : String
     , type_ : String
     , url : String
@@ -123,7 +121,17 @@ type alias Document =
 
 
 type alias Flags =
-    { elasticUrl : String
+    { currentUrl : String
+    , elasticUrl : String
+    , showHeader : Bool
+    }
+
+
+defaultFlags : Flags
+defaultFlags =
+    { currentUrl = "/"
+    , elasticUrl = ""
+    , showHeader = True
     }
 
 
@@ -139,6 +147,8 @@ type SortDir
 
 type Theme
     = Dark
+    | ExtraContrast
+    | Lavender
     | Light
     | Paper
 
@@ -177,14 +187,20 @@ type Msg
     | TraitFilterRemoved String
     | TypeFilterAdded String
     | TypeFilterRemoved String
-    | UrlChanged Url
+    | UrlChanged String
     | UrlRequested Browser.UrlRequest
     | WindowResized Int Int
 
 
+port document_getNodeHeight : String -> Cmd msg
+port document_receiveNodeHeight : ({ id : String, height : Float } -> msg) -> Sub msg
+port document_setTitle : String -> Cmd msg
 port localStorage_set : Encode.Value -> Cmd msg
 port localStorage_get : String -> Cmd msg
 port localStorage_receive : (Decode.Value -> msg) -> Sub msg
+port navigation_loadUrl : String -> Cmd msg
+port navigation_pushUrl : String -> Cmd msg
+port navigation_urlChanged : (String -> msg) -> Sub msg
 
 
 type alias Model =
@@ -196,7 +212,6 @@ type alias Model =
     , includeFilteredTraits : Bool
     , includeFilteredTypes : Bool
     , menuOpen : Bool
-    , navKey : Browser.Navigation.Key
     , overlayActive : Bool
     , query : String
     , queryOptionsHeight : Int
@@ -208,6 +223,7 @@ type alias Model =
     , selectedSortAbility : String
     , selectedSortResistance : String
     , selectedSortWeakness : String
+    , showHeader : Bool
     , showResultAdditionalInfo : Bool
     , showResultSpoilers : Bool
     , showResultTraits : Bool
@@ -218,20 +234,28 @@ type alias Model =
     }
 
 
-main : Program Flags Model Msg
+main : Program Decode.Value Model Msg
 main =
-    Browser.application
+    Browser.element
         { init = init
         , subscriptions = subscriptions
         , update = update
         , view = view
-        , onUrlRequest = UrlRequested
-        , onUrlChange = UrlChanged
         }
 
 
-init : Flags -> Url -> Browser.Navigation.Key -> ( Model, Cmd Msg )
-init flags url navKey =
+init : Decode.Value -> ( Model, Cmd Msg )
+init flagsValue =
+    let
+        flags : Flags
+        flags =
+            Decode.decodeValue flagsDecoder flagsValue
+                |> Result.withDefault defaultFlags
+
+        url : Url
+        url =
+            parseUrl flags.currentUrl
+    in
     ( { debounce = 0
       , elasticUrl = flags.elasticUrl
       , eqsHelpOpen = False
@@ -240,7 +264,6 @@ init flags url navKey =
       , includeFilteredTraits = True
       , includeFilteredTypes = True
       , menuOpen = False
-      , navKey = navKey
       , overlayActive = False
       , query = ""
       , queryOptionsHeight = 0
@@ -252,6 +275,7 @@ init flags url navKey =
       , selectedSortAbility = "strength"
       , selectedSortResistance = "acid"
       , selectedSortWeakness = "acid"
+      , showHeader = flags.showHeader
       , showResultAdditionalInfo = True
       , showResultSpoilers = True
       , showResultTraits = True
@@ -270,13 +294,23 @@ init flags url navKey =
         ]
     )
         |> searchWithCurrentQuery
+        |> updateTitle
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Browser.Events.onResize WindowResized
+        , document_receiveNodeHeight
+            (\{ id, height } ->
+                if id == queryOptionsDummyId then
+                    GotQueryOptionsHeight (round height)
+
+                else
+                    NoOp
+            )
         , localStorage_receive LocalStorageValueReceived
+        , navigation_urlChanged UrlChanged
         ]
 
 
@@ -334,8 +368,23 @@ update msg model =
                         Ok "light" ->
                             { model | theme = Light }
 
+                        Ok "book-print" ->
+                            { model | theme = Paper }
+
                         Ok "paper" ->
                             { model | theme = Paper }
+
+                        Ok "extra-contrast" ->
+                            { model | theme = ExtraContrast }
+
+                        Ok "contrast-dark" ->
+                            { model | theme = ExtraContrast }
+
+                        Ok "lavender" ->
+                            { model | theme = Lavender }
+
+                        Ok "lavander" ->
+                            { model | theme = Lavender }
 
                         _ ->
                             model
@@ -519,6 +568,12 @@ update msg model =
 
                     Paper ->
                         "paper"
+
+                    ExtraContrast ->
+                        "extra-contrast"
+
+                    Lavender ->
+                        "lavender"
                 )
             )
 
@@ -559,21 +614,22 @@ update msg model =
             )
 
         UrlChanged url ->
-            ( updateModelFromQueryString url model
+            ( updateModelFromQueryString (parseUrl url) model
             , Cmd.none
             )
                 |> searchWithCurrentQuery
+                |> updateTitle
 
         UrlRequested urlRequest ->
             case urlRequest of
                 Browser.Internal url ->
                     ( model
-                    , Browser.Navigation.pushUrl model.navKey (Url.toString url)
+                    , navigation_pushUrl (Url.toString url)
                     )
 
                 Browser.External url ->
                     ( model
-                    , Browser.Navigation.load url
+                    , navigation_loadUrl url
                     )
 
         WindowResized width height ->
@@ -582,13 +638,22 @@ update msg model =
             )
 
 
+parseUrl : String -> Url
+parseUrl url =
+    Url.fromString url
+        |> Maybe.withDefault
+            { protocol = Url.Http
+            , host = ""
+            , port_ = Nothing
+            , path = ""
+            , query = Nothing
+            , fragment = Nothing
+            }
+
+
 getQueryOptionsHeight : Cmd Msg
 getQueryOptionsHeight =
-    Browser.Dom.getViewportOf "query-options-dummy"
-        |> Task.map .scene
-        |> Task.map .height
-        |> Task.map round
-        |> Task.attempt (Result.withDefault 0 >> GotQueryOptionsHeight)
+    document_getNodeHeight queryOptionsDummyId
 
 
 saveToLocalStorage : String -> String -> Cmd msg
@@ -599,7 +664,6 @@ saveToLocalStorage key value =
             , ( "value", Encode.string value )
             ]
         )
-
 
 
 updateUrl : Model -> Cmd Msg
@@ -649,7 +713,7 @@ updateUrl ({ url } as model) =
                 |> String.Extra.nonEmpty
     }
         |> Url.toString
-        |> Browser.Navigation.pushUrl model.navKey
+        |> navigation_pushUrl
 
 
 searchFields : List String
@@ -1047,6 +1111,28 @@ searchWithCurrentQuery ( model, cmd ) =
         )
 
 
+updateTitle : ( Model, Cmd msg ) -> ( Model, Cmd msg )
+updateTitle ( model, cmd ) =
+    ( model
+    , Cmd.batch
+        [ cmd
+        , document_setTitle model.query
+        ]
+    )
+
+
+flagsDecoder : Decode.Decoder Flags
+flagsDecoder =
+    Field.require "currentUrl" Decode.string <| \currentUrl ->
+    Field.require "elasticUrl" Decode.string <| \elasticUrl ->
+    Field.attempt "showHeader" Decode.bool <| \showHeader ->
+    Decode.succeed
+        { currentUrl = currentUrl
+        , elasticUrl = elasticUrl
+        , showHeader = Maybe.withDefault defaultFlags.showHeader showHeader
+        }
+
+
 encodeObjectMaybe : List (Maybe ( String, Encode.Value )) -> Encode.Value
 encodeObjectMaybe list =
     Maybe.Extra.values list
@@ -1088,7 +1174,6 @@ stringListDecoder =
 
 documentDecoder : Decode.Decoder Document
 documentDecoder =
-    Field.require "id" Decode.int <| \id ->
     Field.require "category" Decode.string <| \category ->
     Field.require "name" Decode.string <| \name ->
     Field.require "type" Decode.string <| \type_ ->
@@ -1162,8 +1247,7 @@ documentDecoder =
     Field.attempt "will_save" Decode.int <| \will ->
     Field.attempt "wisdom" Decode.int <| \wisdom ->
     Decode.succeed
-        { id = id
-        , category = category
+        { category = category
         , name = name
         , type_ = type_
         , url = url
@@ -1243,15 +1327,10 @@ getUrl doc =
     "https://2e.aonprd.com/" ++ doc.url
 
 
-view : Model -> Browser.Document Msg
+view : Model -> Html Msg
 view model =
-    { title =
-        if String.isEmpty model.query then
-            "Nethys Search"
-
-        else
-            model.query ++ " - Nethys Search"
-    , body =
+    Html.div
+        []
         [ Html.node "style"
             []
             [ Html.text css
@@ -1264,42 +1343,60 @@ view model =
 
                 Paper ->
                     Html.text cssPaper
+
+                ExtraContrast ->
+                    Html.text cssExtraContrast
+
+                Lavender ->
+                    Html.text cssLavender
             ]
         , FontAwesome.Styles.css
         , Html.div
             [ HA.class "body-container"
             , HA.class "column"
+            , HA.class "align-center"
             ]
-            [ Html.button
-                [ HA.class "menu-open-button"
-                , HE.onClick (ShowMenuPressed True)
-                , HE.onMouseOver (ShowMenuPressed True)
-                ]
-                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.bars ]
-            , Html.div
-                [ HA.class "menu-overlay"
-                , HAE.attributeIf (not model.menuOpen) (HA.class "menu-overlay-hidden")
-                , HE.onClick (ShowMenuPressed False)
-                , HAE.attributeIf (model.overlayActive) (HE.onMouseOver (ShowMenuPressed False))
-                ]
-                []
-            , viewMenu model
-            , Html.div
-                [ HA.class "column"
-                , HA.class "content-container"
-                , HA.class "gap-large"
-                ]
-                [ viewTitle
-                , Html.main_
-                    [ HA.class "column gap-large"
+            (List.append
+                (if model.showHeader then
+                    [ Html.button
+                        [ HA.class "menu-open-button"
+                        , HE.onClick (ShowMenuPressed True)
+                        , HE.onMouseOver (ShowMenuPressed True)
+                        ]
+                        [ FontAwesome.Icon.viewIcon FontAwesome.Solid.bars ]
+                    , Html.div
+                        [ HA.class "menu-overlay"
+                        , HAE.attributeIf (not model.menuOpen) (HA.class "menu-overlay-hidden")
+                        , HE.onClick (ShowMenuPressed False)
+                        , HAE.attributeIf (model.overlayActive) (HE.onMouseOver (ShowMenuPressed False))
+                        ]
+                        []
+                    , viewMenu model
                     ]
-                    [ viewQuery model
-                    , viewSearchResults model
+
+                 else
+                    []
+                )
+                [ Html.div
+                    [ HA.class "column"
+                    , HA.class "content-container"
+                    , HA.class "gap-large"
+                    ]
+                    [ if model.showHeader then
+                        viewTitle
+
+                      else
+                        Html.text ""
+                    , Html.main_
+                        [ HA.class "column gap-large"
+                        ]
+                        [ viewQuery model
+                        , viewSearchResults model
+                        ]
                     ]
                 ]
-            ]
+            )
         ]
-    }
 
 
 viewMenu : Model -> Html Msg
@@ -1355,6 +1452,18 @@ viewMenu model =
                             , name = "theme-type"
                             , onInput = ThemeSelected Paper
                             , text = "Paper"
+                            }
+                        , viewRadioButton
+                            { checked = model.theme == ExtraContrast
+                            , name = "theme-type"
+                            , onInput = ThemeSelected ExtraContrast
+                            , text = "Extra Contrast"
+                            }
+                        , viewRadioButton
+                            { checked = model.theme == Lavender
+                            , name = "theme-type"
+                            , onInput = ThemeSelected Lavender
+                            , text = "Lavender"
                             }
                         ]
                     ]
@@ -1463,7 +1572,9 @@ viewQuery model =
         , HA.style "position" "relative"
         ]
         [ Html.div
-            [ HA.style "position" "relative" ]
+            [ HA.class "row"
+            , HA.class "input-container"
+            ]
             [ Html.input
                 [ HA.autofocus True
                 , HA.class "query-input"
@@ -1506,7 +1617,7 @@ viewQuery model =
 
         , Html.div
             [ HA.class "query-options-dummy"
-            , HA.id "query-options-dummy"
+            , HA.id queryOptionsDummyId
             ]
             [ viewQueryOptions model ]
 
@@ -1514,7 +1625,7 @@ viewQuery model =
             [ HA.class "query-options-container"
             , HA.style "height"
                 (if model.queryOptionsOpen then
-                    String.fromInt model.queryOptionsHeight
+                    String.fromInt model.queryOptionsHeight ++ "px"
 
                  else "0"
                 )
@@ -1918,7 +2029,8 @@ viewFilterTypes model =
             ]
 
         , Html.div
-            [ HA.style "position" "relative"
+            [ HA.class "row"
+            , HA.class "input-container"
             ]
             [ Html.input
                 [ HA.placeholder "Search among types"
@@ -2004,7 +2116,8 @@ viewFilterTraits model =
             ]
 
         , Html.div
-            [ HA.style "position" "relative"
+            [ HA.class "row"
+            , HA.class "input-container"
             ]
             [ Html.input
                 [ HA.placeholder "Search among traits"
@@ -2996,6 +3109,11 @@ stringContainsChar str chars =
         chars
 
 
+queryOptionsDummyId : String
+queryOptionsDummyId =
+    "query-options-dummy"
+
+
 css : String
 css =
     """
@@ -3005,20 +3123,7 @@ css =
         font-display: swap;
     }
 
-    :root {
-        --gap-tiny: 4px;
-        --gap-small: 8px;
-        --gap-medium: 12px;
-        --gap-large: 20px;
-        --font-normal: 16px;
-        --font-large: 20px;
-        --font-very-large: 24px;
-    }
-
     body {
-        background-color: var(--color-bg);
-        color: var(--color-text);
-        font-family: "Century Gothic", CenturyGothic, AppleGothic, sans-serif;
         margin: 0px;
     }
 
@@ -3065,12 +3170,18 @@ css =
     }
 
     input[type=text] {
-        background-color: var(--color-bg);
-        border-style: solid;
-        border-radius: 4px;
+        background-color: transparent;
+        border-width: 0;
         color: var(--color-text);
         padding: 4px;
-        width: 100%;
+        flex-grow: 1;
+    }
+
+    input:focus-visible {
+        border-width: 0;
+        border-style: none;
+        border-image: none;
+        outline: 0;
     }
 
     select {
@@ -3090,10 +3201,21 @@ css =
     }
 
     .body-container {
-        align-items: center;
+        background-color: var(--color-bg);
+        color: var(--color-text);
+        font-family: "Century Gothic", CenturyGothic, AppleGothic, sans-serif;
+        font-size: var(--font-normal);
+        line-height: normal;
         min-height: 100%;
         min-width: 400px;
         position: relative;
+        --font-normal: 16px;
+        --font-large: 20px;
+        --font-very-large: 24px;
+        --gap-tiny: 4px;
+        --gap-small: 8px;
+        --gap-medium: 12px;
+        --gap-large: 20px;
     }
 
     .bold {
@@ -3158,6 +3280,18 @@ css =
         gap: var(--gap-tiny);
     }
 
+    .input-container {
+        background-color: var(--color-bg);
+        border-style: solid;
+        border-radius: 4px;
+        border-width: 2px;
+        border-color: #808080;
+    }
+
+    .input-container:focus-within {
+        border-color: var(--color-text);
+    }
+
     .icon-font {
         color: var(--color-icon);
         font-family: "Pathfinder-Icons";
@@ -3166,13 +3300,9 @@ css =
     }
 
     .input-button {
-        aspect-ratio: 1 / 1;
         background-color: transparent;
         border-width: 0;
         color: var(--color-text);
-        height: 100%;
-        right: 0px;
-        position: absolute;
     }
 
     .menu {
@@ -3371,7 +3501,7 @@ css =
 cssDark : String
 cssDark =
     """
-    :root {
+    .body-container {
         --color-bg: #111111;
         --color-bg-secondary: #282828;
         --color-container-bg: #333333;
@@ -3395,7 +3525,7 @@ cssDark =
 cssLight : String
 cssLight =
     """
-    :root {
+    .body-container {
         --color-bg: #eeeeee;
         --color-bg-secondary: #cccccc;
         --color-container-bg: #dddddd;
@@ -3419,7 +3549,7 @@ cssLight =
 cssPaper : String
 cssPaper =
     """
-    :root {
+    .body-container {
         --color-bg: #f1ece5;
         --color-bg-secondary: #cccccc;
         --color-container-bg: #dddddd;
@@ -3436,5 +3566,53 @@ cssPaper =
         --color-icon: #111111;
         --color-inactive-text: #999999;
         --color-text: #111111;
+    }
+    """
+
+
+cssExtraContrast : String
+cssExtraContrast =
+    """
+    .body-container {
+        --color-bg: #111111;
+        --color-bg-secondary: #282828;
+        --color-container-bg: #333333;
+        --color-container-border: #eeeeee;
+        --color-element-bg: #5d0000;
+        --color-element-border: #d8c483;
+        --color-element-icon: #cccccc;
+        --color-element-inactive-bg: #291716;
+        --color-element-inactive-border: #6c6242;
+        --color-element-inactive-text: #656148;
+        --color-element-text: #cbc18f;
+        --color-subelement-bg: #769477;
+        --color-subelement-text: #111111;
+        --color-icon: #cccccc;
+        --color-inactive-text: #999999;
+        --color-text: #eeeeee;
+    }
+    """
+
+
+cssLavender : String
+cssLavender =
+    """
+    .body-container {
+        --color-bg: #ffffff;
+        --color-bg-secondary: #cccccc;
+        --color-container-bg: #dddddd;
+        --color-container-border: #111111;
+        --color-element-bg: #493a88;
+        --color-element-border: #d8c483;
+        --color-element-icon: #cccccc;
+        --color-element-inactive-bg: #291716;
+        --color-element-inactive-border: #6c6242;
+        --color-element-inactive-text: #656148;
+        --color-element-text: #cbc18f;
+        --color-subelement-bg: #f0e6ff;
+        --color-subelement-text: #111111;
+        --color-icon: #000000;
+        --color-inactive-text: #999999;
+        --color-text: #000000;
     }
     """
