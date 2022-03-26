@@ -1353,7 +1353,10 @@ def get_actions(soup, label):
             if node.name in ['br', 'hr', 'a']:
                 break
 
-            if node.name == 'img' and 'actiondark' in node['class'] :
+            if node.name == 'span' and 'action' in node['class']:
+                parts.append(node['title'])
+
+            elif node.name == 'img' and 'actiondark' in node['class']:
                 parts.append(node['alt'])
 
             else:
