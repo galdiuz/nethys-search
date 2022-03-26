@@ -799,12 +799,12 @@ def parse_ritual(id: str, soup: BeautifulSoup):
     doc.cost = get_label_text(soup, 'Cost')
     doc.duration = get_label_text(soup, 'Duration')
     doc.heighten = get_heighten(soup)
-    doc.primary_check = get_label_text(soup, 'Primary Check')
+    doc.primary_check = get_label_text(soup, 'Primary Check', '').rstrip(';').strip()
     doc.range = normalize_range(range)
     doc.range_raw = range
     doc.secondary_casters = [c for c in secondary_casters if c.isdigit()] if secondary_casters else None
     doc.secondary_casters_raw = secondary_casters
-    doc.secondary_check = get_label_text(soup, 'Secondary Checks')
+    doc.secondary_check = get_label_text(soup, 'Secondary Checks', '').rstrip(';').strip()
     doc.target = get_label_text(soup, 'Target(s)')
     doc.trait = normalize_traits(traits)
     doc.trait_raw = traits
