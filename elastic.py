@@ -4,6 +4,7 @@ from elasticsearch_dsl import Document, Field, Float, Integer, Keyword, Object, 
 from elasticsearch_dsl.connections import connections
 import re
 import os
+import urllib.parse
 
 
 def main():
@@ -69,6 +70,7 @@ def main():
                 'mysteries': parse_mystery,
                 'npc-theme-templates': parse_npc_theme_template,
                 'npcs': parse_npc,
+                'pages': parse_page,
                 'patrons': parse_patron,
                 'planes': parse_plane,
                 'rackets': parse_racket,
@@ -99,12 +101,11 @@ def build_url(category: str, id: int, params: [str] = []) -> str:
 
 
 def dasherize(string: str) -> str:
-    # print('before:', string)
     string.strip()
-    string = re.sub(r'[A-Z]', (lambda m: '-' + m.group(0)), string)
+    string = re.sub(r'[A-Z]+', (lambda m: '-' + m.group(0)), string)
+    string = string.replace("'", '').replace('&', 'and')
     string = re.sub(r'[^a-zA-Z0-9]+', '-', string)
     string = string.lower().strip('-')
-    # print('after:', string)
 
     return string
 
@@ -113,19 +114,21 @@ def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type: s
     title = soup.find('h1', class_='title')
 
     name, title_type, level, pfs = get_title_data(title)
-    source = get_label_text(soup, 'Source')
+    sources = split_comma(get_label_text(soup, 'Source'))
 
     doc = Doc()
     doc.meta.id = category + '-' + dasherize(name)
     doc.id = id
     doc.url = dasherize(name)
+    doc.aon_url = build_url(url, id, url_params)
     doc.category = category
     doc.name = name.strip()
     doc.type = title_type or type
     doc.pfs = pfs
+    doc.markdown = get_markdown_from_title_node(title)
     doc.text = title.parent.get_text(' ', strip=True)
-    doc.source = normalize_source(source)
-    doc.source_raw = source
+    doc.source = [normalize_source(source) for source in sources]
+    doc.source_raw = sources
     doc.spoilers = get_spoilers(soup)
     doc.level = level
 
@@ -747,6 +750,105 @@ def parse_creature(id: str, soup: BeautifulSoup, url: str):
     doc.save()
 
 
+def parse_page(id: str, soup: BeautifulSoup):
+    parse_functions = {
+        'rules': parse_page_rules,
+    }
+
+    if id in parse_functions:
+        parse_functions[id](soup)
+
+    else:
+        parse_page_generic(id, soup)
+
+
+def parse_page_generic(id: str, soup: BeautifulSoup):
+    title = soup.find('h1', class_='title')
+    name, title_type, level, pfs = get_title_data(title)
+    sources = split_comma(get_label_text(soup, 'Source'))
+
+    doc = Doc()
+    doc.meta.id = id
+    doc.url = id
+    doc.aon_url = None # TODO
+    doc.category = 'page'
+    doc.name = name
+    doc.type = 'Page'
+    doc.text = soup.text
+    doc.markdown = get_markdown_from_title_node(title)
+    doc.source = [normalize_source(source) for source in sources]
+    doc.source_raw = sources
+
+    doc.save()
+
+def parse_page_rules(soup: BeautifulSoup):
+    rulebooks = []
+
+    for title in soup.find_all('h1', 'title'):
+        div = title.next_sibling
+
+        name = title.text.rstrip(' ►')
+        id = 'rules-' + dasherize(name)
+        doc = Doc()
+        doc.meta.id = id
+        doc.url = dasherize(name)
+        doc.aon_url = 'Rules.aspx'
+        doc.category = 'rules'
+        doc.name = name
+        doc.type = 'Rules'
+        doc.text = div.text
+        doc.breadcrumbs = ['Rules']
+        doc.source = [name]
+        doc.source_raw = [name]
+
+        markdown = ''
+
+        node = div
+        inList = False
+        parent = None
+        while node := node.next:
+            if node.name == 'a':
+                if inList:
+                    markdown += f'[{node.text}](/rules/{dasherize(name)}/{parent}/{dasherize(node.text)})\n\n'
+                    inList = False
+                else:
+                    markdown += f'[{node.text}](/rules/{dasherize(name)}/{dasherize(node.text)})\n\n'
+                    parent = dasherize(node.text)
+
+            elif node.name == 'li':
+                markdown += '- '
+                inList = True
+
+            elif node.name == 'h1':
+                break
+
+        doc.markdown = markdown
+
+        doc.save()
+
+        rulebooks.append(name)
+
+    doc = Doc()
+    doc.meta.id = 'rules'
+    doc.url = 'rules'
+    doc.aon_url = 'Rules.aspx'
+    doc.category = 'page'
+    doc.name = 'Rules'
+    doc.type = 'Page'
+    doc.text = soup.text
+
+    markdown = ''
+
+    for rulebook in rulebooks:
+        markdown += f'<document id="rules-{dasherize(rulebook)}" />\n'
+
+    doc.markdown = markdown
+
+    doc.save()
+
+
+
+
 def parse_patron(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'patron', 'Patrons', 'Witch Patron Theme')
     traits = get_traits(soup)
@@ -829,22 +931,14 @@ def parse_rules(id: str, soup: BeautifulSoup):
     title = soup.find('h1', class_='title')
     name, title_type, level, pfs = get_title_data(title)
     source = get_label_text(soup, 'Source')
+    breadcrumbs = get_breadcrumbs(soup)
 
-    breadcrumbs = []
-    if node := title.previous_sibling:
-        while node := node.previous_sibling:
-            if node.text == ' / ':
-                continue
-            breadcrumbs.append(node.text)
-
-    breadcrumbs.append(normalize_source(source))
-    breadcrumbs.reverse()
     doc.breadcrumbs = breadcrumbs
 
-    id = dasherize('-'.join(['rules'] + breadcrumbs + [name]))
+    id = dasherize('-'.join(breadcrumbs + [name]))
     doc.meta.id = id
 
-    markdown = get_markdown(title)
+    markdown = get_markdown_from_title_node(title)
     markdown = markdown.replace('<document id="rules-', f'<document id="{id}-')
     doc.markdown = markdown
 
@@ -1420,28 +1514,281 @@ def get_heighten(soup: BeautifulSoup):
     return heighten
 
 
-def get_markdown(title: BeautifulSoup):
-    node = title
+def get_markdown_from_title_node(title: BeautifulSoup):
+    node = title.find_next_sibling('b', text='Source').find_next_sibling('br')
+
+    markdown = get_markdown(node)
+
+    if title.parent.find_next_sibling('span'):
+        node = title.parent.find_next_sibling('span').contents[0]
+        markdown += get_markdown(node)
+
+    return markdown
+
+
+def get_markdown(node: BeautifulSoup):
     markdown = ''
     title_level = None
 
-    while node := node.next_sibling:
-        if node.name == 'b' and not title_level:
-            markdown += '**' + node.text + '**'
+    while node:
+        if node.name == 'a' and not title_level:
+            url = get_document_url_from_node(node)
+            markdown += f'[{node.text}]({url})'
+
+        elif node.name == 'b' and not title_level:
+            markdown += '**'
+            markdown += get_markdown(node.next_element)
+            markdown += '**'
 
         elif node.name == 'br' and not title_level:
-            markdown += "\n"
+            markdown += "\n\n"
 
         elif node.name == 'h1':
-            link = node.find('a')
-            a = 'rules-' + dasherize(link.text)
-            markdown += f'\n\n<document id="{a}" />'
-            title_level = 1
+            links = node.find_all('a')
+            if links:
+                id = get_document_id_from_node(links[-1])
+                markdown += f'\n\n<document id="{id}" />\n'
+                title_level = 1
+
+            elif 'class' in node.attrs and 'title' in node['class']:
+                name, type, level, pfs = get_title_data(node)
+                if type and level:
+                    markdown += f'\n<title level="1" right="{type} {level}">{name}</title>\n'
+
+                else:
+                    markdown += f'\n<title level="1">{name}</title>\n'
+
+            else:
+                markdown += f'\n# {node.text}\n'
+
+        elif node.name == 'h2' and (not title_level or title_level >= 2):
+            title_level = None
+            links = node.find_all('a')
+            if links:
+                id = get_document_id_from_node(links[-1])
+                markdown += f'\n\n<document id="{id}" />\n'
+                title_level = 2
+
+            elif 'class' in node.attrs and 'title' in node['class']:
+                name, type, level, pfs = get_title_data(node)
+                if type and level:
+                    markdown += f'\n<title level="2" right="{type} {level}">{name}</title>\n'
+
+                else:
+                    markdown += f'\n<title level="2">{name}</title>\n'
+
+            else:
+                markdown += f'\n## {node.text}\n'
+
+        elif node.name == 'h3' and not title_level:
+            links = node.find_all('a')
+            if links:
+                id = get_document_id_from_node(links[-1])
+                markdown += f'\n\n<document id="{id}" level="3" />\n'
+                title_level = 3
+
+            elif 'class' in node.attrs and 'title' in node['class']:
+                name, type, level, pfs = get_title_data(node)
+                if type and level:
+                    markdown += f'\n<title level="3" right="{type} {level}">{name}</title>\n'
+
+                else:
+                    markdown += f'\n<title level="3">{name}</title>\n'
+
+            else:
+                markdown += f'\n### {node.text}\n'
+
+        elif node.name == 'hr' and not title_level:
+            markdown += '\n- - -\n'
+
+        elif node.name == 'i' and not title_level:
+            markdown += '_'
+            markdown += get_markdown(node.next_element)
+            markdown += '_'
+
+        elif node.name == 'p' and 'align' in node.attrs and node['align'] == 'center' and not title_level:
+            markdown += '\n<center>'
+            markdown += get_markdown(node.next_element)
+            markdown += '</center>\n'
+
+        elif node.name == 'table' and not title_level:
+            added_header = False
+            added_body = False
+            markdown += '\n\n<table>\n'
+
+            table_body = node.find('tbody')
+
+            for table_row in table_body.find_all('tr'):
+                table_cells = table_row.find_all('td')
+
+                if not added_header:
+                    markdown += ' <thead>\n'
+                    markdown += '  <tr>\n'
+
+                    for table_cell in table_cells:
+                        markdown += '   <th>'
+                        if table_cell.text:
+                            markdown += get_markdown(table_cell.next_element)
+                        markdown += '</th>\n'
+
+                    markdown += '  </tr>\n'
+                    markdown += ' </thead>\n'
+
+                    added_header = True
+
+                    continue
+
+                elif not added_body:
+                    markdown += ' <tbody>\n'
+
+                    added_body = True
+
+                markdown += '  <tr>\n'
+
+                for table_cell in table_cells:
+                    if 'colspan' in table_cell.attrs:
+                        colspan = table_cell['colspan']
+                        colspan = f' colspan="{colspan}"'
+                    else:
+                        colspan = ''
+
+                    markdown += f'   <td{colspan}>'
+                    markdown += get_markdown(table_cell.next_element)
+                    markdown += f'</td>\n'
+
+                markdown += '  </tr>\n'
+
+            markdown += ' </tbody>\n'
+
+            table_foot = node.find('tfoot')
+
+            if table_foot:
+                markdown += ' <tfoot>\n'
+                for table_row in table_foot.find_all('tr'):
+                    markdown += '  <tr>\n'
+
+                    for table_cell in table_row.find_all('td'):
+                        if 'colspan' in table_cell.attrs:
+                            colspan = table_cell['colspan']
+                            colspan = f' colspan="{colspan}"'
+                        else:
+                            colspan = ''
+
+                        markdown += f'   <td{colspan}>'
+                        markdown += get_markdown(table_cell.next_element)
+                        markdown += f'</td>\n'
+
+                    markdown += '  </tr>\n'
+                markdown += ' </tfoot>\n'
+
+
+            markdown += '</table>\n'
+
+        elif node.name == 'div' and (title_level != 1 and title_level != 2):
+            title_level = None
+            markdown += '\n<infobox>'
+            markdown += get_markdown(node.next_element)
+            markdown += '</infobox>\n'
+
+        elif node.name == 'ancestries%39%%' and not title_level:
+            markdown += get_markdown(node.next_element)
 
         elif not title_level:
             markdown += node.text
 
+        node = node.next_sibling
+
     return markdown
+
+
+def get_document_id_from_node(node: BeautifulSoup):
+    type = node['href'].split('.', 1)[0]
+    type = dasherize(type)
+    data = get_data_from_node(node)
+
+    typemap = {
+        'actions': 'action',
+        'instincts': 'instinct',
+    }
+
+    if type in typemap:
+        type = typemap[type]
+
+    if type == 'rules':
+        return dasherize('-'.join(data['breadcrumbs'] + [data['name']]))
+
+    else:
+        return type + '-' + dasherize(data['name'])
+
+
+def get_document_url_from_node(node: BeautifulSoup):
+    type = node['href'].split('.', 1)[0]
+    type = dasherize(type)
+    data = get_data_from_node(node)
+
+    if not data:
+        # TODO
+        return '/'
+
+    if type == 'rules':
+        return '/' + '/'.join([dasherize(b) for b in data['breadcrumbs'] + [data['name']]])
+
+    else:
+        return '/' + type + '/' + dasherize(data['name'])
+
+
+def get_breadcrumbs(soup: BeautifulSoup) -> [str]:
+    title = soup.find('h1', class_='title')
+    source = get_label_text(soup, 'Source')
+
+    breadcrumbs = []
+    if node := title.previous_sibling:
+        while node := node.previous_sibling:
+            if node.text == ' / ':
+                continue
+            breadcrumbs.append(node.text)
+
+    breadcrumbs.append(normalize_source(source))
+    breadcrumbs.append('Rules')
+    breadcrumbs.reverse()
+
+    return breadcrumbs
+
+
+def get_data_from_node(node: BeautifulSoup):
+    url = urllib.parse.urlparse(node['href'])
+    query = urllib.parse.parse_qs(url.query)
+    type = url.path.split('.', 1)[0]
+    type = dasherize(type)
+
+    if 'ID' in query:
+        id = query['ID'][0]
+
+    else:
+        # print(node['href'])
+        # print(query)
+        return {} # TODO
+
+    file_path = f'data/{type}/{id}.html'
+
+    if not os.path.isfile(file_path):
+        # print(file_path)
+        return {}
+
+    with open(file_path, 'r') as fp:
+        soup = BeautifulSoup(fp, 'html5lib')
+
+    title = soup.find('h1', class_='title')
+
+    if not title:
+        return {}
+
+    name, title_type, level, pfs = get_title_data(title)
+
+    return {
+        'breadcrumbs': get_breadcrumbs(soup),
+        'name': name,
+    }
 
 
 def get_senses(per):

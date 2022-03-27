@@ -1,23 +1,37 @@
 module AoN exposing (main)
 
 import Browser
+import Browser.Dom
+import Browser.Events
 import Browser.Navigation
 import Dict exposing (Dict)
+import FontAwesome.Icon
+import FontAwesome.Solid
+import FontAwesome.Regular
+import FontAwesome.Styles
 import Html exposing (Html)
 import Html.Attributes as HA
 import Html.Attributes.Extra as HAE
+import Html.Events as HE
 import Http
-import Regex
 import Json.Decode as Decode
 import Json.Decode.Field as Field
 import Json.Encode as Encode
 import List.Extra
-import String.Extra
 import Markdown.Block
 import Markdown.Html
 import Markdown.Parser
 import Markdown.Renderer
-import Url
+import Maybe.Extra
+import Process
+import Regex
+import Result.Extra
+import String.Extra
+import Task
+import Url exposing (Url)
+import Url.Builder
+import Url.Parser
+import Url.Parser.Query
 
 
 type alias Flags =
@@ -30,7 +44,37 @@ type alias Model =
     , elasticUrl : String
     , navKey : Browser.Navigation.Key
     , page : Page
+    , search : Dict String SearchModel
+    , url : Url
     }
+
+
+type alias SearchModel =
+    { debounce : Int
+    , defaultSort : List ( String, SortDir )
+    , filteredTraits : Dict String Bool
+    , fixedFilters : List ( String, String )
+    , optionsHeight : Int
+    , optionsOpen : Bool
+    , query : String
+    , queryType : QueryType
+    , searchResults : List (Result Http.Error SearchResult)
+    , searchTraitsInput : String
+    , traits : List String
+    , tracker : Maybe Int
+    }
+
+
+type alias SearchResult =
+    { documents : List (Document)
+    , searchAfter : Encode.Value
+    , total : Int
+    }
+
+
+type SortDir
+    = Asc
+    | Desc
 
 
 type alias Document =
@@ -47,6 +91,7 @@ type alias Document =
     , advancedDomainSpell : Maybe String
     , alignment : Maybe String
     , ammunition : Maybe String
+    , aonUrl : Maybe String
     , area : Maybe String
     , aspect : Maybe String
     , bloodlines : List String
@@ -94,7 +139,7 @@ type alias Document =
     , secondaryCasters : Maybe String
     , secondaryChecks : Maybe String
     , skills : List String
-    , source : Maybe String
+    , sources : List String
     , spellList : Maybe String
     , spoilers : Maybe String
     , strength : Maybe Int
@@ -111,13 +156,21 @@ type alias Document =
     }
 
 
+type QueryType
+    = Standard
+    | ElasticsearchQueryString
+
+
 type Page
     = Action String
     | Class String
     | Classes
     | ClassFeats String
+    -- | Equipment
+    | Feat String
     | Instinct String
     | Instincts
+    | Home
     | NotFound
     | Rule (List String)
     | Rules
@@ -129,10 +182,22 @@ type Page
 
 type Msg
     = GotDocument String (Result Http.Error Document)
-    | GotDocuments (List String) (Result Http.Error (List Document))
+    | GotDocuments (List String) (Result Http.Error (List (Result String Document)))
+    | GotQueryOptionsHeight Int
+    | GotSearchResult String (Result Http.Error SearchResult)
+    | GotTraitAggs String (Result Http.Error (List String))
+    | LoadMoreSearchResultsPressed
     | NoOp
+    | QueryChanged String String
+    | QueryOptionsPressed String Bool
+    | QueryTypeSelected String QueryType
+    | RemoveAllTraitFiltersPressed String
+    | SearchDebouncePassed String Int
+    | SearchTraitsChanged String String
+    | TraitFilterPressed String String
     | UrlChanged Url.Url
     | UrlRequested Browser.UrlRequest
+    | WindowResized Int Int
 
 
 main : Program Flags Model Msg
@@ -147,101 +212,336 @@ main =
         }
 
 
+init : Flags -> Url.Url -> Browser.Navigation.Key -> ( Model, Cmd Msg )
 init flags url navKey =
+    let
+        page : Page
+        page =
+            urlToPage url
+    in
     ( { documents = Dict.empty
       , elasticUrl = flags.elasticUrl
       , navKey = navKey
-      , page = urlToPage url
+      , page = page
+      , search =
+            case getSearchKey page of
+                Just key ->
+                    Dict.insert
+                        key
+                        (updateSearchModelFromQueryString url (emptySearchModel page))
+                        Dict.empty
+
+                Nothing ->
+                    Dict.empty
+      , url = url
       }
     , Cmd.none
     )
         |> fetchData
+        |> searchWithCurrentSearchModel
 
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Sub.none
+    Browser.Events.onResize WindowResized
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         GotDocument id result ->
-            let
-                result_ =
-                    case result of
-                        Ok doc ->
-                            case doc.id of
-                                "class-barbarian" ->
-                                    Ok { doc | markdown = barbarian }
-
-                                "action-rage" ->
-                                    Ok { doc | markdown = rage }
-
-                                _ ->
-                                    result
-
-                        _ ->
-                            result
-
-                _ =
-                    case result_ of
-                        Ok doc ->
-                            getChildDocuments doc.markdown
-                                |> Debug.log "child ids"
-
-                        Err _ ->
-                            []
-            in
-            ( { model | documents = Dict.insert id result_ model.documents }
-            , result_
+            ( { model | documents = Dict.insert id result model.documents }
+            , result
                 |> Result.map .markdown
                 |> Result.map getChildDocuments
+                |> Debug.log "child ids"
                 |> Result.map (fetchDocuments model)
                 |> Result.withDefault Cmd.none
             )
 
         GotDocuments ids result ->
-            let
-                documents : Dict String (Result Http.Error Document)
-                documents =
-                    ids
-                        |> List.map
-                            (\id ->
-                                ( id
-                                , Result.andThen
-                                    (\docs ->
-                                        List.Extra.find
-                                            (.id >> (==) id)
-                                            docs
-                                            |> Result.fromMaybe Http.Timeout
-                                    )
-                                    result
-                                )
-                            )
-                        |> Dict.fromList
-            in
             ( { model
                 | documents =
-                    Dict.union model.documents documents
+                    Dict.union
+                        model.documents
+                        (ids
+                            |> List.map
+                                (\id ->
+                                    ( id
+                                    , Result.andThen
+                                        (\docs ->
+                                            docs
+                                                |> List.filterMap (Result.toMaybe)
+                                                |> List.Extra.find (.id >> (==) id)
+                                                |> Result.fromMaybe (Http.BadStatus 404)
+                                        )
+                                        result
+                                    )
+                                )
+                            |> Dict.fromList
+                        )
               }
             , result
+                |> Result.map (List.filterMap (Result.toMaybe))
                 |> Result.map (List.map .markdown)
                 |> Result.map (List.concatMap getChildDocuments)
                 |> Result.map (fetchDocuments model)
                 |> Result.withDefault Cmd.none
             )
 
+        GotQueryOptionsHeight height ->
+            case getSearchKey model.page of
+                Just key ->
+                    ( { model
+                        | search =
+                            Dict.update
+                                key
+                                (Maybe.map
+                                    (\search ->
+                                        { search | optionsHeight = height }
+                                    )
+                                )
+                                model.search
+                      }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model
+                    , Cmd.none
+                    )
+
+        GotSearchResult key result ->
+            ( { model
+                | documents =
+                    Dict.union
+                        model.documents
+                        (result
+                            |> Result.map .documents
+                            |> Result.map
+                                (List.map
+                                    (\document ->
+                                        ( document.id, Ok document )
+                                    )
+                                )
+                            |> Result.withDefault []
+                            |> Dict.fromList
+                        )
+                , search =
+                    Dict.update
+                        key
+                        (Maybe.map
+                            (\search ->
+                                { search
+                                    | searchResults =
+                                        List.append
+                                            (List.filter Result.Extra.isOk search.searchResults)
+                                            [ result ]
+                                    , tracker = Nothing
+                                }
+                            )
+                        )
+                        model.search
+              }
+            , Cmd.none
+            )
+
+        GotTraitAggs key result ->
+            ( { model
+                | search =
+                    Dict.update
+                        key
+                        (Maybe.map
+                            (\search ->
+                                { search | traits = Result.withDefault [] result }
+                            )
+                        )
+                        model.search
+              }
+            , getQueryOptionsHeight
+            )
+
+        LoadMoreSearchResultsPressed ->
+            ( model
+            , Cmd.none
+            )
+                |> searchWithCurrentSearchModel
+
         NoOp ->
             ( model
             , Cmd.none
             )
 
+        QueryChanged key value ->
+            let
+                newDebounce : Int
+                newDebounce =
+                    Dict.get key model.search
+                        |> Maybe.map .debounce
+                        |> Maybe.withDefault 0
+            in
+            ( { model
+                | search =
+                    Dict.update
+                        key
+                        (Maybe.map
+                            (\search ->
+                                { search
+                                    | debounce = newDebounce
+                                    , query = value
+                                }
+                            )
+                        )
+                        model.search
+              }
+            , Process.sleep 250
+                |> Task.perform (\_ -> SearchDebouncePassed key newDebounce)
+            )
+
+        QueryTypeSelected key value ->
+            ( { model
+                | search =
+                    Dict.update
+                        key
+                        (Maybe.map
+                            (\search ->
+                                { search | queryType = value }
+                            )
+                        )
+                        model.search
+              }
+            , Cmd.none
+            )
+
+        RemoveAllTraitFiltersPressed key ->
+            ( { model
+                | search =
+                    Dict.update
+                        key
+                        (Maybe.map
+                            (\search ->
+                                { search | filteredTraits = Dict.empty }
+                            )
+                        )
+                        model.search
+              }
+            , Dict.get key model.search
+                |> Maybe.map
+                    (\search ->
+                        { search | filteredTraits = Dict.empty }
+                    )
+                |> Maybe.map (updateUrlWithSearchParams model)
+                |> Maybe.withDefault Cmd.none
+            )
+
+        SearchDebouncePassed key debounce ->
+            if (getSearchKey model.page == Just key)
+                && (Dict.get key model.search
+                    |> Maybe.map .debounce
+                    |> (==) (Just debounce)
+                )
+            then
+                ( model
+                , Dict.get key model.search
+                    |> Maybe.map (updateUrlWithSearchParams model)
+                    |> Maybe.withDefault Cmd.none
+                )
+
+            else
+                ( model, Cmd.none )
+
+        QueryOptionsPressed key value ->
+            if value then
+                ( model
+                , getQueryOptionsHeight
+                )
+
+            else
+                ( { model
+                    | search =
+                        Dict.update
+                            key
+                            (Maybe.map
+                                (\search ->
+                                    { search | optionsHeight = 0 }
+                                )
+                            )
+                            model.search
+                  }
+                , Cmd.none
+                )
+
+        SearchTraitsChanged key value ->
+            ( { model
+                | search =
+                    Dict.update
+                        key
+                        (Maybe.map
+                            (\search ->
+                                { search | searchTraitsInput = value }
+                            )
+                        )
+                        model.search
+              }
+            , getQueryOptionsHeight
+            )
+
+        TraitFilterPressed key trait ->
+            ( model
+            , Dict.get key model.search
+                |> Maybe.map
+                    (\search ->
+                        { search
+                            | filteredTraits =
+                                Dict.update
+                                    trait
+                                    (\value ->
+                                        case value of
+                                            Just True ->
+                                                Just False
+
+                                            Just False ->
+                                                Nothing
+
+                                            Nothing ->
+                                                Just True
+                                    )
+                                    search.filteredTraits
+
+
+                        }
+                    )
+                |> Maybe.map (updateUrlWithSearchParams model)
+                |> Maybe.withDefault Cmd.none
+            )
+
         UrlChanged url ->
-            ( { model | page = urlToPage url }
+            let
+                page : Page
+                page =
+                    urlToPage url
+            in
+            ( { model
+                | page = page
+                , search =
+                    case getSearchKey page of
+                        Just key ->
+                            Dict.update
+                                key
+                                (Maybe.withDefault (emptySearchModel page)
+                                    >> updateSearchModelFromQueryString url
+                                    >> Just
+                                )
+                                model.search
+
+                        Nothing ->
+                            model.search
+                , url = url
+              }
             , Cmd.none
             )
                 |> fetchData
+                |> searchWithCurrentSearchModel
 
         UrlRequested urlRequest ->
             case urlRequest of
@@ -252,15 +552,119 @@ update msg model =
 
                 Browser.External url ->
                     ( model
-                    , Cmd.none
+                    , Browser.Navigation.load url
                     )
+
+        WindowResized width height ->
+            ( model
+            , getQueryOptionsHeight
+            )
+
+
+emptySearchModel : Page -> SearchModel
+emptySearchModel page =
+    { debounce = 0
+    , defaultSort =
+        case page of
+            ClassFeats _ ->
+                [ ( "level", Asc ), ( "name.keyword", Asc ) ]
+            _ ->
+                []
+    , filteredTraits = Dict.empty
+    , fixedFilters =
+        case page of
+            ClassFeats class ->
+                [ ( "trait", class ), ( "type", "feat" ) ]
+
+            _ ->
+                []
+    , optionsHeight = 0
+    , optionsOpen = False
+    , query = ""
+    , queryType = Standard
+    , searchResults = []
+    , searchTraitsInput = ""
+    , traits = []
+    , tracker = Nothing
+    }
+
+
+updateSearchModelFromQueryString : Url -> SearchModel -> SearchModel
+updateSearchModelFromQueryString url searchModel =
+    { searchModel
+        | query = getQueryParam url "q"
+        , filteredTraits =
+            List.append
+                (getQueryParam url "include-traits"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\trait -> ( trait, True ))
+                )
+                (getQueryParam url "exclude-traits"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\trait -> ( trait, False ))
+                )
+                |> Dict.fromList
+        , searchResults = []
+    }
+
+
+getQueryParam : Url -> String -> String
+getQueryParam url param =
+    { url | path = "" }
+        |> Url.Parser.parse (Url.Parser.query (Url.Parser.Query.string param))
+        |> Maybe.Extra.join
+        |> Maybe.withDefault ""
+
+
+getQueryOptionsHeight =
+    Browser.Dom.getViewportOf "search-options-measure-wrapper"
+        |> Task.map .scene
+        |> Task.map .height
+        |> Task.map round
+        |> Task.attempt (Result.withDefault 0 >> GotQueryOptionsHeight)
+
+
+updateUrlWithSearchParams : Model -> SearchModel -> Cmd Msg
+updateUrlWithSearchParams { navKey, url } searchModel =
+    { url
+        | query =
+            [ ( "q", searchModel.query )
+            , ( "include-traits"
+              , searchModel.filteredTraits
+                    |> Dict.toList
+                    |> List.filter (Tuple.second)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "exclude-traits"
+              , searchModel.filteredTraits
+                    |> Dict.toList
+                    |> List.filter (Tuple.second >> not)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            ]
+                |> List.filter (Tuple.second >> String.isEmpty >> not)
+                |> List.map (\(key, val) -> Url.Builder.string key val)
+                |> Url.Builder.toQuery
+                |> String.dropLeft 1
+                |> String.Extra.nonEmpty
+    }
+        |> Url.toString
+        |> Browser.Navigation.pushUrl navKey
 
 
 dasherize : String -> String
 dasherize string =
     string
         |> String.trim
-        |> Regex.replace (regexFromString "([A-Z])") (.match >> String.append "-")
+        |> Regex.replace (regexFromString "([A-Z]+)") (.match >> String.append "-")
+        |> String.replace "'" ""
+        |> String.replace "&" "and"
         |> Regex.replace (regexFromString "[^a-zA-Z0-9]+") (\_ -> "-")
         |> Regex.replace (regexFromString "^-+|-+$") (\_ -> "")
         |> String.toLower
@@ -274,7 +678,10 @@ regexFromString =
 urlToPage : Url.Url -> Page
 urlToPage url =
     case String.split "/" (String.dropLeft 1 url.path) of
-        [ "action", id ] ->
+        [ "" ] ->
+            Home
+
+        [ "actions", id ] ->
             Action id
 
         [ "classes" ] ->
@@ -298,6 +705,9 @@ urlToPage url =
         [ "classes", class, "sample-builds" ] ->
             SampleBuilds class
 
+        [ "feats", id ] ->
+            Feat id
+
         [ "rules" ] ->
             Rules
 
@@ -318,7 +728,7 @@ documentToUrl : Document -> String
 documentToUrl document =
     case document.category of
         "action" ->
-            "/action/" ++ document.url
+            "/actions/" ++ document.url
 
         "class" ->
             "/classes/" ++ document.url
@@ -327,7 +737,7 @@ documentToUrl document =
             List.append document.breadcrumbs [ document.name ]
                 |> List.map dasherize
                 |> String.join "/"
-                |> (++) "/rules/"
+                |> (++) "/"
 
         _ ->
             ""
@@ -342,11 +752,17 @@ pageToDataKey page =
         Class id ->
             Just ("class-" ++ id)
 
+        Feat id ->
+            Just ("feat-" ++ id)
+
         Instincts ->
             Just "instincts"
 
         Rule ids ->
             Just ("rules-" ++ String.join "-" ids)
+
+        Rules ->
+            Just "rules"
 
         Trait id ->
             Just ("trait-" ++ id)
@@ -358,18 +774,380 @@ pageToDataKey page =
             Nothing
 
 
+searchWithCurrentSearchModel : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+searchWithCurrentSearchModel ( model, cmd ) =
+    case getSearchKey model.page of
+        Just key ->
+            let
+                searchModel : SearchModel
+                searchModel =
+                    Dict.get key model.search
+                        |> Maybe.withDefault (emptySearchModel model.page)
+
+                newTracker : Int
+                newTracker =
+                    searchModel.tracker
+                        |> Maybe.withDefault 0
+                        |> (+) 1
+            in
+            ( { model
+                | search =
+                    Dict.insert
+                        key
+                        { searchModel | tracker = Just newTracker }
+                        model.search
+              }
+            , Cmd.batch
+                [ cmd
+                , case searchModel.tracker of
+                    Just oldTracker ->
+                        Http.cancel ("search-" ++ String.fromInt oldTracker)
+
+                    Nothing ->
+                        Cmd.none
+                , Http.request
+                    { method = "POST"
+                    , url = model.elasticUrl ++ "/_search"
+                    , headers = []
+                    , body = Http.jsonBody (buildSearchBody searchModel)
+                    , expect = Http.expectJson (GotSearchResult key) searchResultDecoder
+                    , timeout = Just 10000
+                    , tracker = Just ("search-" ++ String.fromInt newTracker)
+                    }
+
+                , if List.isEmpty searchModel.traits then
+                    getTraitAggs model key searchModel
+
+                  else
+                    Cmd.none
+                ]
+            )
+
+        Nothing ->
+            ( model
+            , cmd
+            )
+
+
+getTraitAggs : Model -> String -> SearchModel -> Cmd Msg
+getTraitAggs model key searchModel =
+    Http.request
+        { method = "POST"
+        , url = model.elasticUrl ++ "/_search"
+        , headers = []
+        , body = Http.jsonBody (buildAggsBody searchModel)
+        , expect = Http.expectJson (GotTraitAggs key) aggsResultDecoder
+        , timeout = Just 10000
+        , tracker = Nothing
+        }
+
+
+buildAggsBody : SearchModel -> Encode.Value
+buildAggsBody searchModel =
+    Encode.object
+        [ ( "query"
+          , Encode.object
+                [ ( "bool"
+                  , Encode.object
+                        [ ( "filter"
+                          , searchModel.fixedFilters
+                                |> List.map
+                                    (\( field, value ) ->
+                                        [ ( "term"
+                                        , Encode.object
+                                            [ ( field
+                                              , Encode.object
+                                                    [ ( "value", Encode.string value ) ]
+                                              )
+                                            ]
+                                          )
+                                        ]
+                                    )
+                                |> Encode.list Encode.object
+                          )
+                        ]
+                  )
+                ]
+          )
+        , ( "aggs"
+          , Encode.object
+                [ ( "traits"
+                  , Encode.object
+                        [ ( "terms"
+                          , Encode.object
+                                [ ( "field", Encode.string "trait" )
+                                , ( "size", Encode.int 10000 )
+                                ]
+                          )
+                        ]
+                  )
+                ]
+          )
+        , ( "size", Encode.int 0 )
+        ]
+
+
+getSearchKey : Page -> Maybe String
+getSearchKey page =
+    case page of
+        ClassFeats class ->
+            Just ("class-feats-" ++ class)
+
+        _ ->
+            Nothing
+
+
+buildSearchBody : SearchModel -> Encode.Value
+buildSearchBody searchModel =
+    let
+        includedTraits : List String
+        includedTraits =
+            searchModel.filteredTraits
+                |> Dict.toList
+                |> List.filter (Tuple.second)
+                |> List.map Tuple.first
+
+
+        excludedTraits : List String
+        excludedTraits =
+            searchModel.filteredTraits
+                |> Dict.toList
+                |> List.filter (Tuple.second >> not)
+                |> List.map Tuple.first
+
+        filters : List (List ( String, Encode.Value ))
+        filters =
+            List.concat
+                [ searchModel.fixedFilters
+                    |> List.map
+                        (\( field, value ) ->
+                            [ ( "term"
+                            , Encode.object
+                                [ ( field
+                                  , Encode.object
+                                        [ ( "value", Encode.string value ) ]
+                                  )
+                                ]
+                              )
+                            ]
+                        )
+                , if List.isEmpty includedTraits then
+                    []
+
+                  else
+                    [ [ ( "terms"
+                        , Encode.object
+                            [ ( "trait"
+                              , Encode.list Encode.string includedTraits
+                              )
+                            ]
+                        )
+                      ]
+                    ]
+                ]
+
+        mustNots : List (List ( String, Encode.Value ))
+        mustNots =
+            List.concat
+                [ if List.isEmpty excludedTraits then
+                    []
+
+                  else
+                    [ [ ( "terms"
+                        , Encode.object
+                            [ ( "trait"
+                              , Encode.list Encode.string excludedTraits
+                              )
+                            ]
+                        )
+                      ]
+                    ]
+                ]
+    in
+    encodeObjectMaybe
+        [ ( "query"
+          , Encode.object
+                [ ( "bool"
+                  , encodeObjectMaybe
+                        [ if String.isEmpty searchModel.query then
+                            Nothing
+
+                          else
+                            ( "should"
+                            , Encode.list Encode.object
+                                (case searchModel.queryType of
+                                    Standard ->
+                                        buildStandardQueryBody searchModel.query
+
+                                    ElasticsearchQueryString ->
+                                        buildElasticsearchQueryStringQueryBody searchModel.query
+                                )
+                            )
+                                |> Just
+
+                        , if List.isEmpty filters then
+                            Nothing
+
+                          else
+                            ( "filter"
+                            , Encode.list Encode.object filters
+                            )
+                                |> Just
+
+                        , if List.isEmpty excludedTraits then
+                            Nothing
+
+                          else
+                            ( "must_not"
+                            , Encode.list Encode.object mustNots
+                            )
+                                |> Just
+
+                        , if String.isEmpty searchModel.query then
+                            Nothing
+
+                          else
+                            Just ( "minimum_should_match", Encode.int 1 )
+                        ]
+                  )
+                ]
+          )
+            |> Just
+
+        , ( "size", Encode.int 50 )
+            |> Just
+
+        , ( "sort"
+          , Encode.list identity
+                (if List.isEmpty searchModel.defaultSort then
+                    [ Encode.string "_score"
+                    , Encode.string "_doc"
+                    ]
+
+                 else
+                     List.append
+                        (List.map
+                            (\( field, dir ) ->
+                                Encode.object
+                                    [ ( field
+                                      , Encode.object
+                                            [ ( "order", Encode.string (sortDirToString dir) )
+                                            ]
+                                      )
+                                    ]
+                            )
+                            searchModel.defaultSort
+                        )
+                        [ Encode.string "_doc" ]
+                )
+          )
+            |> Just
+
+        , ( "_source"
+          , Encode.object
+                [ ( "excludes", Encode.list Encode.string [ "text" ] ) ]
+          )
+            |> Just
+
+        , searchModel.searchResults
+            |> List.Extra.last
+            |> Maybe.andThen (Result.toMaybe)
+            |> Maybe.map .searchAfter
+            |> Maybe.map (Tuple.pair "search_after")
+        ]
+
+
+sortDirToString : SortDir -> String
+sortDirToString dir =
+    case dir of
+        Asc ->
+            "asc"
+
+        Desc ->
+            "desc"
+
+
+buildStandardQueryBody : String -> List (List ( String, Encode.Value ))
+buildStandardQueryBody queryString =
+    [ [ ( "match_phrase_prefix"
+        , Encode.object
+            [ ( "name"
+              , Encode.object
+                    [ ( "query", Encode.string queryString )
+                    ]
+              )
+            ]
+        )
+      ]
+    , [ ( "bool"
+        , Encode.object
+            [ ( "must"
+              , Encode.list Encode.object
+                    (List.map
+                        (\word ->
+                            [ ( "multi_match"
+                              , Encode.object
+                                    [ ( "query", Encode.string word )
+                                    , ( "type", Encode.string "best_fields" )
+                                    , ( "fields", Encode.list Encode.string searchFields )
+                                    , ( "fuzziness", Encode.string "auto" )
+                                    ]
+                              )
+                            ]
+                        )
+                        (String.words queryString)
+                    )
+              )
+            ]
+        )
+      ]
+    ]
+
+
+buildElasticsearchQueryStringQueryBody : String -> List (List ( String, Encode.Value ))
+buildElasticsearchQueryStringQueryBody queryString =
+    [ [ ( "query_string"
+        , Encode.object
+            [ ( "query", Encode.string queryString )
+            , ( "default_operator", Encode.string "AND" )
+            , ( "fields", Encode.list Encode.string searchFields )
+            ]
+        )
+      ]
+    ]
+
+
+searchFields : List String
+searchFields =
+    [ "name"
+    , "text^0.1"
+    , "trait_raw"
+    , "type"
+    ]
+
+
+encodeObjectMaybe : List (Maybe ( String, Encode.Value )) -> Encode.Value
+encodeObjectMaybe list =
+    Maybe.Extra.values list
+        |> Encode.object
+
+
 fetchData : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 fetchData ( model, cmd ) =
     ( model
-    , case pageToDataKey model.page of
-        Just id ->
-            fetchDocument model id
+    , Cmd.batch
+        [ cmd
+        , case pageToDataKey model.page of
+            Just id ->
+                fetchDocument model id
 
-        Nothing ->
-            Cmd.none
+            Nothing ->
+                Cmd.none
+        ]
     )
 
 
+fetchDocument : Model -> String -> Cmd Msg
 fetchDocument model id =
     case Dict.get id model.documents of
         Just _ ->
@@ -387,6 +1165,7 @@ fetchDocument model id =
                 }
 
 
+fetchDocuments : Model -> List String -> Cmd Msg
 fetchDocuments model ids =
     let
         idsToFetch : List String
@@ -418,10 +1197,42 @@ fetchDocuments model ids =
             , expect =
                 Http.expectJson
                     (GotDocuments idsToFetch)
-                    (Decode.field "docs" (Decode.list documentDecoder))
+                    (Decode.field
+                        "docs"
+                        (Decode.list
+                            (Decode.oneOf
+                                [ Decode.map Ok documentDecoder
+                                , Decode.map Err (Decode.field "_id" Decode.string)
+                                ]
+                            )
+                        )
+                    )
             , timeout = Just 10000
             , tracker = Nothing
             }
+
+
+aggsResultDecoder : Decode.Decoder (List String)
+aggsResultDecoder =
+    Decode.at
+        [ "aggregations", "traits", "buckets" ]
+        (Decode.list (Decode.field "key" Decode.string))
+
+
+
+searchResultDecoder : Decode.Decoder SearchResult
+searchResultDecoder =
+    Field.requireAt [ "hits", "hits" ] (Decode.list documentDecoder) <| \documents ->
+    Field.requireAt [ "hits", "hits" ] (Decode.list (Decode.field "sort" Decode.value)) <| \sorts ->
+    Field.requireAt [ "hits", "total", "value" ] Decode.int <| \total ->
+    Decode.succeed
+        { documents = documents
+        , searchAfter =
+            sorts
+                |> List.Extra.last
+                |> Maybe.withDefault Encode.null
+        , total = total
+        }
 
 
 documentDecoder : Decode.Decoder Document
@@ -429,7 +1240,6 @@ documentDecoder =
     Field.requireAt [ "_id" ] Decode.string <| \id ->
     Field.requireAt [ "_source", "category" ] Decode.string <| \category ->
     Field.requireAt [ "_source", "name" ] Decode.string <| \name ->
-    Field.requireAt [ "_source", "text" ] Decode.string <| \text ->
     Field.requireAt [ "_source", "type" ] Decode.string <| \type_ ->
     Field.requireAt [ "_source", "url" ] Decode.string <| \url ->
     Field.attemptAt [ "_source", "markdown" ] Decode.string <| \markdown ->
@@ -441,6 +1251,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "advanced_domain_spell" ] Decode.string <| \advancedDomainSpell ->
     Field.attemptAt [ "_source", "alignment" ] Decode.string <| \alignment ->
     Field.attemptAt [ "_source", "ammunition" ] Decode.string <| \ammunition ->
+    Field.attemptAt [ "_source", "aon_url" ] Decode.string <| \aonUrl ->
     Field.attemptAt [ "_source", "area" ] Decode.string <| \area ->
     Field.attemptAt [ "_source", "aspect" ] Decode.string <| \aspect ->
     Field.attemptAt [ "_source", "breadcrumbs" ] stringListDecoder <| \breadcrumbs ->
@@ -487,7 +1298,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "secondary_casters_raw" ] Decode.string <| \secondaryCasters ->
     Field.attemptAt [ "_source", "secondary_check" ] Decode.string <| \secondaryChecks ->
     Field.attemptAt [ "_source", "skill" ] stringListDecoder <| \skills ->
-    Field.attemptAt [ "_source", "source" ] Decode.string <| \source ->
+    Field.attemptAt [ "_source", "source" ] stringListDecoder <| \sources ->
     Field.attemptAt [ "_source", "spell_list" ] Decode.string <| \spellList ->
     Field.attemptAt [ "_source", "spoilers" ] Decode.string <| \spoilers ->
     Field.attemptAt [ "_source", "strength" ] Decode.int <| \strength ->
@@ -515,6 +1326,7 @@ documentDecoder =
         , advancedDomainSpell = advancedDomainSpell
         , alignment = alignment
         , ammunition = ammunition
+        , aonUrl = aonUrl
         , area = area
         , aspect = aspect
         , breadcrumbs = Maybe.withDefault [] breadcrumbs
@@ -545,7 +1357,7 @@ documentDecoder =
         , intelligence = intelligence
         , lessonType = lessonType
         , level = level
-        , markdown = Maybe.withDefault text markdown
+        , markdown = Maybe.withDefault "" markdown
         , mysteries = Maybe.withDefault [] mysteries
         , patronThemes = Maybe.withDefault [] patronThemes
         , perception = perception
@@ -562,7 +1374,7 @@ documentDecoder =
         , secondaryCasters = secondaryCasters
         , secondaryChecks = secondaryChecks
         , skills = Maybe.withDefault [] skills
-        , source = source
+        , sources = Maybe.withDefault [] sources
         , spellList = spellList
         , spoilers = spoilers
         , strength = strength
@@ -627,38 +1439,374 @@ view model =
     , body =
         [ Html.div
             [ HA.style "padding" "8px"
-            , HA.class "column"
-            , HA.class "align-center"
+            , HA.class "row"
+            , HA.class "justify-center"
             ]
             [ Html.node "style"
                 []
                 [ Html.text css
                 , Html.text cssDark
                 ]
+            , FontAwesome.Styles.css
             , Html.div
-                [ HA.style "max-width" "1000px" ]
-                [ viewPage model ]
-                -- [ renderMarkdown
-                -- ]
+                [ HA.class "column"
+                , HA.class "align-stretch"
+                , HA.class "grow"
+                , HA.style "max-width" "1200px"
+                , HA.style "width" "100%"
+                ]
+                [ viewNavigation model
+
+                , case pageToDataKey model.page of
+                    Just id ->
+                        viewDocument model id 0 True
+
+                    _ ->
+                        Html.text ""
+
+                , case getSearchKey model.page of
+                    Just key ->
+                        viewSearch model key
+
+                    Nothing ->
+                        Html.text ""
+                ]
             ]
         ]
     }
 
 
-
-viewPage : Model -> Html Msg
-viewPage model =
+viewSearch : Model -> String -> Html Msg
+viewSearch model key =
     Html.div
         [ HA.class "column"
-        , HA.class "align-center"
+        , HA.class "gap-tiny"
         ]
-        [ viewNavigation model
-        , case pageToDataKey model.page of
-            Just id ->
-                viewDocument model id 0 True
+        (case Dict.get key model.search of
+            Just searchModel ->
+                [ viewQuery key searchModel
+                , viewSearchResults searchModel
+                ]
 
-            _ ->
+            Nothing ->
+                []
+        )
+
+
+viewQuery : String -> SearchModel -> Html Msg
+viewQuery key searchModel =
+    Html.div
+        [ HA.class "column"
+        , HA.class "align-stretch"
+        , HA.class "gap-tiny"
+        ]
+        [ Html.div
+            [ HA.class "row"
+            , HA.class "input-container"
+            ]
+            [ Html.input
+                [ HA.class "query-input"
+                , HA.placeholder "Enter search query"
+                , HA.type_ "text"
+                , HA.value searchModel.query
+                , HE.onInput (QueryChanged key)
+                ]
+                [ Html.text searchModel.query ]
+            , if String.isEmpty searchModel.query then
                 Html.text ""
+
+              else
+                Html.button
+                    [ HA.class "input-button"
+                    , HA.style "font-size" "24px"
+                    , HE.onClick (QueryChanged key "")
+                    ]
+                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+            ]
+
+        , Html.button
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HE.onClick (QueryOptionsPressed key (searchModel.optionsHeight == 0))
+            , HA.style "align-self" "center"
+            ]
+            (if searchModel.optionsOpen then
+                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronUp
+                , Html.text "Hide filters and options"
+                , FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronUp
+                ]
+
+             else
+                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronDown
+                , Html.text "Show filters and options"
+                , FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronDown
+                ]
+            )
+
+        , Html.div
+            [ HA.class "search-options-container"
+            , HA.style "height" (String.fromInt searchModel.optionsHeight ++ "px")
+            ]
+            [ Html.div
+                [ HA.id "search-options-measure-wrapper" ]
+                [ viewSearchOptions key searchModel ]
+            ]
+        ]
+
+
+viewSearchOptions : String -> SearchModel -> Html Msg
+viewSearchOptions key searchModel =
+    Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ viewQueryType key searchModel
+        -- , viewFilterTypes model
+        , viewFilterTraits key searchModel
+        -- , viewSortResults model
+        ]
+
+
+viewQueryType : String -> SearchModel -> Html Msg
+viewQueryType key searchModel =
+    Html.div
+        [ HA.class "option-container"
+        , HA.class "column"
+        ]
+        [ Html.h2
+            []
+            [ Html.text "Query type" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "align-baseline"
+            , HA.class "gap-medium"
+            ]
+            [ viewRadioButton
+                { checked = searchModel.queryType == Standard
+                , name = "query-type"
+                , onInput = QueryTypeSelected key Standard
+                , text = "Standard"
+                }
+            , viewRadioButton
+                { checked = searchModel.queryType == ElasticsearchQueryString
+                , name = "query-type"
+                , onInput = QueryTypeSelected key ElasticsearchQueryString
+                , text = "Complex"
+                }
+            ]
+        ]
+
+
+viewFilterTraits : String -> SearchModel -> Html Msg
+viewFilterTraits key searchModel =
+    Html.div
+        [ HA.class "option-container"
+        , HA.class "column"
+        ]
+        [ Html.h2
+            []
+            [ Html.text "Filter traits" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "input-container"
+            ]
+            [ Html.input
+                [ HA.placeholder "Search among traits"
+                , HA.value searchModel.searchTraitsInput
+                , HA.type_ "text"
+                , HE.onInput (SearchTraitsChanged key)
+                ]
+                []
+            , if String.isEmpty searchModel.searchTraitsInput then
+                Html.text ""
+
+              else
+                Html.button
+                    [ HA.class "input-button"
+                    , HE.onClick (SearchTraitsChanged key "")
+                    ]
+                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+            ]
+
+        , Html.button
+            [ HE.onClick (RemoveAllTraitFiltersPressed key)
+            , HA.style "align-self" "flex-start"
+            ]
+            [ Html.text "Reset trait filters" ]
+
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "scrollbox"
+            , HA.class "wrap"
+            ]
+            (List.map
+                (\trait ->
+                    Html.button
+                        [ HA.class "trait"
+                        , HA.class "row"
+                        , HA.class "align-center"
+                        , HA.class "gap-tiny"
+                        , HE.onClick (TraitFilterPressed key trait)
+                        ]
+                        [ Html.div
+                            []
+                            [ Html.text trait ]
+                        , case Dict.get trait searchModel.filteredTraits of
+                            Just True ->
+                                Html.div
+                                    [ HA.style "color" "#00cc00"
+                                    ]
+                                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.checkCircle ]
+
+                            Just False ->
+                                Html.div
+                                    [ HA.style "color" "#dd0000"
+                                    ]
+                                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.minusCircle ]
+
+                            Nothing ->
+                                Html.div
+                                    []
+                                    [ FontAwesome.Icon.viewIcon FontAwesome.Regular.circle ]
+                        ]
+                )
+                (List.filter
+                    (String.toLower >> String.contains (String.toLower searchModel.searchTraitsInput))
+                    searchModel.traits
+                )
+            )
+        ]
+
+
+viewRadioButton : { checked : Bool, name : String, onInput : msg, text : String } -> Html msg
+viewRadioButton { checked, name, onInput, text } =
+    Html.label
+        [ HA.class "row"
+        , HA.class "align-baseline"
+        ]
+        [ Html.input
+            [ HA.type_ "radio"
+            , HA.checked checked
+            , HA.name name
+            , HE.onClick onInput
+            ]
+            []
+        , Html.div
+            []
+            [ Html.text text ]
+        ]
+
+
+viewSearchResults : SearchModel -> Html Msg
+viewSearchResults searchModel =
+    let
+        total : Maybe Int
+        total =
+            searchModel.searchResults
+                |> List.head
+                |> Maybe.andThen Result.toMaybe
+                |> Maybe.map .total
+
+        resultCount : Int
+        resultCount =
+            searchModel.searchResults
+                |> List.map (Result.map .documents)
+                |> List.map (Result.map List.length)
+                |> List.map (Result.withDefault 0)
+                |> List.sum
+    in
+    Html.div
+        [ HA.class "column"
+        , HA.class "gap-large"
+        ]
+        (List.concat
+            [ case total of
+                Just 10000 ->
+                    [ Html.text ("10000+ results") ]
+
+                Just count ->
+                    [ Html.text (String.fromInt count ++ " results") ]
+
+                _ ->
+                    []
+
+            , List.map
+                (\result ->
+                    case result of
+                        Ok r ->
+                            List.map (viewSearchDocument) r.documents
+
+                        Err (Http.BadStatus 400) ->
+                            [ Html.h2
+                                []
+                                [ Html.text "Error: Failed to parse query" ]
+                            ]
+
+                        Err _ ->
+                            [ Html.h2
+                                []
+                                [ Html.text "Error: Search failed" ]
+                            ]
+                )
+                searchModel.searchResults
+                |> List.concat
+
+            , if Maybe.Extra.isJust searchModel.tracker then
+                [ Html.div
+                    [ HA.class "loader"
+                    ]
+                    []
+                ]
+
+              else if resultCount < Maybe.withDefault 0 total then
+                [ Html.button
+                    [ HA.style "align-self" "center"
+                    , HE.onClick LoadMoreSearchResultsPressed
+                    ]
+                    [ Html.text "Load more" ]
+                ]
+
+              else
+                []
+            ]
+        )
+
+
+viewSearchDocument document =
+    Html.section
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h1
+            [ HA.class "title" ]
+            [ Html.div
+                []
+                [ Html.a
+                    [ HA.href ""
+                    -- [ HA.href (getUrl hit.source)
+                    , HA.target "_blank"
+                    ]
+                    [ Html.text document.name
+                    ]
+                , case ( document.actions, hasActionsInTitle document ) of
+                    ( Just actions, True ) ->
+                        viewTextWithActionIcons (" " ++ actions)
+
+                    _ ->
+                        Html.text ""
+                ]
+            , Html.div
+                [ HA.class "title-type" ]
+                [ Html.text document.type_
+                , case document.level of
+                    Just level ->
+                        Html.text (" " ++ String.fromInt level)
+
+                    Nothing ->
+                        Html.text ""
+                ]
+            ]
         ]
 
 
@@ -666,6 +1814,7 @@ viewNavigation model =
     Html.div
         [ HA.class "column"
         , HA.class "align-center"
+        , HA.class "gap-small"
         ]
         [ Html.div
             [ HA.class "row"
@@ -727,6 +1876,9 @@ viewNavigation model =
         , case model.page of
             Class "barbarian" ->
                 viewBarbarianSubnav
+
+            Class "bard" ->
+                viewBardSubnav
 
             ClassFeats "barbarian" ->
                 viewBarbarianSubnav
@@ -822,6 +1974,38 @@ viewBarbarianSubnav =
         )
 
 
+viewBardSubnav =
+    Html.div
+        [ HA.class "row"
+        , HA.class "wrap"
+        , HA.class "gap-small"
+        ]
+        (List.map
+            (\{ href, label } ->
+                Html.a
+                    [ HA.href href ]
+                    [ Html.text label ]
+            )
+            [ { href = "/classes/bard"
+              , label = "Details"
+              }
+            , { href = "/classes/bard/feats"
+              , label = "Feats"
+              }
+            , { href = "/classes/bard/kits"
+              , label = "Kits"
+              }
+            , { href = "/classes/bard/sample-builds"
+              , label = "Sample Builds"
+              }
+            , { href = "/classes/bard/muses"
+              , label = "Muses"
+              }
+            ]
+            |> List.intersperse (Html.text "|")
+        )
+
+
 viewDocument : Model -> String -> Int -> Bool -> Html Msg
 viewDocument model id titleLevel isMain =
     case Dict.get id model.documents of
@@ -829,40 +2013,9 @@ viewDocument model id titleLevel isMain =
             Html.div
                 [ HA.class "column"
                 , HA.class "gap-medium"
+                , HA.class "margin-top-not-first"
                 ]
-                [ (if titleLevel <= 1 then
-                    Html.h1
-                        [ HA.class "title" ]
-
-                   else if titleLevel == 2 then
-                    Html.h2
-                        [ HA.class "subtitle" ]
-
-                   else if titleLevel == 3 then
-                    Html.h3
-                        [ HA.class "subsubtitle" ]
-
-                   else
-                    Html.h4
-                        [ HA.class "subsubsubtitle" ]
-                  )
-                    [ Html.div
-                        []
-                        [ Html.a
-                            [ HA.href (documentToUrl document) ]
-                            [ Html.text document.name ]
-                        , case ( document.actions, hasActionsInTitle document ) of
-                            ( Just actions, True ) ->
-                                viewTextWithActionIcons (" " ++ actions)
-
-                            _ ->
-                                Html.text ""
-                        ]
-                    , Html.div
-                        []
-                        [ Html.text document.type_ ]
-                    ]
-                , if isMain then
+                [ if isMain && not (List.isEmpty document.breadcrumbs) then
                     Html.div
                         [ HA.class "row"
                         , HA.class "gap-small"
@@ -877,7 +2030,7 @@ viewDocument model id titleLevel isMain =
                                             (List.append prev [ breadcrumb ]
                                                 |> List.map dasherize
                                                 |> String.join "/"
-                                                |> (++) "/rules/"
+                                                |> (++) "/"
                                             )
                                         ]
                                         [ Html.text breadcrumb ]
@@ -887,14 +2040,93 @@ viewDocument model id titleLevel isMain =
                             ( [], [] )
                             document.breadcrumbs
                             |> Tuple.second
+                            |> \list ->
+                                List.append
+                                    list
+                                    [ Html.div
+                                        []
+                                        [ Html.text document.name ]
+                                    ]
                             |> List.intersperse (Html.text "/")
                         )
 
                   else
                     Html.text ""
+
+                , case ( isMain, document.aonUrl ) of
+                    ( True, Just aonUrl ) ->
+                        Html.a
+                            [ HA.href ("https://2e.aonprd.com/" ++ aonUrl) ]
+                            [ Html.text "View this page on Archives of Nethys" ]
+
+                    _ ->
+                        Html.text ""
+
+                -- Title
+                , (if titleLevel <= 1 then
+                    Html.h1
+
+                   else if titleLevel == 2 then
+                    Html.h2
+
+                   else if titleLevel == 3 then
+                    Html.h3
+
+                   else
+                    Html.h4
+                  )
+                    [ HA.class "title" ]
+                    [ Html.div
+                        []
+                        [ Html.a
+                            [ HA.href (documentToUrl document) ]
+                            [ Html.text document.name ]
+                        , case ( document.actions, hasActionsInTitle document ) of
+                            ( Just actions, True ) ->
+                                viewTextWithActionIcons (" " ++ actions)
+
+                            _ ->
+                                Html.text ""
+                        ]
+                    , if document.type_ /= "Page" then
+                        Html.div
+                            []
+                            [ Html.text document.type_ ]
+
+                      else
+                        Html.text ""
+                    ]
+
+                -- Traits
                 , Html.div
                     [ HA.class "row" ]
                     (List.map viewTrait document.traits)
+
+                -- Source
+                , case document.sources of
+                    [] ->
+                        Html.text ""
+
+                    sources ->
+                        Html.div
+                            []
+                            [ Html.span
+                                [ HA.class "bold" ]
+                                [ Html.text "Source" ]
+                            , Html.text " "
+                            , List.map
+                                (\source ->
+                                    -- TODO: Page numbers?
+                                    -- TODO: Link style?
+                                    Html.a
+                                        [ HA.href ("/source/" ++ dasherize source) ]
+                                        [ Html.text source ]
+                                )
+                                sources
+                                |> List.intersperse (Html.text ", ")
+                                |> Html.span []
+                            ]
+
                 , renderMarkdown model (titleLevel + 1) document.markdown
                 ]
 
@@ -1059,48 +2291,126 @@ renderer model titleLevel =
     { defaultRenderer
         | html =
             Markdown.Html.oneOf
-                [ Markdown.Html.tag "h2"
-                    (\right content ->
-                        Html.h2
-                            [ HA.class "row"
-                            , HA.class "justify-between"
+                [ Markdown.Html.tag "title"
+                    (\level right content ->
+                        (case level of
+                            "1" ->
+                                Html.h1
+
+                            "2" ->
+                                Html.h2
+
+                            "3" ->
+                                Html.h3
+
+                            "4" ->
+                                Html.h4
+
+                            _ ->
+                                Html.h1
+                        )
+                            [ HA.class "title"
+                            , HA.class "margin-top-not-first"
                             ]
                             [ Html.div
                                 []
                                 content
-                            , Html.div
-                                [ HA.class "align-right" ]
-                                [ Html.text right ]
+                            , case right of
+                                Just r ->
+                                    Html.div
+                                        [ HA.class "align-right" ]
+                                        [ Html.text r ]
+
+                                Nothing ->
+                                    Html.text ""
                             ]
                     )
-                    |> Markdown.Html.withAttribute "right"
-                , Markdown.Html.tag "row"
-                    (\content ->
-                        Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            content
-                    )
-                , Markdown.Html.tag "column"
+                    |> Markdown.Html.withAttribute "level"
+                    |> Markdown.Html.withOptionalAttribute "right"
+                , Markdown.Html.tag "center"
                     (\content ->
                         Html.div
                             [ HA.class "column"
                             , HA.class "gap-medium"
+                            , HA.class "align-center"
                             ]
                             content
                     )
                 , Markdown.Html.tag "document"
-                    (\id _ ->
-                        viewDocument model id titleLevel False
+                    (\id level _ ->
+                        viewDocument
+                            model
+                            id
+                            (max
+                                (level
+                                    |> Maybe.andThen String.toInt
+                                    |> Maybe.withDefault 0
+                                )
+                                titleLevel
+                            )
+                            False
                     )
                     |> Markdown.Html.withAttribute "id"
+                    |> Markdown.Html.withOptionalAttribute "level"
                 , Markdown.Html.tag "infobox"
                     (\content ->
                         Html.div
                             [ HA.class "option-container"
                             , HA.class "column"
                             ]
+                            content
+                    )
+                , Markdown.Html.tag "table"
+                    (\content ->
+                        Html.div
+                            [ HA.style "overflow-x" "auto"
+                            , HA.style "max-width" "100%"
+                            , HA.style "align-self" "center"
+                            ]
+                            [ Html.table
+                                []
+                                content
+                            ]
+                    )
+                , Markdown.Html.tag "tbody"
+                    (\content ->
+                        Html.tbody
+                            [ HA.style "max-width" "100%"
+                            ]
+                            content
+                    )
+                , Markdown.Html.tag "td"
+                    (\colspan content ->
+                        Html.td
+                            [ HAE.attributeMaybe
+                                HA.colspan
+                                (Maybe.andThen String.toInt colspan)
+                            ]
+                            content
+                    )
+                    |> Markdown.Html.withOptionalAttribute "colspan"
+                , Markdown.Html.tag "tfoot"
+                    (\content ->
+                        Html.tfoot
+                            []
+                            content
+                    )
+                , Markdown.Html.tag "th"
+                    (\content ->
+                        Html.th
+                            []
+                            content
+                    )
+                , Markdown.Html.tag "thead"
+                    (\content ->
+                        Html.thead
+                            []
+                            content
+                    )
+                , Markdown.Html.tag "tr"
+                    (\content ->
+                        Html.tr
+                            []
                             content
                     )
                 , Markdown.Html.tag "trait"
@@ -1112,203 +2422,6 @@ renderer model titleLevel =
                     )
                 ]
     }
-
-
-barbarian : String
-barbarian =
-    """
-<row>
-<column>
-*Rage consumes you in battle. You delight in wreaking havoc and using powerful weapons to carve through your enemies, relying on astonishing durability without needing complicated techniques or rigid training. Your rages draw upon a vicious instinct, which you might associate with an animal, a spirit, or some part of yourself. To many barbarians, brute force is a hammer and every problem looks like a nail, whereas others try to hold back the storm of emotions inside them and release their rage only when it matters most.*
-
-**Key Ability: STRENGTH**  
-At 1st level, your class gives you an ability boost to Strength.
-
-**Hit Points: 12 plus your Constitution modifier**  
-You increase your maximum number of HP by this number at 1st level and every level thereafter.
-</column>
-<column>
-![Test](https://via.placeholder.com/200x300/)
-</column>
-</row>
-
-<infobox>
-## Key Terms
-You'll see the following key terms in many barbarian class features.
-
-[**Flourish**](/traits/flourish): Flourish actions are techniques that require too much exertion to perform a large number in a row. You can use only 1 action with the flourish trait per turn.
-
-[**Instinct**](/traits/instinct): Instinct abilities require a specific [instinct](/classes/barbarian/instincts); you lose access if you perform acts anathema to your instinct.
-
-[**Open**](/traits/open): These maneuvers work only as your first salvo on your turn. You can use an open action only if you haven't used an action with the attack or open trait yet this turn.
-
-[**Rage**](/traits/rage): You must be [raging](/action/rage) to use abilities with the rage trait, and they end automatically when you stop raging.
-</infobox>
-
-
-# Roleplaying the Barbarian
-
-## During Combat Encounters...
-You summon your rage and rush to the front lines to smash your way through. Offense is your best defense—you’ll need to drop foes before they can exploit your relatively low defenses.
-
-## During Social Encounters...
-You use intimidation to get what you need, especially when gentler persuasion can’t get the job done.
-
-## While Exploring...
-You look out for danger, ready to rush headfirst into battle in an instant. You climb the challenging rock wall and drop a rope for others to follow, and you wade into the risky currents to reach the hidden switch beneath the water’s surface. If something needs breaking, you’re up to the task!
-
-## In Downtime...
-You might head to a tavern to carouse, build up the fearsome legend of your mighty deeds, or recruit followers to become a warlord in your own right.
-
-## You Might...
-* Have a deep-seated well of anger, hatred, or frustration.
-* Prefer a straightforward approach to one requiring patience and tedium.
-* Engage in a regimen of intense physical fitness—and punch anyone who says this conflicts with your distaste for patience and tedium.
-
-## Others Probably...
-* Rely on your courage and your strength, and trust that you can hold your own in a fight.
-* See you as uncivilized or a boorish lout unfit for high society.
-* Believe that you are loyal to your friends and allies and will never relent until the fight is done.
-
-# Initial Proficiencies
-At 1st level, you gain the listed proficiency ranks in the following statistics. You are untrained in anything not listed unless you gain a better proficiency rank in some other way.
-
-## Perception
-Expert in Perception
-
-## Saving Throws
-Expert in Fortitude  
-Trained in Reflex  
-Expert in Will
-
-## Skills
-Trained in Athletics  
-Trained in a number of additional skills equal to 3 plus your Intelligence modifier
-
-## Attacks
-Trained in simple weapons  
-Trained in martial weapons  
-Trained in unarmed attacks
-
-## Defenses
-Trained in light armor  
-Trained in medium armor  
-Trained in unarmored defense
-
-## Class DC
-Trained in barbarian class DC
-
-
-# Class Features
-You gain these features as a Barbarian. Abilities gained at higher levels list the levels at which you gain them next to the features' names.
-
-## Ancestry and Background
-In addition to the abilities provided by your class at 1st level, you have the benefits of your selected ancestry and background, as described in Chapter 2.
-
-## Barbarian Feats
-At 1st level and every even-numbered level thereafter, you gain a barbarian class feat.
-
-## Initial Proficiencies
-At 1st level you gain a number of proficiencies that represent your basic training. These proficiencies are noted in at the start of this class.
-
-## Instinct
-Your rage wells up from a dominant instinct—one you learned from a tradition or that comes naturally to you. Your instinct gives you an ability, requires you to avoid certain behaviors, grants you increased damage and resistances at higher levels, and allows you to select feats tied to your instinct.
-
-Instincts can be found here.
-
-## Rage
-You gain the Rage action, which lets you fly into a frenzy.
-
-<document id="action-rage" />
-
-<h2 right="Level 2">Skill Feats</h2>
-At 2nd level and every 2 levels thereafter, you gain a skill feat. Skill feats appear in Chapter 5 and have the skill trait. You must be trained or better in the corresponding skill to select a skill feat.
-
-<h2 right="Level 3">Deny Advantage</h2>
-Your foes struggle to pass your defenses. You aren’t flat-footed to hidden, undetected, or flanking creatures of your level or lower, or creatures of your level or lower using surprise attack. However, they can still help their allies flank.
-
-<h2 right="Level 3">General Feats</h2>
-At 3rd level and every 4 levels thereafter, you gain a general feat. General feats are listed in Chapter 5.
-
-<h2 right="Level 3">Skill Increases</h2>
-At 3rd level and every 2 levels thereafter, you gain a skill increase. You can use this increase either to increase your proficiency rank to trained in one skill you’re untrained in, or to increase your proficiency rank in one skill in which you’re already trained to expert.
-
-At 7th level, you can use skill increases to increase your proficiency rank to master in a skill in which you’re already an expert, and at 15th level, you can use them to increase your proficiency rank to legendary in a skill in which you’re already a master.
-
-<h2 right="Level 5">Ability Boosts</h2>
-At 5th level and every 5 levels thereafter, you boost four different ability scores. You can use these ability boosts to increase your ability scores above 18. Boosting an ability score increases it by 1 if it’s already 18 or above, or by 2 if it starts below 18.
-
-<h2 right="Level 5">Ancestry Feats</h2>
-In addition to the ancestry feat you started with, you gain an ancestry feat at 5th level and every 4 levels thereafter. The list of ancestry feats available to you can be found in your ancestry’s entry in Chapter 2.
-
-<h2 right="Level 5">Brutality</h2>
-Your fury makes your weapons lethal. Your proficiency ranks for simple weapons, martial weapons, and unarmed attacks increase to expert. While raging, you gain access to the critical specialization effects for melee weapons and unarmed attacks.
-
-<h2 right="Level 7">Juggernaut</h2>
-Your body is accustomed to physical hardship and resistant to ailments. Your proficiency rank for Fortitude saves increases to master. When you roll a success on a Fortitude save, you get a critical success instead.
-
-<h2 right="Level 7">Weapon Specialization</h2>
-Your rage helps you hit harder. You deal an additional 2 damage with weapons and unarmed attacks in which you have expert proficiency. This damage increases to 3 if you’re a master, and 4 if you’re legendary. You gain your instinct’s specialization ability.
-
-See specific instincts for more information.
-
-<h2 right="Level 9">Lightning Reflexes</h2>
-Your reflexes are lightning fast. Your proficiency rank for Reflex saves increases to expert.
-
-<h2 right="Level 9">Raging Resistance</h2>
-Repeated exposure and toughened skin allow you to fend off harm. While raging, you gain resistance equal to 3 + your Constitution modifier to damage types based on your instinct.
-
-See specific instincts for more information.
-
-<h2 right="Level 11">Mighty Rage</h2>
-Your rage intensifies and lets you burst into action. Your proficiency rank for your barbarian class DC increases to expert. You gain the Mighty Rage free action.
-
-<document id="action-mighty-rage" />
-
-<h2 right="Level 13">Greater Juggernaut</h2>
-You have a stalwart physiology. Your proficiency rank for Fortitude saves increases to legendary. When you roll a critical failure on a Fortitude save, you get a failure instead. When you roll a failure on a Fortitude save against an effect that deals damage, you halve the damage you take.
-
-<h2 right="Level 13">Medium Armor Expertise</h2>
-You’ve learned to defend yourself better against attacks. Your proficiency ranks for light armor, medium armor, and unarmored defense increase to expert.
-
-
-<h2 right="Level 13">Weapon Fury</h2>
-Your rage makes you even more effective with the weapons you wield. Your proficiency ranks for simple weapons, martial weapons, and unarmed attacks increase to master.
-
-<h2 right="Level 15">Greater Weapon Specialization</h2>
-The weapons you’ve mastered become truly fearsome in your hands. Your damage from weapon specialization increases to 4 with weapons and unarmed attacks in which you’re an expert, 6 if you’re a master, and 8 if you’re legendary. You gain a greater benefit from your instinct’s specialization ability.
-
-See specific instincts for more information.
-
-<h2 right="Level 15">Indomitable Will</h2>
-Your rage makes it difficult to control you. Your proficiency rank for Will saves increases to master. When you roll a success on a Will save, you get a critical success instead.
-
-<h2 right="Level 17">Heightened Senses</h2>
-Your instinct heightens each of your senses further. Your proficiency rank for Perception increases to master.
-
-<h2 right="Level 17">Quick Rage</h2>
-You recover from your Rage quickly, and are soon ready to begin anew. After you spend a full turn without raging, you can Rage again without needing to wait 1 minute.
-
-<h2 right="Level 19">Armor of Fury</h2>
-Your training and rage deepen your connection to your armor. Your proficiency ranks for light armor, medium armor, and unarmored defense increase to master.
-
-<h2 right="Level 19">Devastator</h2>
-Your Strikes are so devastating that you hardly care about resistance, and your barbarian abilities are unparalleled. Your proficiency rank for your barbarian class DC increases to master. Your melee Strikes ignore 10 points of a creature’s resistance to their physical damage.
-    """
-
-
-rage : String
-rage =
-    """
-You tap into your inner fury and begin raging. You gain a number of temporary Hit Points equal to your level plus your Constitution modifier. This frenzy lasts for 1 minute, until there are no enemies you can perceive, or until you fall unconscious, whichever comes first. You can't voluntarily stop raging. While you are raging:
-
-* You deal 2 additional damage with melee Strikes. This additional damage is halved if your weapon or unarmed attack is agile.
-* You take a –1 penalty to AC.
-
-You can't use actions with the concentrate trait unless they also have the rage trait. You can [Seek](/Actions.aspx?ID=84) while raging.
-
-After you stop raging, you lose any remaining temporary Hit Points from Rage, and you can't Rage again for 1 minute.
-    """
 
 
 css : String
@@ -1334,6 +2447,7 @@ css =
         background-color: var(--color-bg);
         color: var(--color-text);
         font-family: "Century Gothic", CenturyGothic, AppleGothic, sans-serif;
+        line-height: 1.25;
         margin: 0px;
     }
 
@@ -1363,37 +2477,70 @@ css =
         color: var(--color-inactive-text);
     }
 
-    h1 {
-        font-size: 48px;
-        font-weight: normal;
+    h1, h2, h3, h4 {
+        font-variant: small-caps;
+        font-weight: 700;
         margin: 0;
+    }
+
+    h1 {
+        font-size: var(--font-very-large);
+    }
+
+    h1.title {
+        background-color: var(--color-element-bg);
+        border-color: var(--color-container-border);
+        color: var(--color-element-text);
     }
 
     h2 {
         font-size: var(--font-large);
-        margin: 0;
+    }
+
+    h2.title {
+        background-color: var(--color-subelement-bg);
+        color: var(--color-subelement-text);
+        line-height: 1;
     }
 
     h3 {
-        font-size: var(--font-large);
-        margin: 0;
+        font-size: 18px;
+    }
+
+    h3.title {
+        background-color: #627d62;
+        color: var(--color-subelement-text);
+        line-height: 1;
     }
 
     h4 {
-        margin: 0;
+        font-size: var(--font-medium);
+    }
+
+    h4.title {
+        background-color: #494e70;
+        color: var(--color-subelement-text);
+        line-height: 1;
     }
 
     hr {
+        margin: 0;
         width: 100%;
     }
 
     input[type=text] {
-        background-color: var(--color-bg);
-        border-style: solid;
-        border-radius: 4px;
+        background-color: transparent;
+        border-width: 0;
         color: var(--color-text);
         padding: 4px;
-        width: 100%;
+        flex-grow: 1;
+    }
+
+    input:focus-visible {
+        border-width: 0;
+        border-style: none;
+        border-image: none;
+        outline: 0;
     }
 
     p {
@@ -1406,6 +2553,31 @@ css =
 
     select {
         font-size: var(--font-normal);
+    }
+
+    table {
+        align-self: center;
+        border-spacing: 0;
+        border-collapse: collapse;
+    }
+
+    tbody tr {
+        background-color: #64542f;
+    }
+
+    tbody tr:nth-child(odd) {
+        background-color: #342c19;
+    }
+
+    thead tr, tfoot tr {
+        background-color: var(--color-element-bg);
+        color: var(--color-element-text)
+    }
+
+    td, th {
+        border: 1px solid var(--color-text);
+        padding: 1px 5px;
+        line-height: 1.5;
     }
 
     .align-baseline {
@@ -1496,6 +2668,10 @@ css =
         gap: var(--gap-tiny);
     }
 
+    .grow {
+        flex-grow: 1;
+    }
+
     .icon-font {
         color: var(--color-icon);
         font-family: "Pathfinder-Icons";
@@ -1503,14 +2679,22 @@ css =
         font-weight: normal;
     }
 
+    .input-container {
+        background-color: var(--color-bg);
+        border-style: solid;
+        border-radius: 4px;
+        border-width: 2px;
+        border-color: #808080;
+    }
+
+    .input-container:focus-within {
+        border-color: var(--color-text);
+    }
+
     .input-button {
-        aspect-ratio: 1 / 1;
         background-color: transparent;
         border-width: 0;
         color: var(--color-text);
-        height: 100%;
-        right: 0px;
-        position: absolute;
     }
 
     .justify-between {
@@ -1578,24 +2762,12 @@ css =
         border-style: solid;
         border-width: 1px;
         background-color: var(--color-container-bg);
-        gap: var(--gap-small);
+        gap: var(--gap-medium);
         padding: 8px;
     }
 
     .query-input {
         font-size: var(--font-very-large);
-    }
-
-    .query-options-container {
-        transition: height ease-in-out 0.2s;
-        overflow: hidden;
-    }
-
-    .query-options-dummy {
-        opacity: 0;
-        pointer-events: none;
-        position: absolute;
-        visibility: hidden;
     }
 
     .scrollbox {
@@ -1609,40 +2781,9 @@ css =
         padding: 4px;
     }
 
-    .subtitle, h2 {
-        border-radius: 4px;
-        background-color: var(--color-subelement-bg);
-        color: var(--color-subelement-text);
-        font-variant: small-caps;
-        line-height: 1rem;
-        padding: 4px 9px;
-        display: flex;
-        flex-direction: row;
-        justify-content: space-between;
-    }
-
-    .subsubtitle, h3 {
-        border-radius: 4px;
-        background-color: #627d62;
-        color: var(--color-subelement-text);
-        font-variant: small-caps;
-        line-height: 1rem;
-        padding: 4px 9px;
-        display: flex;
-        flex-direction: row;
-        justify-content: space-between;
-    }
-
-    .subsubsubtitle, h4 {
-        border-radius: 4px;
-        background-color: #494e70;
-        color: var(--color-subelement-text);
-        font-variant: small-caps;
-        line-height: 1rem;
-        padding: 4px 9px;
-        display: flex;
-        flex-direction: row;
-        justify-content: space-between;
+    .search-options-container {
+        transition: height ease-in-out 0.2s;
+        overflow: hidden;
     }
 
     .option-container h2 {
@@ -1651,23 +2792,21 @@ css =
         padding: 0;
     }
 
-    .subtitle:empty {
-        display: none;
+    .margin-top-not-first:not(:first-child) {
+        margin-top: var(--gap-medium);
     }
 
-    .title, h1 {
+    .title {
         border-radius: 4px;
-        background-color: var(--color-element-bg);
-        border-color: var(--color-container-border);
-        color: var(--color-element-text);
         display: flex;
         flex-direction: row;
-        font-size: var(--font-very-large);
-        font-variant: small-caps;
-        font-weight: 700;
         gap: var(--gap-small);
         justify-content: space-between;
         padding: 4px 9px;
+    }
+
+    .title:empty {
+        display: none;
     }
 
     .title .icon-font {
@@ -1763,6 +2902,7 @@ cssDark =
         --color-element-inactive-text: #656148;
         --color-element-text: #cbc18f;
         --color-subelement-bg: #806e45;
+        --color-subelement-bg2: #64542f;
         --color-subelement-text: #111111;
         --color-icon: #cccccc;
         --color-inactive-text: #999999;
