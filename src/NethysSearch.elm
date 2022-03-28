@@ -301,7 +301,7 @@ subscriptions model =
         [ Browser.Events.onResize WindowResized
         , document_receiveNodeHeight
             (\{ id, height } ->
-                if id == queryOptionsDummyId then
+                if id == queryOptionsMeasureWrapperId then
                     GotQueryOptionsHeight (round height)
 
                 else
@@ -648,7 +648,7 @@ parseUrl url =
 
 getQueryOptionsHeight : Cmd Msg
 getQueryOptionsHeight =
-    document_getNodeHeight queryOptionsDummyId
+    document_getNodeHeight queryOptionsMeasureWrapperId
 
 
 saveToLocalStorage : String -> String -> Cmd msg
@@ -1661,12 +1661,6 @@ viewQuery model =
             )
 
         , Html.div
-            [ HA.class "query-options-dummy"
-            , HA.id queryOptionsDummyId
-            ]
-            [ viewQueryOptions model ]
-
-        , Html.div
             [ HA.class "query-options-container"
             , HA.style "height"
                 (if model.queryOptionsOpen then
@@ -1675,7 +1669,10 @@ viewQuery model =
                  else "0"
                 )
             ]
-            [ viewQueryOptions model ]
+            [ Html.div
+                [ HA.id queryOptionsMeasureWrapperId ]
+                [ viewQueryOptions model ]
+            ]
 
         , if model.queryType == ElasticsearchQueryString then
             Html.div
@@ -3188,9 +3185,9 @@ stringContainsChar str chars =
         chars
 
 
-queryOptionsDummyId : String
-queryOptionsDummyId =
-    "query-options-dummy"
+queryOptionsMeasureWrapperId : String
+queryOptionsMeasureWrapperId =
+    "query-options-measure-wrapper"
 
 
 css : String
@@ -3452,13 +3449,6 @@ css =
     .query-options-container {
         transition: height ease-in-out 0.2s;
         overflow: hidden;
-    }
-
-    .query-options-dummy {
-        opacity: 0;
-        pointer-events: none;
-        position: absolute;
-        visibility: hidden;
     }
 
     .scrollbox {
