@@ -156,6 +156,7 @@ type Theme
 
 type Msg
     = DebouncePassed Int
+    | GotEqsHelpHeight Int
     | GotQueryOptionsHeight Int
     | GotSearchResult (Result Http.Error SearchResult)
     | FilterTraitsOperatorChanged Bool
@@ -206,7 +207,7 @@ port navigation_urlChanged : (String -> msg) -> Sub msg
 type alias Model =
     { debounce : Int
     , elasticUrl : String
-    , eqsHelpOpen : Bool
+    , eqsHelpHeight : Int
     , filteredTraits : Dict String Bool
     , filteredTypes : Dict String Bool
     , filterTraitsOperator : Bool
@@ -257,7 +258,7 @@ init flagsValue =
     in
     ( { debounce = 0
       , elasticUrl = flags.elasticUrl
-      , eqsHelpOpen = False
+      , eqsHelpHeight = 0
       , filteredTraits = Dict.empty
       , filteredTypes = Dict.empty
       , filterTraitsOperator = True
@@ -304,6 +305,9 @@ subscriptions model =
                 if id == queryOptionsMeasureWrapperId then
                     GotQueryOptionsHeight (round height)
 
+                else if id == eqsHelpMeasureWrapperId then
+                    GotEqsHelpHeight (round height)
+
                 else
                     NoOp
             )
@@ -323,6 +327,14 @@ update msg model =
 
             else
                 ( model, Cmd.none )
+
+        GotEqsHelpHeight height ->
+            ( { model
+                | eqsHelpHeight = height
+                , queryOptionsHeight = model.queryOptionsHeight + (height - model.eqsHelpHeight)
+              }
+            , Cmd.none
+            )
 
         GotQueryOptionsHeight height ->
             ( { model | queryOptionsHeight = height }
@@ -482,9 +494,19 @@ update msg model =
             )
 
         ShowEqsHelpPressed show ->
-            ( { model | eqsHelpOpen = show }
-            , getQueryOptionsHeight
-            )
+            if show then
+                ( model
+                , getEqsHelpHeight
+                )
+
+            else
+                ( { model
+                    | eqsHelpHeight = 0
+                    , queryOptionsHeight = model.queryOptionsHeight - model.eqsHelpHeight
+                  }
+                , Cmd.none
+                )
+
 
         ShowMenuPressed show ->
             ( { model
@@ -649,6 +671,11 @@ parseUrl url =
 getQueryOptionsHeight : Cmd Msg
 getQueryOptionsHeight =
     document_getNodeHeight queryOptionsMeasureWrapperId
+
+
+getEqsHelpHeight : Cmd Msg
+getEqsHelpHeight =
+    document_getNodeHeight eqsHelpMeasureWrapperId
 
 
 saveToLocalStorage : String -> String -> Cmd msg
@@ -1661,7 +1688,7 @@ viewQuery model =
             )
 
         , Html.div
-            [ HA.class "query-options-container"
+            [ HA.class "foldable-container"
             , HA.style "height"
                 (if model.queryOptionsOpen then
                     String.fromInt model.queryOptionsHeight ++ "px"
@@ -1685,6 +1712,7 @@ viewQuery model =
                 , HA.class "row"
                 , HA.class "align-center"
                 , HA.class "nowrap"
+                , HA.class "gap-small"
                 ]
                 [ Html.div
                     [ HA.style "font-size" "24px"
@@ -1883,189 +1911,204 @@ viewQueryType model =
         [ HA.class "option-container"
         , HA.class "column"
         ]
-        [ Html.h3
-            []
-            [ Html.text "Query type" ]
+        [ Html.div
+            [ HA.class "column"
+            , HA.class "gap-small"
+            ]
+            [ Html.h3
+                []
+                [ Html.text "Query type" ]
+            , Html.div
+                [ HA.class "row"
+                , HA.class "align-baseline"
+                , HA.class "gap-medium"
+                ]
+                [ viewRadioButton
+                    { checked = model.queryType == Standard
+                    , name = "query-type"
+                    , onInput = QueryTypeSelected Standard
+                    , text = "Standard"
+                    }
+                , viewRadioButton
+                    { checked = model.queryType == ElasticsearchQueryString
+                    , name = "query-type"
+                    , onInput = QueryTypeSelected ElasticsearchQueryString
+                    , text = "Complex"
+                    }
+                , Html.button
+                    [ HE.onClick (ShowEqsHelpPressed (model.eqsHelpHeight == 0)) ]
+                    (if model.eqsHelpHeight == 0 then
+                        [ Html.text "Show help" ]
+
+                     else
+                        [ Html.text "Hide help" ]
+                    )
+                ]
+            ]
         , Html.div
-            [ HA.class "row"
-            , HA.class "align-baseline"
+            [ HA.class "foldable-container"
+            , HA.style "height" (String.fromInt model.eqsHelpHeight ++ "px")
+            ]
+            [ Html.div
+                [ HA.id eqsHelpMeasureWrapperId
+                , HA.style "padding-top" "var(--gap-small)"
+                ]
+                [ viewEqsHelp ]
+            ]
+        ]
+
+
+viewEqsHelp : Html msg
+viewEqsHelp =
+    Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.div
+            []
+            [ Html.text "With the complex query type you can write queries using Elasticsearch Query String syntax. The general idea is that you can search in specific fields by searching "
+            , Html.span
+                [ HA.class "monospace" ]
+                [ Html.text "field:value" ]
+            , Html.text ". For full documentation on how the query syntax works see "
+            , Html.a
+                [ HA.href "https://www.elastic.co/guide/en/elasticsearch/reference/7.15/query-dsl-query-string-query.html#query-string-syntax"
+                , HA.target "_blank"
+                ]
+                [ Html.text "Elasticsearch's documentation" ]
+            , Html.text ". See below for a list of available fields. [n] means the field is numeric and supports range queries."
+            ]
+        , Html.div
+            [ HA.class "scrollbox"
+            , HA.class "column"
             , HA.class "gap-medium"
             ]
-            [ viewRadioButton
-                { checked = model.queryType == Standard
-                , name = "query-type"
-                , onInput = QueryTypeSelected Standard
-                , text = "Standard"
-                }
-            , viewRadioButton
-                { checked = model.queryType == ElasticsearchQueryString
-                , name = "query-type"
-                , onInput = QueryTypeSelected ElasticsearchQueryString
-                , text = "Complex"
-                }
-            , Html.button
-                [ HE.onClick (ShowEqsHelpPressed (not model.eqsHelpOpen)) ]
-                (if model.eqsHelpOpen then
-                    [ Html.text "Hide help" ]
-
-                 else
-                    [ Html.text "Show help" ]
-                )
-            ]
-        , if model.eqsHelpOpen then
-            Html.div
+            [ Html.div
                 [ HA.class "column"
-                , HA.class "gap-small"
+                , HA.class "gap-tiny"
                 ]
-                [ Html.div
-                    []
-                    [ Html.text "With the complex query type you can write queries using Elasticsearch Query String syntax. The general idea is that you can search in specific fields by searching "
-                    , Html.span
-                        [ HA.class "monospace" ]
-                        [ Html.text "field:value" ]
-                    , Html.text ". For full documentation on how the query syntax works see "
-                    , Html.a
-                        [ HA.href "https://www.elastic.co/guide/en/elasticsearch/reference/7.15/query-dsl-query-string-query.html#query-string-syntax"
-                        , HA.target "_blank"
-                        ]
-                        [ Html.text "Elasticsearch's documentation" ]
-                    , Html.text ". See below for a list of available fields. [n] means the field is numeric and supports range queries."
-                    ]
-                , Html.div
-                    [ HA.class "scrollbox"
-                    , HA.class "column"
-                    , HA.class "gap-medium"
-                    ]
+                (List.append
                     [ Html.div
-                        [ HA.class "column"
-                        , HA.class "gap-tiny"
+                        [ HA.class "row"
+                        , HA.class "gap-medium"
                         ]
-                        (List.append
-                            [ Html.div
+                        [ Html.div
+                            [ HA.class "bold"
+                            , HA.style "width" "35%"
+                            , HA.style "max-width" "200px"
+                            ]
+                            [ Html.text "Field" ]
+                        , Html.div
+                            [ HA.class "bold"
+                            , HA.style "max-width" "60%"
+                            ]
+                            [ Html.text "Description" ]
+                        ]
+                    ]
+                    (List.map
+                        (\( field, desc ) ->
+                            Html.div
                                 [ HA.class "row"
                                 , HA.class "gap-medium"
                                 ]
                                 [ Html.div
-                                    [ HA.class "bold"
-                                    , HA.style "width" "35%"
+                                    [ HA.style "width" "35%"
                                     , HA.style "max-width" "200px"
+                                    , HA.style "word-break" "break-all"
+                                    , HA.class "monospace"
                                     ]
-                                    [ Html.text "Field" ]
+                                    [ Html.text field ]
                                 , Html.div
-                                    [ HA.class "bold"
-                                    , HA.style "max-width" "60%"
+                                    [ HA.style "max-width" "60%"
                                     ]
-                                    [ Html.text "Description" ]
+                                    [ Html.text desc ]
                                 ]
-                            ]
-                            (List.map
-                                (\( field, desc ) ->
-                                    Html.div
-                                        [ HA.class "row"
-                                        , HA.class "gap-medium"
-                                        ]
-                                        [ Html.div
-                                            [ HA.style "width" "35%"
-                                            , HA.style "max-width" "200px"
-                                            , HA.style "word-break" "break-all"
-                                            , HA.class "monospace"
-                                            ]
-                                            [ Html.text field ]
-                                        , Html.div
-                                            [ HA.style "max-width" "60%"
-                                            ]
-                                            [ Html.text desc ]
-                                        ]
-                                )
-                                Data.fields
-                            )
                         )
-                    , Html.div
-                        [ HA.class "column" ]
-                        [ Html.text "Valid types for resistance and weakness:"
-                        , Html.div
-                            []
-                            (List.map
-                                (\type_ ->
-                                    Html.span
-                                        [ HA.class "monospace" ]
-                                        [ Html.text type_ ]
-                                )
-                                Data.damageTypes
-                                |> List.intersperse (Html.text ", ")
-                            )
-                        ]
-                    ]
-                , Html.h3
-                    []
-                    [ Html.text "Example queries" ]
+                        Data.fields
+                    )
+                )
+            , Html.div
+                [ HA.class "column" ]
+                [ Html.text "Valid types for resistance and weakness:"
                 , Html.div
                     []
-                    [ Html.div
-                        []
-                        [ Html.text "Spells or cantrips unique to the arcane tradition:" ]
-                    , Html.div
-                        [ HA.class "monospace" ]
-                        [ Html.text "tradition:(arcane -divine -occult -primal) type:(spell OR cantrip)" ]
-                    ]
-                , Html.div
-                    []
-                    [ Html.div
-                        []
-                        [ Html.text "Evil deities with dagger as their favored weapon:" ]
-                    , Html.div
-                        [ HA.class "monospace" ]
-                        [ Html.text "alignment:?E favored_weapon:dagger" ]
-                    ]
-                , Html.div
-                    []
-                    [ Html.div
-                        []
-                        [ Html.text "Non-consumable items between 500 and 1000 gp:" ]
-                    , Html.div
-                        [ HA.class "monospace" ]
-                        [ Html.text "price:[50000 TO 100000] NOT trait:consumable" ]
-                    ]
-                , Html.div
-                    []
-                    [ Html.div
-                        []
-                        [ Html.text "Spells up to level 5 with a range of at least 100 feet that are granted by any sorcerer bloodline:" ]
-                    , Html.div
-                        [ HA.class "monospace" ]
-                        [ Html.text "type:spell level:<=5 range:>=100 bloodline:*" ]
-                    ]
-                , Html.div
-                    []
-                    [ Html.div
-                        []
-                        [ Html.text "Rules pages that mention 'mental damage':" ]
-                    , Html.div
-                        [ HA.class "monospace" ]
-                        [ Html.text "\"mental damage\" type:rules" ]
-                    ]
-                , Html.div
-                    []
-                    [ Html.div
-                        []
-                        [ Html.text "Weapons with finesse and either disarm or trip:" ]
-                    , Html.div
-                        [ HA.class "monospace" ]
-                        [ Html.text "type:weapon trait:finesse trait:(disarm OR trip)" ]
-                    ]
-                , Html.div
-                    []
-                    [ Html.div
-                        []
-                        [ Html.text "Creatures resistant to fire but not all damage:" ]
-                    , Html.div
-                        [ HA.class "monospace" ]
-                        [ Html.text "resistance.fire:* NOT resistance.all:*" ]
-                    ]
+                    (List.map
+                        (\type_ ->
+                            Html.span
+                                [ HA.class "monospace" ]
+                                [ Html.text type_ ]
+                        )
+                        Data.damageTypes
+                        |> List.intersperse (Html.text ", ")
+                    )
                 ]
-
-          else
-            Html.text ""
+            ]
+        , Html.h3
+            []
+            [ Html.text "Example queries" ]
+        , Html.div
+            []
+            [ Html.div
+                []
+                [ Html.text "Spells or cantrips unique to the arcane tradition:" ]
+            , Html.div
+                [ HA.class "monospace" ]
+                [ Html.text "tradition:(arcane -divine -occult -primal) type:(spell OR cantrip)" ]
+            ]
+        , Html.div
+            []
+            [ Html.div
+                []
+                [ Html.text "Evil deities with dagger as their favored weapon:" ]
+            , Html.div
+                [ HA.class "monospace" ]
+                [ Html.text "alignment:?E favored_weapon:dagger" ]
+            ]
+        , Html.div
+            []
+            [ Html.div
+                []
+                [ Html.text "Non-consumable items between 500 and 1000 gp:" ]
+            , Html.div
+                [ HA.class "monospace" ]
+                [ Html.text "price:[50000 TO 100000] NOT trait:consumable" ]
+            ]
+        , Html.div
+            []
+            [ Html.div
+                []
+                [ Html.text "Spells up to level 5 with a range of at least 100 feet that are granted by any sorcerer bloodline:" ]
+            , Html.div
+                [ HA.class "monospace" ]
+                [ Html.text "type:spell level:<=5 range:>=100 bloodline:*" ]
+            ]
+        , Html.div
+            []
+            [ Html.div
+                []
+                [ Html.text "Rules pages that mention 'mental damage':" ]
+            , Html.div
+                [ HA.class "monospace" ]
+                [ Html.text "\"mental damage\" type:rules" ]
+            ]
+        , Html.div
+            []
+            [ Html.div
+                []
+                [ Html.text "Weapons with finesse and either disarm or trip:" ]
+            , Html.div
+                [ HA.class "monospace" ]
+                [ Html.text "type:weapon trait:finesse trait:(disarm OR trip)" ]
+            ]
+        , Html.div
+            []
+            [ Html.div
+                []
+                [ Html.text "Creatures resistant to fire but not all damage:" ]
+            , Html.div
+                [ HA.class "monospace" ]
+                [ Html.text "resistance.fire:* NOT resistance.all:*" ]
+            ]
         ]
 
 
@@ -2074,6 +2117,7 @@ viewFilterTypes model =
     Html.div
         [ HA.class "option-container"
         , HA.class "column"
+        , HA.class "gap-small"
         ]
         [ Html.h3
             []
@@ -2157,6 +2201,7 @@ viewFilterTraits model =
     Html.div
         [ HA.class "option-container"
         , HA.class "column"
+        , HA.class "gap-small"
         ]
         [ Html.h3
             []
@@ -2252,6 +2297,7 @@ viewSortResults model =
     Html.div
         [ HA.class "option-container"
         , HA.class "column"
+        , HA.class "gap-small"
         ]
         [ Html.h3
             []
@@ -3190,6 +3236,11 @@ queryOptionsMeasureWrapperId =
     "query-options-measure-wrapper"
 
 
+eqsHelpMeasureWrapperId : String
+eqsHelpMeasureWrapperId =
+    "eqs-help-measure-wrapper"
+
+
 css : String
 css =
     """
@@ -3438,7 +3489,6 @@ css =
         border-style: solid;
         border-width: 1px;
         background-color: var(--color-container-bg);
-        gap: var(--gap-small);
         padding: 8px;
     }
 
@@ -3446,7 +3496,7 @@ css =
         font-size: var(--font-very-large);
     }
 
-    .query-options-container {
+    .foldable-container {
         transition: height ease-in-out 0.2s;
         overflow: hidden;
     }
