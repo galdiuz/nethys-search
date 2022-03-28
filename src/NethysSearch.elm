@@ -155,10 +155,13 @@ type Theme
 
 
 type Msg
-    = DebouncePassed Int
+    = ComponentFilterAdded String
+    | ComponentFilterRemoved String
+    | DebouncePassed Int
     | GotEqsHelpHeight Int
     | GotQueryOptionsHeight Int
     | GotSearchResult (Result Http.Error SearchResult)
+    | FilterComponentsOperatorChanged Bool
     | FilterTraitsOperatorChanged Bool
     | LoadMorePressed
     | LocalStorageValueReceived Decode.Value
@@ -167,6 +170,7 @@ type Msg
     | QueryChanged String
     | QueryTypeSelected QueryType
     | RemoveAllSortsPressed
+    | RemoveAllComponentFiltersPressed
     | RemoveAllTraitFiltersPressed
     | RemoveAllTypeFiltersPressed
     | SearchTraitsChanged String
@@ -208,8 +212,10 @@ type alias Model =
     { debounce : Int
     , elasticUrl : String
     , eqsHelpHeight : Int
+    , filteredComponents : Dict String Bool
     , filteredTraits : Dict String Bool
     , filteredTypes : Dict String Bool
+    , filterComponentsOperator : Bool
     , filterTraitsOperator : Bool
     , menuOpen : Bool
     , overlayActive : Bool
@@ -259,14 +265,16 @@ init flagsValue =
     ( { debounce = 0
       , elasticUrl = flags.elasticUrl
       , eqsHelpHeight = 0
+      , filteredComponents = Dict.empty
       , filteredTraits = Dict.empty
       , filteredTypes = Dict.empty
+      , filterComponentsOperator = True
       , filterTraitsOperator = True
       , menuOpen = False
       , overlayActive = False
       , query = ""
       , queryOptionsHeight = 0
-      , queryOptionsOpen = False
+      , queryOptionsOpen = True
       , queryType = Standard
       , searchResults = []
       , searchTraits = ""
@@ -319,6 +327,16 @@ subscriptions model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        ComponentFilterAdded component ->
+            ( model
+            , updateUrl { model | filteredComponents = toggleBoolDict component model.filteredComponents }
+            )
+
+        ComponentFilterRemoved component ->
+            ( model
+            , updateUrl { model | filteredComponents = Dict.remove component model.filteredComponents }
+            )
+
         DebouncePassed debounce ->
             if model.debounce == debounce then
                 ( model
@@ -350,6 +368,11 @@ update msg model =
                 , tracker = Nothing
               }
             , Cmd.none
+            )
+
+        FilterComponentsOperatorChanged value ->
+            ( model
+            , updateUrl { model | filterComponentsOperator = value }
             )
 
         FilterTraitsOperatorChanged value ->
@@ -459,6 +482,11 @@ update msg model =
         RemoveAllSortsPressed ->
             ( model
             , updateUrl { model | sort = [] }
+            )
+
+        RemoveAllComponentFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredComponents = Dict.empty }
             )
 
         RemoveAllTraitFiltersPressed ->
@@ -736,6 +764,27 @@ updateUrl ({ url } as model) =
                     |> List.map Tuple.first
                     |> String.join ","
               )
+            , ( "include-components"
+              , model.filteredComponents
+                    |> Dict.toList
+                    |> List.filter (Tuple.second)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "exclude-components"
+              , model.filteredComponents
+                    |> Dict.toList
+                    |> List.filter (Tuple.second >> not)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "components-operator"
+              , if model.filterComponentsOperator then
+                  ""
+
+                else
+                  "or"
+              )
             , ( "sort"
               , model.sort
                     |> List.map
@@ -897,6 +946,13 @@ sortDirFromString str =
 buildSearchFilterTerms : Model -> List (List ( String, Encode.Value ))
 buildSearchFilterTerms model =
     let
+        includedComponents : List String
+        includedComponents =
+            model.filteredComponents
+                |> Dict.toList
+                |> List.filter (Tuple.second)
+                |> List.map Tuple.first
+
         includedTraits : List String
         includedTraits =
             model.filteredTraits
@@ -912,7 +968,37 @@ buildSearchFilterTerms model =
                 |> List.map Tuple.first
     in
     List.concat
-        [ if List.isEmpty includedTraits then
+        [ if List.isEmpty includedComponents then
+            []
+
+          else if model.filterComponentsOperator then
+            List.map
+                (\component ->
+                    [ ( "term"
+                      , Encode.object
+                            [ ( "component"
+                              , Encode.object
+                                    [ ( "value", Encode.string component )
+                                    ]
+                              )
+                            ]
+                      )
+                    ]
+                )
+                includedComponents
+
+          else
+            [ [ ( "terms"
+                , Encode.object
+                    [ ( "component"
+                      , Encode.list Encode.string includedComponents
+                      )
+                    ]
+                )
+              ]
+            ]
+
+        , if List.isEmpty includedTraits then
             []
 
           else if model.filterTraitsOperator then
@@ -961,6 +1047,13 @@ buildSearchFilterTerms model =
 buildSearchMustNotTerms : Model -> List (List ( String, Encode.Value ))
 buildSearchMustNotTerms model =
     let
+        excludedComponents : List String
+        excludedComponents =
+            model.filteredComponents
+                |> Dict.toList
+                |> List.filter (Tuple.second >> not)
+                |> List.map Tuple.first
+
         excludedTraits : List String
         excludedTraits =
             model.filteredTraits
@@ -976,7 +1069,21 @@ buildSearchMustNotTerms model =
                 |> List.map Tuple.first
     in
     List.concat
-        [ if List.isEmpty excludedTraits then
+        [ if List.isEmpty excludedComponents then
+            []
+
+          else
+            [ [ ( "terms"
+                , Encode.object
+                    [ ( "component"
+                      , Encode.list Encode.string excludedComponents
+                      )
+                    ]
+                )
+              ]
+            ]
+
+        , if List.isEmpty excludedTraits then
             []
 
           else
@@ -1067,6 +1174,21 @@ updateModelFromQueryString url model =
 
                 _ ->
                     Standard
+        , filteredComponents =
+            List.append
+                (getQueryParam url "include-components"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\component -> ( component, True ))
+                )
+                (getQueryParam url "exclude-components"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\component -> ( component, False ))
+                )
+                |> Dict.fromList
         , filteredTypes =
             List.append
                 (getQueryParam url "include-types"
@@ -1097,6 +1219,7 @@ updateModelFromQueryString url model =
                     |> List.map (\trait -> ( trait, False ))
                 )
                 |> Dict.fromList
+        , filterComponentsOperator = getQueryParam url "components-operator" /= "or"
         , filterTraitsOperator = getQueryParam url "traits-operator" /= "or"
         , searchResults = []
         , sort =
@@ -1761,6 +1884,13 @@ viewQuery model =
 viewFilters : Model -> Html Msg
 viewFilters model =
     let
+        includedComponents : List String
+        includedComponents =
+            model.filteredComponents
+                |> Dict.toList
+                |> List.filter (Tuple.second)
+                |> List.map Tuple.first
+
         includedTraits : List String
         includedTraits =
             model.filteredTraits
@@ -1773,6 +1903,13 @@ viewFilters model =
             model.filteredTypes
                 |> Dict.toList
                 |> List.filter (Tuple.second)
+                |> List.map Tuple.first
+
+        excludedComponents : List String
+        excludedComponents =
+            model.filteredComponents
+                |> Dict.toList
+                |> List.filter (Tuple.second >> not)
                 |> List.map Tuple.first
 
         excludedTraits : List String
@@ -1821,29 +1958,6 @@ viewFilters model =
                     )
                 )
 
-        , if List.isEmpty includedTypes then
-            Html.text ""
-
-          else
-            Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "align-baseline"
-                ]
-                (List.append
-                    [ Html.text "Include types:" ]
-                    (List.map
-                        (\type_ ->
-                            Html.button
-                                [ HA.class "filter-type"
-                                , HE.onClick (TypeFilterRemoved type_)
-                                ]
-                                [ Html.text type_ ]
-                        )
-                        includedTypes
-                    )
-                )
-
         , if List.isEmpty excludedTraits then
             Html.text ""
 
@@ -1864,6 +1978,29 @@ viewFilters model =
                                 [ Html.text trait ]
                         )
                         excludedTraits
+                    )
+                )
+
+        , if List.isEmpty includedTypes then
+            Html.text ""
+
+          else
+            Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-baseline"
+                ]
+                (List.append
+                    [ Html.text "Include types:" ]
+                    (List.map
+                        (\type_ ->
+                            Html.button
+                                [ HA.class "filter-type"
+                                , HE.onClick (TypeFilterRemoved type_)
+                                ]
+                                [ Html.text type_ ]
+                        )
+                        includedTypes
                     )
                 )
 
@@ -1889,6 +2026,55 @@ viewFilters model =
                         excludedTypes
                     )
                 )
+
+        , if List.isEmpty includedComponents then
+            Html.text ""
+
+          else
+            Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-baseline"
+                ]
+                (List.append
+                    [ if model.filterComponentsOperator then
+                        Html.text "Include all components:"
+
+                      else
+                        Html.text "Include any component:"
+                    ]
+                    (List.map
+                        (\component ->
+                            Html.button
+                                [ HE.onClick (ComponentFilterRemoved component)
+                                ]
+                                [ Html.text component ]
+                        )
+                        includedComponents
+                    )
+                )
+
+        , if List.isEmpty excludedComponents then
+            Html.text ""
+
+          else
+            Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-baseline"
+                ]
+                (List.append
+                    [ Html.text "Exclude components:" ]
+                    (List.map
+                        (\component ->
+                            Html.button
+                                [ HE.onClick (ComponentFilterRemoved component)
+                                ]
+                                [ Html.text component ]
+                        )
+                        excludedComponents
+                    )
+                )
         ]
 
 
@@ -1901,6 +2087,7 @@ viewQueryOptions model =
         [ viewQueryType model
         , viewFilterTypes model
         , viewFilterTraits model
+        , viewFilterValues model
         , viewSortResults model
         ]
 
@@ -2169,23 +2356,7 @@ viewFilterTypes model =
                         , HE.onClick (TypeFilterAdded type_)
                         ]
                         [ Html.text type_
-                        , case Dict.get type_ model.filteredTypes of
-                            Just True ->
-                                Html.div
-                                    [ HA.style "color" "#00cc00"
-                                    ]
-                                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.checkCircle ]
-
-                            Just False ->
-                                Html.div
-                                    [ HA.style "color" "#dd0000"
-                                    ]
-                                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.minusCircle ]
-
-                            Nothing ->
-                                Html.div
-                                    []
-                                    [ FontAwesome.Icon.viewIcon FontAwesome.Regular.circle ]
+                        , viewFilterIcon (Dict.get type_ model.filteredTypes)
                         ]
                 )
                 (List.filter
@@ -2265,23 +2436,7 @@ viewFilterTraits model =
                         , HE.onClick (TraitFilterAdded trait)
                         ]
                         [ Html.text trait
-                        , case Dict.get trait model.filteredTraits of
-                            Just True ->
-                                Html.div
-                                    [ HA.style "color" "#00cc00"
-                                    ]
-                                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.checkCircle ]
-
-                            Just False ->
-                                Html.div
-                                    [ HA.style "color" "#dd0000"
-                                    ]
-                                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.minusCircle ]
-
-                            Nothing ->
-                                Html.div
-                                    []
-                                    [ FontAwesome.Icon.viewIcon FontAwesome.Regular.circle ]
+                        , viewFilterIcon (Dict.get trait model.filteredTraits)
                         ]
                 )
                 (List.filter
@@ -2289,6 +2444,79 @@ viewFilterTraits model =
                     Data.traits
                 )
             )
+        ]
+
+
+viewFilterValues : Model -> Html Msg
+viewFilterValues model =
+    Html.div
+        [ HA.class "option-container"
+        , HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Filter values" ]
+        , Html.div
+            [ HA.class "column"
+            , HA.class "gap-large"
+            ]
+            [ Html.div
+                [ HA.class "column"
+                , HA.class "gap-small"
+                ]
+                [ Html.h4
+                    []
+                    [ Html.text "Spell components" ]
+                , Html.div
+                    [ HA.class "row"
+                    , HA.class "align-baseline"
+                    , HA.class "gap-medium"
+                    ]
+                    [ viewRadioButton
+                        { checked = model.filterComponentsOperator
+                        , name = "filter-components"
+                        , onInput = FilterComponentsOperatorChanged True
+                        , text = "Include all (AND)"
+                        }
+                    , viewRadioButton
+                        { checked = not model.filterComponentsOperator
+                        , name = "filter-components"
+                        , onInput = FilterComponentsOperatorChanged False
+                        , text = "Include any (OR)"
+                        }
+                    , Html.button
+                        [ HE.onClick RemoveAllComponentFiltersPressed ]
+                        [ Html.text "Reset selection" ]
+                    ]
+                , Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HA.class "scrollbox"
+                    ]
+                    (List.map
+                        (\component ->
+                            Html.button
+                                [ HA.class "row"
+                                , HA.class "gap-tiny"
+                                , HE.onClick (ComponentFilterAdded component)
+                                ]
+                                [ Html.text (String.Extra.toTitleCase component)
+                                , viewFilterIcon (Dict.get component model.filteredComponents)
+                                ]
+                        )
+                        [ "material"
+                        , "somatic"
+                        , "verbal"
+                        ]
+                    )
+
+                ]
+            -- Price
+            -- Bulk
+            -- Range
+            -- Monster stats
+            ]
         ]
 
 
@@ -2444,6 +2672,27 @@ viewSortButtons model field =
         ]
         [ Html.text "Desc" ]
     ]
+
+
+viewFilterIcon : Maybe Bool -> Html msg
+viewFilterIcon value =
+    case value of
+        Just True ->
+            Html.div
+                [ HA.style "color" "#00cc00"
+                ]
+                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.checkCircle ]
+
+        Just False ->
+            Html.div
+                [ HA.style "color" "#dd0000"
+                ]
+                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.minusCircle ]
+
+        Nothing ->
+            Html.div
+                []
+                [ FontAwesome.Icon.viewIcon FontAwesome.Regular.circle ]
 
 
 viewCheckbox : { checked : Bool, onCheck : Bool -> msg, text : String } -> Html msg
@@ -3293,6 +3542,11 @@ css =
 
     h3 {
         font-size: var(--font-large);
+        margin: 0;
+    }
+
+    h4 {
+        font-size: var(--font-medium);
         margin: 0;
     }
 
