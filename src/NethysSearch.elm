@@ -4,8 +4,10 @@ import Browser
 import Browser.Dom
 import Browser.Events
 import Data
+import Dict exposing (Dict)
 import FontAwesome.Attributes
 import FontAwesome.Icon
+import FontAwesome.Regular
 import FontAwesome.Solid
 import FontAwesome.Styles
 import Html exposing (Html)
@@ -21,7 +23,6 @@ import Maybe.Extra
 import Process
 import Regex
 import Result.Extra
-import Set exposing (Set)
 import String.Extra
 import Task
 import Url exposing (Url)
@@ -157,8 +158,7 @@ type Msg
     = DebouncePassed Int
     | GotQueryOptionsHeight Int
     | GotSearchResult (Result Http.Error SearchResult)
-    | IncludeFilteredTraitsChanged Bool
-    | IncludeFilteredTypesChanged Bool
+    | FilterTraitsOperatorChanged Bool
     | LoadMorePressed
     | LocalStorageValueReceived Decode.Value
     | MenuOpenDelayPassed
@@ -207,10 +207,9 @@ type alias Model =
     { debounce : Int
     , elasticUrl : String
     , eqsHelpOpen : Bool
-    , filteredTraits : Set String
-    , filteredTypes : Set String
-    , includeFilteredTraits : Bool
-    , includeFilteredTypes : Bool
+    , filteredTraits : Dict String Bool
+    , filteredTypes : Dict String Bool
+    , filterTraitsOperator : Bool
     , menuOpen : Bool
     , overlayActive : Bool
     , query : String
@@ -259,10 +258,9 @@ init flagsValue =
     ( { debounce = 0
       , elasticUrl = flags.elasticUrl
       , eqsHelpOpen = False
-      , filteredTraits = Set.empty
-      , filteredTypes = Set.empty
-      , includeFilteredTraits = True
-      , includeFilteredTypes = True
+      , filteredTraits = Dict.empty
+      , filteredTypes = Dict.empty
+      , filterTraitsOperator = True
       , menuOpen = False
       , overlayActive = False
       , query = ""
@@ -342,14 +340,9 @@ update msg model =
             , Cmd.none
             )
 
-        IncludeFilteredTraitsChanged value ->
-            ( { model | includeFilteredTraits = value }
-            , updateUrl { model | includeFilteredTraits = value }
-            )
-
-        IncludeFilteredTypesChanged value ->
-            ( { model | includeFilteredTypes = value }
-            , updateUrl { model | includeFilteredTypes = value }
+        FilterTraitsOperatorChanged value ->
+            ( model
+            , updateUrl { model | filterTraitsOperator = value }
             )
 
         LoadMorePressed ->
@@ -458,12 +451,12 @@ update msg model =
 
         RemoveAllTraitFiltersPressed ->
             ( model
-            , updateUrl { model | filteredTraits = Set.empty }
+            , updateUrl { model | filteredTraits = Dict.empty }
             )
 
         RemoveAllTypeFiltersPressed ->
             ( model
-            , updateUrl { model | filteredTypes = Set.empty }
+            , updateUrl { model | filteredTypes = Dict.empty }
             )
 
         SearchTraitsChanged value ->
@@ -577,40 +570,24 @@ update msg model =
                 )
             )
 
-        TraitFilterAdded type_ ->
-            let
-                set =
-                    Set.insert type_ model.filteredTraits
-            in
+        TraitFilterAdded trait ->
             ( model
-            , updateUrl { model | filteredTraits = set }
+            , updateUrl { model | filteredTraits = toggleBoolDict trait model.filteredTraits }
             )
 
-        TraitFilterRemoved type_ ->
-            let
-                set =
-                    Set.remove type_ model.filteredTraits
-            in
+        TraitFilterRemoved trait ->
             ( model
-            , updateUrl { model | filteredTraits = set }
+            , updateUrl { model | filteredTraits = Dict.remove trait model.filteredTraits }
             )
 
         TypeFilterAdded type_ ->
-            let
-                set =
-                    Set.insert type_ model.filteredTypes
-            in
             ( model
-            , updateUrl { model | filteredTypes = set }
+            , updateUrl { model | filteredTypes = toggleBoolDict type_ model.filteredTypes }
             )
 
         TypeFilterRemoved type_ ->
-            let
-                set =
-                    Set.remove type_ model.filteredTypes
-            in
             ( model
-            , updateUrl { model | filteredTypes = set }
+            , updateUrl { model | filteredTypes = Dict.remove type_ model.filteredTypes }
             )
 
         UrlChanged url ->
@@ -636,6 +613,24 @@ update msg model =
             ( model
             , getQueryOptionsHeight
             )
+
+
+toggleBoolDict : comparable -> Dict comparable Bool -> Dict comparable Bool
+toggleBoolDict key dict =
+    Dict.update
+        key
+        (\value ->
+            case value of
+                Just True ->
+                    Just False
+
+                Just False ->
+                    Nothing
+
+                Nothing ->
+                    Just True
+        )
+        dict
 
 
 parseUrl : String -> Url
@@ -679,23 +674,40 @@ updateUrl ({ url } as model) =
                     ElasticsearchQueryString ->
                         "eqs"
               )
-            , ( if model.includeFilteredTypes then
-                    "include-types"
-
-                else
-                    "exclude-types"
-              , model.filteredTypes
-                |> Set.toList
-                |> String.join ","
-              )
-            , ( if model.includeFilteredTraits then
-                    "include-traits"
-
-                else
-                    "exclude-traits"
+            , ( "include-traits"
               , model.filteredTraits
-                |> Set.toList
-                |> String.join ","
+                    |> Dict.toList
+                    |> List.filter (Tuple.second)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "exclude-traits"
+              , model.filteredTraits
+                    |> Dict.toList
+                    |> List.filter (Tuple.second >> not)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "traits-operator"
+              , if model.filterTraitsOperator then
+                  ""
+
+                else
+                  "or"
+              )
+            , ( "include-types"
+              , model.filteredTypes
+                    |> Dict.toList
+                    |> List.filter (Tuple.second)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "exclude-types"
+              , model.filteredTypes
+                    |> Dict.toList
+                    |> List.filter (Tuple.second >> not)
+                    |> List.map Tuple.first
+                    |> String.join ","
               )
             , ( "sort"
               , model.sort
@@ -754,8 +766,7 @@ buildSearchBody model =
                           else
                             Just
                                 ( "filter"
-                                , Encode.list Encode.object
-                                    (List.map List.singleton (buildSearchFilterTerms model))
+                                , Encode.list Encode.object (buildSearchFilterTerms model)
                                 )
 
                         , if List.isEmpty (buildSearchMustNotTerms model) then
@@ -764,8 +775,7 @@ buildSearchBody model =
                           else
                             Just
                                 ( "must_not"
-                                , Encode.list Encode.object
-                                    (List.map List.singleton (buildSearchMustNotTerms model))
+                                , Encode.list Encode.object (buildSearchMustNotTerms model)
                                 )
 
                         , if String.isEmpty model.query then
@@ -857,66 +867,116 @@ sortDirFromString str =
             Nothing
 
 
-buildSearchFilterTerms : Model -> List ( String, Encode.Value )
+buildSearchFilterTerms : Model -> List (List ( String, Encode.Value ))
 buildSearchFilterTerms model =
-    [ if Set.isEmpty model.filteredTraits || not model.includeFilteredTraits then
-        Nothing
+    let
+        includedTraits : List String
+        includedTraits =
+            model.filteredTraits
+                |> Dict.toList
+                |> List.filter (Tuple.second)
+                |> List.map Tuple.first
 
-      else
-        Just
-            ( "terms"
-            , Encode.object
-                [ ( "trait"
-                  , Encode.list Encode.string (Set.toList model.filteredTraits)
-                  )
-                ]
-            )
+        includedTypes : List String
+        includedTypes =
+            model.filteredTypes
+                |> Dict.toList
+                |> List.filter (Tuple.second)
+                |> List.map Tuple.first
+    in
+    List.concat
+        [ if List.isEmpty includedTraits then
+            []
 
-    , if Set.isEmpty model.filteredTypes || not model.includeFilteredTypes then
-        Nothing
+          else if model.filterTraitsOperator then
+            List.map
+                (\trait ->
+                    [ ( "term"
+                      , Encode.object
+                            [ ( "trait"
+                              , Encode.object
+                                    [ ( "value", Encode.string trait )
+                                    ]
+                              )
+                            ]
+                      )
+                    ]
+                )
+                includedTraits
 
-      else
-        Just
-            ( "terms"
-            , Encode.object
-                [ ( "type"
-                  , Encode.list Encode.string (Set.toList model.filteredTypes)
-                  )
-                ]
-            )
-    ]
-        |> Maybe.Extra.values
+          else
+            [ [ ( "terms"
+                , Encode.object
+                    [ ( "trait"
+                      , Encode.list Encode.string includedTraits
+                      )
+                    ]
+                )
+              ]
+            ]
+
+        , if List.isEmpty includedTypes then
+            []
+
+          else
+            [ [ ( "terms"
+                , Encode.object
+                    [ ( "type"
+                      , Encode.list Encode.string includedTypes
+                      )
+                    ]
+                )
+              ]
+            ]
+        ]
 
 
-buildSearchMustNotTerms : Model -> List ( String, Encode.Value )
+buildSearchMustNotTerms : Model -> List (List ( String, Encode.Value ))
 buildSearchMustNotTerms model =
-    [ if Set.isEmpty model.filteredTraits || model.includeFilteredTraits then
-        Nothing
+    let
+        excludedTraits : List String
+        excludedTraits =
+            model.filteredTraits
+                |> Dict.toList
+                |> List.filter (Tuple.second >> not)
+                |> List.map Tuple.first
 
-      else
-        Just
-            ( "terms"
-            , Encode.object
-                [ ( "trait"
-                  , Encode.list Encode.string (Set.toList model.filteredTraits)
-                  )
-                ]
-            )
+        excludedTypes : List String
+        excludedTypes =
+            model.filteredTypes
+                |> Dict.toList
+                |> List.filter (Tuple.second >> not)
+                |> List.map Tuple.first
+    in
+    List.concat
+        [ if List.isEmpty excludedTraits then
+            []
 
-    , if Set.isEmpty model.filteredTypes || model.includeFilteredTypes then
-        Nothing
+          else
+            [ [ ( "terms"
+                , Encode.object
+                    [ ( "trait"
+                      , Encode.list Encode.string excludedTraits
+                      )
+                    ]
+                )
+              ]
+            ]
 
-      else
-        Just
-            ( "terms"
-            , Encode.object
-                [ ( "type"
-                  , Encode.list Encode.string (Set.toList model.filteredTypes)
-                  )
-                ]
-            )
-    ]
-        |> Maybe.Extra.values
+        , if List.isEmpty excludedTypes then
+            []
+
+          else
+            [ [ ( "terms"
+                , Encode.object
+                    [ ( "type"
+                      , Encode.list Encode.string excludedTypes
+                      )
+                    ]
+                )
+              ]
+            ]
+        ]
 
 
 buildStandardQueryBody : String -> List (List ( String, Encode.Value ))
@@ -981,51 +1041,36 @@ updateModelFromQueryString url model =
                 _ ->
                     Standard
         , filteredTypes =
-            Maybe.Extra.or
+            List.append
                 (getQueryParam url "include-types"
                     |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\type_ -> ( type_, True ))
                 )
                 (getQueryParam url "exclude-types"
                     |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\type_ -> ( type_, False ))
                 )
-                |> Maybe.map (String.split ",")
-                |> Maybe.map Set.fromList
-                |> Maybe.map (Set.filter (\v -> List.member v Data.types))
-                |> Maybe.withDefault Set.empty
+                |> Dict.fromList
         , filteredTraits =
-            Maybe.Extra.or
+            List.append
                 (getQueryParam url "include-traits"
                     |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\trait -> ( trait, True ))
                 )
                 (getQueryParam url "exclude-traits"
                     |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\trait -> ( trait, False ))
                 )
-                |> Maybe.map (String.split ",")
-                |> Maybe.map Set.fromList
-                |> Maybe.map (Set.filter (\v -> List.member v Data.traits))
-                |> Maybe.withDefault Set.empty
-        , includeFilteredTypes =
-            Maybe.Extra.or
-                (getQueryParam url "include-types"
-                    |> String.Extra.nonEmpty
-                    |> Maybe.map (\_ -> True)
-                )
-                (getQueryParam url "exclude-types"
-                    |> String.Extra.nonEmpty
-                    |> Maybe.map (\_ -> False)
-                )
-            |> Maybe.withDefault model.includeFilteredTypes
-        , includeFilteredTraits =
-            Maybe.Extra.or
-                (getQueryParam url "include-traits"
-                    |> String.Extra.nonEmpty
-                    |> Maybe.map (\_ -> True)
-                )
-                (getQueryParam url "exclude-traits"
-                    |> String.Extra.nonEmpty
-                    |> Maybe.map (\_ -> False)
-                )
-            |> Maybe.withDefault model.includeFilteredTraits
+                |> Dict.fromList
+        , filterTraitsOperator = getQueryParam url "traits-operator" /= "or"
         , searchResults = []
         , sort =
             getQueryParam url "sort"
@@ -1060,8 +1105,8 @@ getQueryParam url param =
 searchWithCurrentQuery : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 searchWithCurrentQuery ( model, cmd ) =
     if String.isEmpty (String.trim model.query)
-        && Set.isEmpty model.filteredTraits
-        && Set.isEmpty model.filteredTypes
+        && Dict.isEmpty model.filteredTraits
+        && Dict.isEmpty model.filteredTypes
     then
         ( { model | searchResults = [] }
         , Cmd.batch
@@ -1663,13 +1708,7 @@ viewQuery model =
           else
             Html.text ""
 
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-medium"
-            ]
-            [ viewIncludeFilters model
-            , viewExcludeFilters model
-            ]
+        , viewFilters model
 
         , if List.isEmpty model.sort then
             Html.text ""
@@ -1694,102 +1733,138 @@ viewQuery model =
         ]
 
 
-viewIncludeFilters : Model -> Html Msg
-viewIncludeFilters model =
-    if (Set.isEmpty model.filteredTraits || not model.includeFilteredTraits)
-        && (Set.isEmpty model.filteredTypes || not model.includeFilteredTypes)
-    then
-        Html.text ""
+viewFilters : Model -> Html Msg
+viewFilters model =
+    let
+        includedTraits : List String
+        includedTraits =
+            model.filteredTraits
+                |> Dict.toList
+                |> List.filter (Tuple.second)
+                |> List.map Tuple.first
 
-    else
-        Html.div
-            [ HA.class "row"
-            , HA.class "gap-tiny"
-            , HA.class "align-baseline"
-            ]
-            (List.concat
-                [ [ Html.text "Include:" ]
+        includedTypes : List String
+        includedTypes =
+            model.filteredTypes
+                |> Dict.toList
+                |> List.filter (Tuple.second)
+                |> List.map Tuple.first
 
-                , if (Set.isEmpty model.filteredTypes || not model.includeFilteredTypes) then
-                    []
+        excludedTraits : List String
+        excludedTraits =
+            model.filteredTraits
+                |> Dict.toList
+                |> List.filter (Tuple.second >> not)
+                |> List.map Tuple.first
 
-                  else
-                    model.filteredTypes
-                        |> Set.toList
-                        |> List.map
-                            (\type_ ->
-                                Html.button
-                                    [ HA.class "filter-type"
-                                    , HE.onClick (TypeFilterRemoved type_)
-                                    ]
-                                    [ Html.text type_ ]
-                            )
+        excludedTypes : List String
+        excludedTypes =
+            model.filteredTypes
+                |> Dict.toList
+                |> List.filter (Tuple.second >> not)
+                |> List.map Tuple.first
+    in
+    Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        ]
+        [ if List.isEmpty includedTraits then
+            Html.text ""
 
-                , if (Set.isEmpty model.filteredTraits || not model.includeFilteredTraits) then
-                    []
-
-                  else
-                    model.filteredTraits
-                        |> Set.toList
-                        |> List.map
-                            (\trait ->
-                                Html.button
-                                    [ HA.class "trait"
-                                    , HE.onClick (TraitFilterRemoved trait)
-                                    ]
-                                    [ Html.text trait ]
-                            )
+          else
+            Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-baseline"
                 ]
-            )
+                (List.append
+                    [ if model.filterTraitsOperator then
+                        Html.text "Include all traits:"
 
+                      else
+                        Html.text "Include any trait:"
+                    ]
+                    (List.map
+                        (\trait ->
+                            Html.button
+                                [ HA.class "trait"
+                                , HE.onClick (TraitFilterRemoved trait)
+                                ]
+                                [ Html.text trait ]
+                        )
+                        includedTraits
+                    )
+                )
 
-viewExcludeFilters : Model -> Html Msg
-viewExcludeFilters model =
-    if (Set.isEmpty model.filteredTraits || model.includeFilteredTraits)
-        && (Set.isEmpty model.filteredTypes || model.includeFilteredTypes)
-    then
-        Html.text ""
+        , if List.isEmpty includedTypes then
+            Html.text ""
 
-    else
-        Html.div
-            [ HA.class "row"
-            , HA.class "gap-tiny"
-            , HA.class "align-baseline"
-            ]
-            (List.concat
-                [ [ Html.text "Exclude:" ]
-
-                , if (Set.isEmpty model.filteredTypes || model.includeFilteredTypes) then
-                    []
-
-                  else
-                    model.filteredTypes
-                        |> Set.toList
-                        |> List.map
-                            (\type_ ->
-                                Html.button
-                                    [ HA.class "filter-type"
-                                    , HE.onClick (TypeFilterRemoved type_)
-                                    ]
-                                    [ Html.text type_ ]
-                            )
-
-                , if (Set.isEmpty model.filteredTraits || model.includeFilteredTraits) then
-                    []
-
-                  else
-                    model.filteredTraits
-                        |> Set.toList
-                        |> List.map
-                            (\trait ->
-                                Html.button
-                                    [ HA.class "trait"
-                                    , HE.onClick (TraitFilterRemoved trait)
-                                    ]
-                                    [ Html.text trait ]
-                            )
+          else
+            Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-baseline"
                 ]
-            )
+                (List.append
+                    [ Html.text "Include types:" ]
+                    (List.map
+                        (\type_ ->
+                            Html.button
+                                [ HA.class "filter-type"
+                                , HE.onClick (TypeFilterRemoved type_)
+                                ]
+                                [ Html.text type_ ]
+                        )
+                        includedTypes
+                    )
+                )
+
+        , if List.isEmpty excludedTraits then
+            Html.text ""
+
+          else
+            Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-baseline"
+                ]
+                (List.append
+                    [ Html.text "Exclude traits:" ]
+                    (List.map
+                        (\trait ->
+                            Html.button
+                                [ HA.class "trait"
+                                , HE.onClick (TraitFilterRemoved trait)
+                                ]
+                                [ Html.text trait ]
+                        )
+                        excludedTraits
+                    )
+                )
+
+        , if List.isEmpty excludedTypes then
+            Html.text ""
+
+          else
+            Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-baseline"
+                ]
+                (List.append
+                    [ Html.text "Exclude types:" ]
+                    (List.map
+                        (\type_ ->
+                            Html.button
+                                [ HA.class "filter-type"
+                                , HE.onClick (TypeFilterRemoved type_)
+                                ]
+                                [ Html.text type_ ]
+                        )
+                        excludedTypes
+                    )
+                )
+        ]
 
 
 viewQueryOptions : Model -> Html Msg
@@ -2011,19 +2086,7 @@ viewFilterTypes model =
             , HA.class "align-baseline"
             , HA.class "gap-medium"
             ]
-            [ viewRadioButton
-                { checked = model.includeFilteredTypes
-                , name = "filter-types"
-                , onInput = IncludeFilteredTypesChanged True
-                , text = "Include selected"
-                }
-            , viewRadioButton
-                { checked = not model.includeFilteredTypes
-                , name = "filter-types"
-                , onInput = IncludeFilteredTypesChanged False
-                , text = "Exclude selected"
-                }
-            , Html.button
+            [ Html.button
                 [ HE.onClick RemoveAllTypeFiltersPressed ]
                 [ Html.text "Reset selection" ]
             ]
@@ -2059,22 +2122,30 @@ viewFilterTypes model =
                 (\type_ ->
                     Html.button
                         [ HA.class "filter-type"
-                        , HAE.attributeIf
-                            (xor
-                                model.includeFilteredTypes
-                                (Set.member type_ model.filteredTypes)
-                                && not (Set.isEmpty model.filteredTypes)
-                            )
-                            (HA.class "excluded")
-                        , HE.onClick
-                            (if Set.member type_ model.filteredTypes then
-                                TypeFilterRemoved type_
-
-                             else
-                                TypeFilterAdded type_
-                            )
+                        , HA.class "row"
+                        , HA.class "align-center"
+                        , HA.class "gap-tiny"
+                        , HE.onClick (TypeFilterAdded type_)
                         ]
-                        [ Html.text type_ ]
+                        [ Html.text type_
+                        , case Dict.get type_ model.filteredTypes of
+                            Just True ->
+                                Html.div
+                                    [ HA.style "color" "#00cc00"
+                                    ]
+                                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.checkCircle ]
+
+                            Just False ->
+                                Html.div
+                                    [ HA.style "color" "#dd0000"
+                                    ]
+                                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.minusCircle ]
+
+                            Nothing ->
+                                Html.div
+                                    []
+                                    [ FontAwesome.Icon.viewIcon FontAwesome.Regular.circle ]
+                        ]
                 )
                 (List.filter
                     (String.toLower >> String.contains (String.toLower model.searchTypes))
@@ -2099,16 +2170,16 @@ viewFilterTraits model =
             , HA.class "gap-medium"
             ]
             [ viewRadioButton
-                { checked = model.includeFilteredTraits
+                { checked = model.filterTraitsOperator
                 , name = "filter-traits"
-                , onInput = IncludeFilteredTraitsChanged True
-                , text = "Include selected"
+                , onInput = FilterTraitsOperatorChanged True
+                , text = "Include all (AND)"
                 }
             , viewRadioButton
-                { checked = not model.includeFilteredTraits
+                { checked = not model.filterTraitsOperator
                 , name = "filter-traits"
-                , onInput = IncludeFilteredTraitsChanged False
-                , text = "Exclude selected"
+                , onInput = FilterTraitsOperatorChanged False
+                , text = "Include any (OR)"
                 }
             , Html.button
                 [ HE.onClick RemoveAllTraitFiltersPressed ]
@@ -2143,25 +2214,33 @@ viewFilterTraits model =
             , HA.class "scrollbox"
             ]
             (List.map
-                (\type_ ->
+                (\trait ->
                     Html.button
                         [ HA.class "trait"
-                        , HAE.attributeIf
-                            (xor
-                                model.includeFilteredTraits
-                                (Set.member type_ model.filteredTraits)
-                                && not (Set.isEmpty model.filteredTraits)
-                            )
-                            (HA.class "excluded")
-                        , HE.onClick
-                            (if Set.member type_ model.filteredTraits then
-                                TraitFilterRemoved type_
-
-                             else
-                                TraitFilterAdded type_
-                            )
+                        , HA.class "row"
+                        , HA.class "align-center"
+                        , HA.class "gap-tiny"
+                        , HE.onClick (TraitFilterAdded trait)
                         ]
-                        [ Html.text type_ ]
+                        [ Html.text trait
+                        , case Dict.get trait model.filteredTraits of
+                            Just True ->
+                                Html.div
+                                    [ HA.style "color" "#00cc00"
+                                    ]
+                                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.checkCircle ]
+
+                            Just False ->
+                                Html.div
+                                    [ HA.style "color" "#dd0000"
+                                    ]
+                                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.minusCircle ]
+
+                            Nothing ->
+                                Html.div
+                                    []
+                                    [ FontAwesome.Icon.viewIcon FontAwesome.Regular.circle ]
+                        ]
                 )
                 (List.filter
                     (String.toLower >> String.contains (String.toLower model.searchTraits))
