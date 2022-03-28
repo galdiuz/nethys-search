@@ -163,6 +163,8 @@ type Msg
     | GotSearchResult (Result Http.Error SearchResult)
     | FilterComponentsOperatorChanged Bool
     | FilterTraitsOperatorChanged Bool
+    | FilteredFromValueChanged String String
+    | FilteredToValueChanged String String
     | LoadMorePressed
     | LocalStorageValueReceived Decode.Value
     | MenuOpenDelayPassed
@@ -173,6 +175,7 @@ type Msg
     | RemoveAllComponentFiltersPressed
     | RemoveAllTraitFiltersPressed
     | RemoveAllTypeFiltersPressed
+    | RemoveAllValueFiltersPressed
     | SearchTraitsChanged String
     | SearchTypesChanged String
     | ScrollToTopPressed
@@ -215,6 +218,8 @@ type alias Model =
     , filteredComponents : Dict String Bool
     , filteredTraits : Dict String Bool
     , filteredTypes : Dict String Bool
+    , filteredFromValues : Dict String String
+    , filteredToValues : Dict String String
     , filterComponentsOperator : Bool
     , filterTraitsOperator : Bool
     , menuOpen : Bool
@@ -268,6 +273,8 @@ init flagsValue =
       , filteredComponents = Dict.empty
       , filteredTraits = Dict.empty
       , filteredTypes = Dict.empty
+      , filteredFromValues = Dict.empty
+      , filteredToValues = Dict.empty
       , filterComponentsOperator = True
       , filterTraitsOperator = True
       , menuOpen = False
@@ -378,6 +385,38 @@ update msg model =
         FilterTraitsOperatorChanged value ->
             ( model
             , updateUrl { model | filterTraitsOperator = value }
+            )
+
+        FilteredFromValueChanged key value ->
+            let
+                updatedModel =
+                    { model
+                        | filteredFromValues =
+                            if String.isEmpty value then
+                                Dict.remove key model.filteredFromValues
+
+                            else
+                                Dict.insert key value model.filteredFromValues
+                    }
+            in
+            ( updatedModel
+            , updateUrl updatedModel
+            )
+
+        FilteredToValueChanged key value ->
+            let
+                updatedModel =
+                    { model
+                        | filteredToValues =
+                            if String.isEmpty value then
+                                Dict.remove key model.filteredToValues
+
+                            else
+                                Dict.insert key value model.filteredToValues
+                    }
+            in
+            ( updatedModel
+            , updateUrl updatedModel
             )
 
         LoadMorePressed ->
@@ -497,6 +536,15 @@ update msg model =
         RemoveAllTypeFiltersPressed ->
             ( model
             , updateUrl { model | filteredTypes = Dict.empty }
+            )
+
+        RemoveAllValueFiltersPressed ->
+            ( model
+            , updateUrl
+                { model
+                    | filteredFromValues = Dict.empty
+                    , filteredToValues = Dict.empty
+                }
             )
 
         SearchTraitsChanged value ->
@@ -785,6 +833,18 @@ updateUrl ({ url } as model) =
                 else
                   "or"
               )
+            , ( "values-from"
+              , model.filteredFromValues
+                    |> Dict.toList
+                    |> List.map (\( field, value ) -> field ++ ":" ++ value)
+                    |> String.join ","
+              )
+            , ( "values-to"
+              , model.filteredToValues
+                    |> Dict.toList
+                    |> List.map (\( field, value ) -> field ++ ":" ++ value)
+                    |> String.join ","
+              )
             , ( "sort"
               , model.sort
                     |> List.map
@@ -920,6 +980,14 @@ sortFieldToLabel field =
         |> Maybe.withDefault field
 
 
+sortFieldSuffix : String -> String
+sortFieldSuffix field =
+    case field of
+        "price" -> "cp"
+        "range" -> "ft."
+        _ -> ""
+
+
 sortDirToString : SortDir -> String
 sortDirToString dir =
     case dir of
@@ -1041,6 +1109,40 @@ buildSearchFilterTerms model =
                 )
               ]
             ]
+
+        , List.map
+            (\( field, value ) ->
+                [ ( "range"
+                  , Encode.object
+                        [ ( field
+                          , Encode.object
+                                [ ( "gte"
+                                  , Encode.float (Maybe.withDefault 0 (String.toFloat value))
+                                  )
+                                ]
+                          )
+                        ]
+                  )
+                ]
+            )
+            (Dict.toList model.filteredFromValues)
+
+        , List.map
+            (\( field, value ) ->
+                [ ( "range"
+                  , Encode.object
+                        [ ( field
+                          , Encode.object
+                                [ ( "lte"
+                                  , Encode.float (Maybe.withDefault 0 (String.toFloat value))
+                                  )
+                                ]
+                          )
+                        ]
+                  )
+                ]
+            )
+            (Dict.toList model.filteredToValues)
         ]
 
 
@@ -1221,6 +1323,36 @@ updateModelFromQueryString url model =
                 |> Dict.fromList
         , filterComponentsOperator = getQueryParam url "components-operator" /= "or"
         , filterTraitsOperator = getQueryParam url "traits-operator" /= "or"
+        , filteredFromValues =
+            getQueryParam url "values-from"
+                |> String.Extra.nonEmpty
+                |> Maybe.map (String.split ",")
+                |> Maybe.withDefault []
+                |> List.filterMap
+                    (\string ->
+                        case String.split ":" string of
+                            [ field, value ] ->
+                                Just ( field, value )
+
+                            _ ->
+                                Nothing
+                    )
+                |> Dict.fromList
+        , filteredToValues =
+            getQueryParam url "values-to"
+                |> String.Extra.nonEmpty
+                |> Maybe.map (String.split ",")
+                |> Maybe.withDefault []
+                |> List.filterMap
+                    (\string ->
+                        case String.split ":" string of
+                            [ field, value ] ->
+                                Just ( field, value )
+
+                            _ ->
+                                Nothing
+                    )
+                |> Dict.fromList
         , searchResults = []
         , sort =
             getQueryParam url "sort"
@@ -1255,8 +1387,11 @@ getQueryParam url param =
 searchWithCurrentQuery : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 searchWithCurrentQuery ( model, cmd ) =
     if String.isEmpty (String.trim model.query)
+        && Dict.isEmpty model.filteredComponents
         && Dict.isEmpty model.filteredTraits
         && Dict.isEmpty model.filteredTypes
+        && Dict.isEmpty model.filteredFromValues
+        && Dict.isEmpty model.filteredToValues
     then
         ( { model | searchResults = [] }
         , Cmd.batch
@@ -1929,6 +2064,7 @@ viewFilters model =
     Html.div
         [ HA.class "row"
         , HA.class "gap-medium"
+        , HA.class "align-baseline"
         ]
         [ if List.isEmpty includedTraits then
             Html.text ""
@@ -2075,6 +2211,54 @@ viewFilters model =
                         excludedComponents
                     )
                 )
+
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
+            , HA.class "align-baseline"
+            ]
+            (Dict.merge
+                (\field from ->
+                    (::) ( field, Just from, Nothing )
+                )
+                (\field from to ->
+                    (::) ( field, Just from, Just to )
+                )
+                (\field to ->
+                    (::) ( field, Nothing, Just to )
+                )
+                model.filteredFromValues
+                model.filteredToValues
+                []
+                |> List.map
+                    (\( field, maybeFrom, maybeTo ) ->
+                        Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HA.class "align-baseline"
+                            ]
+                            [ Html.text (sortFieldToLabel field ++ ":")
+                            , maybeFrom
+                                |> Maybe.map
+                                    (\from ->
+                                        Html.button
+                                            [ HE.onClick (FilteredFromValueChanged field "")
+                                            ]
+                                            [ Html.text ("at least " ++ from ++ " " ++ sortFieldSuffix field) ]
+                                    )
+                                |> Maybe.withDefault (Html.text "")
+                            , maybeTo
+                                |> Maybe.map
+                                    (\to ->
+                                        Html.button
+                                            [ HE.onClick (FilteredToValueChanged field "")
+                                            ]
+                                            [ Html.text ("up to " ++ to ++ " " ++ sortFieldSuffix field) ]
+                                    )
+                                |> Maybe.withDefault (Html.text "")
+                            ]
+                    )
+            )
         ]
 
 
@@ -2458,64 +2642,232 @@ viewFilterValues model =
             []
             [ Html.text "Filter values" ]
         , Html.div
-            [ HA.class "column"
+            [ HA.class "row"
             , HA.class "gap-large"
+            , HA.class "wrap"
             ]
-            [ Html.div
-                [ HA.class "column"
+            [ Html.button
+                [ HE.onClick RemoveAllValueFiltersPressed ]
+                [ Html.text "Reset all values" ]
+            ,Html.div
+                [ HA.class "row"
                 , HA.class "gap-small"
+                , HA.class "align-center"
                 ]
                 [ Html.h4
                     []
-                    [ Html.text "Spell components" ]
-                , Html.div
-                    [ HA.class "row"
-                    , HA.class "align-baseline"
-                    , HA.class "gap-medium"
-                    ]
-                    [ viewRadioButton
-                        { checked = model.filterComponentsOperator
-                        , name = "filter-components"
-                        , onInput = FilterComponentsOperatorChanged True
-                        , text = "Include all (AND)"
-                        }
-                    , viewRadioButton
-                        { checked = not model.filterComponentsOperator
-                        , name = "filter-components"
-                        , onInput = FilterComponentsOperatorChanged False
-                        , text = "Include any (OR)"
-                        }
-                    , Html.button
-                        [ HE.onClick RemoveAllComponentFiltersPressed ]
-                        [ Html.text "Reset selection" ]
-                    ]
+                    [ Html.text "Level" ]
                 , Html.div
                     [ HA.class "row"
                     , HA.class "gap-tiny"
-                    , HA.class "scrollbox"
+                    , HA.class "align-center"
                     ]
-                    (List.map
-                        (\component ->
-                            Html.button
-                                [ HA.class "row"
-                                , HA.class "gap-tiny"
-                                , HE.onClick (ComponentFilterAdded component)
-                                ]
-                                [ Html.text (String.Extra.toTitleCase component)
-                                , viewFilterIcon (Dict.get component model.filteredComponents)
-                                ]
-                        )
-                        [ "material"
-                        , "somatic"
-                        , "verbal"
+                    [ Html.div
+                        [ HA.class "input-container" ]
+                        [ Html.input
+                            [ HA.type_ "number"
+                            , HA.step "1"
+                            , HA.value (Maybe.withDefault "" (Dict.get "level" model.filteredFromValues))
+                            , HE.onInput (FilteredFromValueChanged "level")
+                            ]
+                            []
                         ]
-                    )
-
+                    , Html.text "to"
+                    , Html.div
+                        [ HA.class "input-container" ]
+                        [ Html.input
+                            [ HA.type_ "number"
+                            , HA.step "1"
+                            , HA.value (Maybe.withDefault "" (Dict.get "level" model.filteredToValues))
+                            , HE.onInput (FilteredToValueChanged "level")
+                            ]
+                            []
+                        ]
+                    ]
                 ]
-            -- Price
-            -- Bulk
-            -- Range
-            -- Monster stats
+            , Html.div
+                [ HA.class "row"
+                , HA.class "gap-small"
+                , HA.class "align-center"
+                ]
+                [ Html.h4
+                    []
+                    [ Html.text "Price" ]
+                , Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HA.class "align-center"
+                    ]
+                    [ Html.div
+                        [ HA.class "input-container"
+                        , HA.class "row"
+                        , HA.class "align-baseline"
+                        ]
+                        [ Html.input
+                            [ HA.type_ "number"
+                            , HA.step "1"
+                            , HA.value (Maybe.withDefault "" (Dict.get "price" model.filteredFromValues))
+                            , HE.onInput (FilteredFromValueChanged "price")
+                            ]
+                            []
+                        , Html.div
+                            [ HA.style "padding-right" "2px" ]
+                            [ Html.text "cp" ]
+                        ]
+                    , Html.text "to"
+                    , Html.div
+                        [ HA.class "input-container"
+                        , HA.class "row"
+                        , HA.class "align-baseline"
+                        ]
+                        [ Html.input
+                            [ HA.type_ "number"
+                            , HA.step "1"
+                            , HA.value (Maybe.withDefault "" (Dict.get "price" model.filteredToValues))
+                            , HE.onInput (FilteredToValueChanged "price")
+                            ]
+                            []
+                        , Html.div
+                            [ HA.style "padding-right" "2px" ]
+                            [ Html.text "cp" ]
+                        ]
+                    ]
+                ]
+            , Html.div
+                [ HA.class "row"
+                , HA.class "gap-small"
+                , HA.class "align-center"
+                ]
+                [ Html.h4
+                    []
+                    [ Html.text "Bulk" ]
+                , Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HA.class "align-center"
+                    ]
+                    [ Html.div
+                        [ HA.class "input-container" ]
+                        [ Html.input
+                            [ HA.type_ "number"
+                            , HA.step "0.1"
+                            , HA.value (Maybe.withDefault "" (Dict.get "bulk" model.filteredFromValues))
+                            , HE.onInput (FilteredFromValueChanged "bulk")
+                            ]
+                            []
+                        ]
+                    , Html.text "to"
+                    , Html.div
+                        [ HA.class "input-container" ]
+                        [ Html.input
+                            [ HA.type_ "number"
+                            , HA.step "0.1"
+                            , HA.value (Maybe.withDefault "" (Dict.get "bulk" model.filteredToValues))
+                            , HE.onInput (FilteredToValueChanged "bulk")
+                            ]
+                            []
+                        ]
+                    , Html.text "(L bulk is 0,1)"
+                    ]
+                ]
+            , Html.div
+                [ HA.class "row"
+                , HA.class "gap-small"
+                , HA.class "align-center"
+                ]
+                [ Html.h4
+                    []
+                    [ Html.text "Range" ]
+                , Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HA.class "align-center"
+                    ]
+                    [ Html.div
+                        [ HA.class "input-container"
+                        , HA.class "row"
+                        , HA.class "align-baseline"
+                        ]
+                        [ Html.input
+                            [ HA.type_ "number"
+                            , HA.step "1"
+                            , HA.value (Maybe.withDefault "" (Dict.get "range" model.filteredFromValues))
+                            , HE.onInput (FilteredFromValueChanged "range")
+                            ]
+                            []
+                        , Html.div
+                            [ HA.style "padding-right" "2px" ]
+                            [ Html.text "ft." ]
+                        ]
+                    , Html.text "to"
+                    , Html.div
+                        [ HA.class "input-container"
+                        , HA.class "row"
+                        , HA.class "align-baseline"
+                        ]
+                        [ Html.input
+                            [ HA.type_ "number"
+                            , HA.step "1"
+                            , HA.value (Maybe.withDefault "" (Dict.get "range" model.filteredToValues))
+                            , HE.onInput (FilteredToValueChanged "range")
+                            ]
+                            []
+                        , Html.div
+                            [ HA.style "padding-right" "2px" ]
+                            [ Html.text "ft." ]
+                        ]
+                    ]
+                ]
+            ]
+        , Html.div
+            [ HA.class "column"
+            , HA.class "gap-small"
+            ]
+            [ Html.h4
+                []
+                [ Html.text "Spell components" ]
+            , Html.div
+                [ HA.class "row"
+                , HA.class "align-baseline"
+                , HA.class "gap-medium"
+                ]
+                [ viewRadioButton
+                    { checked = model.filterComponentsOperator
+                    , name = "filter-components"
+                    , onInput = FilterComponentsOperatorChanged True
+                    , text = "Include all (AND)"
+                    }
+                , viewRadioButton
+                    { checked = not model.filterComponentsOperator
+                    , name = "filter-components"
+                    , onInput = FilterComponentsOperatorChanged False
+                    , text = "Include any (OR)"
+                    }
+                , Html.button
+                    [ HE.onClick RemoveAllComponentFiltersPressed ]
+                    [ Html.text "Reset selection" ]
+                ]
+            , Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "scrollbox"
+                ]
+                (List.map
+                    (\component ->
+                        Html.button
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HE.onClick (ComponentFilterAdded component)
+                            ]
+                            [ Html.text (String.Extra.toTitleCase component)
+                            , viewFilterIcon (Dict.get component model.filteredComponents)
+                            ]
+                    )
+                    [ "material"
+                    , "somatic"
+                    , "verbal"
+                    ]
+                )
             ]
         ]
 
@@ -2753,7 +3105,8 @@ viewSearchResults model =
     Html.div
         [ HA.class "column"
         , HA.class "gap-large"
-        , HA.style "min-height" "500px"
+        , HA.style "min-height" "800px"
+        , HA.style "display" "flex"
         ]
         (List.concat
             [ case total of
@@ -3550,12 +3903,20 @@ css =
         margin: 0;
     }
 
-    input[type=text] {
+    input[type=text], input[type=number] {
         background-color: transparent;
         border-width: 0;
         color: var(--color-text);
         padding: 4px;
         flex-grow: 1;
+    }
+
+    input:invalid {
+        color: #ff8888;
+    }
+
+    input[type=number] {
+        width: 80px;
     }
 
     input:focus-visible {
