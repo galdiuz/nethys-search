@@ -162,6 +162,7 @@ type Msg
     | GotQueryOptionsHeight Int
     | GotSearchResult (Result Http.Error SearchResult)
     | FilterComponentsOperatorChanged Bool
+    | FilterTraditionsOperatorChanged Bool
     | FilterTraitsOperatorChanged Bool
     | FilteredFromValueChanged String String
     | FilteredToValueChanged String String
@@ -173,6 +174,7 @@ type Msg
     | QueryTypeSelected QueryType
     | RemoveAllSortsPressed
     | RemoveAllComponentFiltersPressed
+    | RemoveAllTraditionFiltersPressed
     | RemoveAllTraitFiltersPressed
     | RemoveAllTypeFiltersPressed
     | RemoveAllValueFiltersPressed
@@ -191,6 +193,8 @@ type Msg
     | SortResistanceChanged String
     | SortWeaknessChanged String
     | ThemeSelected Theme
+    | TraditionFilterAdded String
+    | TraditionFilterRemoved String
     | TraitFilterAdded String
     | TraitFilterRemoved String
     | TypeFilterAdded String
@@ -216,11 +220,13 @@ type alias Model =
     , elasticUrl : String
     , eqsHelpHeight : Int
     , filteredComponents : Dict String Bool
+    , filteredTraditions : Dict String Bool
     , filteredTraits : Dict String Bool
     , filteredTypes : Dict String Bool
     , filteredFromValues : Dict String String
     , filteredToValues : Dict String String
     , filterComponentsOperator : Bool
+    , filterTraditionsOperator : Bool
     , filterTraitsOperator : Bool
     , menuOpen : Bool
     , overlayActive : Bool
@@ -271,11 +277,13 @@ init flagsValue =
       , elasticUrl = flags.elasticUrl
       , eqsHelpHeight = 0
       , filteredComponents = Dict.empty
+      , filteredTraditions = Dict.empty
       , filteredTraits = Dict.empty
       , filteredTypes = Dict.empty
       , filteredFromValues = Dict.empty
       , filteredToValues = Dict.empty
       , filterComponentsOperator = True
+      , filterTraditionsOperator = True
       , filterTraitsOperator = True
       , menuOpen = False
       , overlayActive = False
@@ -380,6 +388,11 @@ update msg model =
         FilterComponentsOperatorChanged value ->
             ( model
             , updateUrl { model | filterComponentsOperator = value }
+            )
+
+        FilterTraditionsOperatorChanged value ->
+            ( model
+            , updateUrl { model | filterTraditionsOperator = value }
             )
 
         FilterTraitsOperatorChanged value ->
@@ -528,6 +541,11 @@ update msg model =
             , updateUrl { model | filteredComponents = Dict.empty }
             )
 
+        RemoveAllTraditionFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredTraditions = Dict.empty }
+            )
+
         RemoveAllTraitFiltersPressed ->
             ( model
             , updateUrl { model | filteredTraits = Dict.empty }
@@ -666,6 +684,16 @@ update msg model =
                     Lavender ->
                         "lavender"
                 )
+            )
+
+        TraditionFilterAdded tradition ->
+            ( model
+            , updateUrl { model | filteredTraditions = toggleBoolDict tradition model.filteredTraditions }
+            )
+
+        TraditionFilterRemoved tradition ->
+            ( model
+            , updateUrl { model | filteredTraditions = Dict.remove tradition model.filteredTraditions }
             )
 
         TraitFilterAdded trait ->
@@ -828,6 +856,27 @@ updateUrl ({ url } as model) =
               )
             , ( "components-operator"
               , if model.filterComponentsOperator then
+                  ""
+
+                else
+                  "or"
+              )
+            , ( "include-traditions"
+              , model.filteredTraditions
+                    |> Dict.toList
+                    |> List.filter (Tuple.second)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "exclude-traditions"
+              , model.filteredTraditions
+                    |> Dict.toList
+                    |> List.filter (Tuple.second >> not)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "traditions-operator"
+              , if model.filterTraditionsOperator then
                   ""
 
                 else
@@ -1021,6 +1070,13 @@ buildSearchFilterTerms model =
                 |> List.filter (Tuple.second)
                 |> List.map Tuple.first
 
+        includedTraditions : List String
+        includedTraditions =
+            model.filteredTraditions
+                |> Dict.toList
+                |> List.filter (Tuple.second)
+                |> List.map Tuple.first
+
         includedTraits : List String
         includedTraits =
             model.filteredTraits
@@ -1060,6 +1116,36 @@ buildSearchFilterTerms model =
                 , Encode.object
                     [ ( "component"
                       , Encode.list Encode.string includedComponents
+                      )
+                    ]
+                )
+              ]
+            ]
+
+        , if List.isEmpty includedTraditions then
+            []
+
+          else if model.filterTraditionsOperator then
+            List.map
+                (\tradition ->
+                    [ ( "term"
+                      , Encode.object
+                            [ ( "tradition"
+                              , Encode.object
+                                    [ ( "value", Encode.string tradition )
+                                    ]
+                              )
+                            ]
+                      )
+                    ]
+                )
+                includedTraditions
+
+          else
+            [ [ ( "terms"
+                , Encode.object
+                    [ ( "tradition"
+                      , Encode.list Encode.string includedTraditions
                       )
                     ]
                 )
@@ -1156,6 +1242,13 @@ buildSearchMustNotTerms model =
                 |> List.filter (Tuple.second >> not)
                 |> List.map Tuple.first
 
+        excludedTraditions : List String
+        excludedTraditions =
+            model.filteredTraditions
+                |> Dict.toList
+                |> List.filter (Tuple.second >> not)
+                |> List.map Tuple.first
+
         excludedTraits : List String
         excludedTraits =
             model.filteredTraits
@@ -1179,6 +1272,20 @@ buildSearchMustNotTerms model =
                 , Encode.object
                     [ ( "component"
                       , Encode.list Encode.string excludedComponents
+                      )
+                    ]
+                )
+              ]
+            ]
+
+        , if List.isEmpty excludedTraditions then
+            []
+
+          else
+            [ [ ( "terms"
+                , Encode.object
+                    [ ( "tradition"
+                      , Encode.list Encode.string excludedTraditions
                       )
                     ]
                 )
@@ -1291,19 +1398,19 @@ updateModelFromQueryString url model =
                     |> List.map (\component -> ( component, False ))
                 )
                 |> Dict.fromList
-        , filteredTypes =
+        , filteredTraditions =
             List.append
-                (getQueryParam url "include-types"
+                (getQueryParam url "include-traditions"
                     |> String.Extra.nonEmpty
                     |> Maybe.map (String.split ",")
                     |> Maybe.withDefault []
-                    |> List.map (\type_ -> ( type_, True ))
+                    |> List.map (\tradition -> ( tradition, True ))
                 )
-                (getQueryParam url "exclude-types"
+                (getQueryParam url "exclude-traditions"
                     |> String.Extra.nonEmpty
                     |> Maybe.map (String.split ",")
                     |> Maybe.withDefault []
-                    |> List.map (\type_ -> ( type_, False ))
+                    |> List.map (\tradition -> ( tradition, False ))
                 )
                 |> Dict.fromList
         , filteredTraits =
@@ -1321,7 +1428,23 @@ updateModelFromQueryString url model =
                     |> List.map (\trait -> ( trait, False ))
                 )
                 |> Dict.fromList
+        , filteredTypes =
+            List.append
+                (getQueryParam url "include-types"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\type_ -> ( type_, True ))
+                )
+                (getQueryParam url "exclude-types"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\type_ -> ( type_, False ))
+                )
+                |> Dict.fromList
         , filterComponentsOperator = getQueryParam url "components-operator" /= "or"
+        , filterTraditionsOperator = getQueryParam url "traditions-operator" /= "or"
         , filterTraitsOperator = getQueryParam url "traits-operator" /= "or"
         , filteredFromValues =
             getQueryParam url "values-from"
@@ -1388,6 +1511,7 @@ searchWithCurrentQuery : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 searchWithCurrentQuery ( model, cmd ) =
     if String.isEmpty (String.trim model.query)
         && Dict.isEmpty model.filteredComponents
+        && Dict.isEmpty model.filteredTraditions
         && Dict.isEmpty model.filteredTraits
         && Dict.isEmpty model.filteredTypes
         && Dict.isEmpty model.filteredFromValues
@@ -1567,7 +1691,7 @@ documentDecoder =
     Field.attempt "spoilers" Decode.string <| \spoilers ->
     Field.attempt "strength" Decode.int <| \strength ->
     Field.attempt "target" Decode.string <| \targets ->
-    Field.attempt "tradition" (Decode.list Decode.string) <| \traditions ->
+    Field.attempt "tradition" stringListDecoder <| \traditions ->
     Field.attempt "trait_raw" (Decode.list Decode.string) <| \maybeTraits ->
     Field.attempt "trigger" Decode.string <| \trigger ->
     Field.attempt "usage" Decode.string <| \usage ->
@@ -2026,6 +2150,13 @@ viewFilters model =
                 |> List.filter (Tuple.second)
                 |> List.map Tuple.first
 
+        includedTraditions : List String
+        includedTraditions =
+            model.filteredTraditions
+                |> Dict.toList
+                |> List.filter (Tuple.second)
+                |> List.map Tuple.first
+
         includedTraits : List String
         includedTraits =
             model.filteredTraits
@@ -2043,6 +2174,13 @@ viewFilters model =
         excludedComponents : List String
         excludedComponents =
             model.filteredComponents
+                |> Dict.toList
+                |> List.filter (Tuple.second >> not)
+                |> List.map Tuple.first
+
+        excludedTraditions : List String
+        excludedTraditions =
+            model.filteredTraditions
                 |> Dict.toList
                 |> List.filter (Tuple.second >> not)
                 |> List.map Tuple.first
@@ -2160,6 +2298,55 @@ viewFilters model =
                                 [ Html.text type_ ]
                         )
                         excludedTypes
+                    )
+                )
+
+        , if List.isEmpty includedTraditions then
+            Html.text ""
+
+          else
+            Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-baseline"
+                ]
+                (List.append
+                    [ if model.filterTraditionsOperator then
+                        Html.text "Include all traditions:"
+
+                      else
+                        Html.text "Include any tradition:"
+                    ]
+                    (List.map
+                        (\tradition ->
+                            Html.button
+                                [ HE.onClick (TraditionFilterRemoved tradition)
+                                ]
+                                [ Html.text tradition ]
+                        )
+                        includedTraditions
+                    )
+                )
+
+        , if List.isEmpty excludedTraditions then
+            Html.text ""
+
+          else
+            Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-baseline"
+                ]
+                (List.append
+                    [ Html.text "Exclude traditions:" ]
+                    (List.map
+                        (\tradition ->
+                            Html.button
+                                [ HE.onClick (TraditionFilterRemoved tradition)
+                                ]
+                                [ Html.text tradition ]
+                        )
+                        excludedTraditions
                     )
                 )
 
@@ -2825,6 +3012,57 @@ viewFilterValues model =
             ]
             [ Html.h4
                 []
+                [ Html.text "Traditions" ]
+            , Html.div
+                [ HA.class "row"
+                , HA.class "align-baseline"
+                , HA.class "gap-medium"
+                ]
+                [ viewRadioButton
+                    { checked = model.filterTraditionsOperator
+                    , name = "filter-traditions"
+                    , onInput = FilterTraditionsOperatorChanged True
+                    , text = "Include all (AND)"
+                    }
+                , viewRadioButton
+                    { checked = not model.filterTraditionsOperator
+                    , name = "filter-traditions"
+                    , onInput = FilterTraditionsOperatorChanged False
+                    , text = "Include any (OR)"
+                    }
+                , Html.button
+                    [ HE.onClick RemoveAllTraditionFiltersPressed ]
+                    [ Html.text "Reset selection" ]
+                ]
+            , Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "scrollbox"
+                ]
+                (List.map
+                    (\tradition ->
+                        Html.button
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HE.onClick (TraditionFilterAdded tradition)
+                            ]
+                            [ Html.text (String.Extra.toTitleCase tradition)
+                            , viewFilterIcon (Dict.get tradition model.filteredTraditions)
+                            ]
+                    )
+                    [ "arcane"
+                    , "divine"
+                    , "occult"
+                    , "primal"
+                    ]
+                )
+            ]
+        , Html.div
+            [ HA.class "column"
+            , HA.class "gap-small"
+            ]
+            [ Html.h4
+                []
                 [ Html.text "Spell components" ]
             , Html.div
                 [ HA.class "row"
@@ -3393,6 +3631,13 @@ viewSearchResultAdditionalInfo hit =
                                 ]
                             )
                                 |> Just
+                        ]
+
+                "eidolon" ->
+                    Maybe.Extra.values
+                        [ hit.source.traditions
+                            |> nonEmptyList
+                            |> Maybe.map (viewLabelAndPluralizedText "Tradition" "Traditions")
                         ]
 
                 "equipment" ->
