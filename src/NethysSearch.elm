@@ -2152,6 +2152,8 @@ viewQueryOptions model =
         [ viewQueryType model
         , viewFilterTypes model
         , viewFilterTraits model
+        , viewFilterTraditions model
+        , viewFilterComponents model
         , viewFilterValues model
         , viewSortResults model
         ]
@@ -2447,7 +2449,10 @@ viewFilterTraits model =
             , HA.class "align-baseline"
             , HA.class "gap-medium"
             ]
-            [ viewRadioButton
+            [ Html.button
+                [ HE.onClick RemoveAllTraitFiltersPressed ]
+                [ Html.text "Reset selection" ]
+            , viewRadioButton
                 { checked = model.filterTraitsOperator
                 , name = "filter-traits"
                 , onInput = FilterTraitsOperatorChanged True
@@ -2459,9 +2464,6 @@ viewFilterTraits model =
                 , onInput = FilterTraitsOperatorChanged False
                 , text = "Include any (OR)"
                 }
-            , Html.button
-                [ HE.onClick RemoveAllTraitFiltersPressed ]
-                [ Html.text "Reset selection" ]
             ]
 
         , Html.div
@@ -2508,6 +2510,117 @@ viewFilterTraits model =
                     (String.toLower >> String.contains (String.toLower model.searchTraits))
                     Data.traits
                 )
+            )
+        ]
+
+
+viewFilterTraditions : Model -> Html Msg
+viewFilterTraditions model =
+    Html.div
+        [ HA.class "option-container"
+        , HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Filter traditions" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "align-baseline"
+            , HA.class "gap-medium"
+            ]
+            [ Html.button
+                [ HE.onClick RemoveAllTraditionFiltersPressed ]
+                [ Html.text "Reset selection" ]
+            , viewRadioButton
+                { checked = model.filterTraditionsOperator
+                , name = "filter-traditions"
+                , onInput = FilterTraditionsOperatorChanged True
+                , text = "Include all (AND)"
+                }
+            , viewRadioButton
+                { checked = not model.filterTraditionsOperator
+                , name = "filter-traditions"
+                , onInput = FilterTraditionsOperatorChanged False
+                , text = "Include any (OR)"
+                }
+            ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "scrollbox"
+            ]
+            (List.map
+                (\tradition ->
+                    Html.button
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HE.onClick (TraditionFilterAdded tradition)
+                        ]
+                        [ Html.text (String.Extra.toTitleCase tradition)
+                        , viewFilterIcon (Dict.get tradition model.filteredTraditions)
+                        ]
+                )
+                [ "arcane"
+                , "divine"
+                , "occult"
+                , "primal"
+                ]
+            )
+        ]
+
+
+viewFilterComponents : Model -> Html Msg
+viewFilterComponents model =
+    Html.div
+        [ HA.class "option-container"
+        , HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Filter spell components" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "align-baseline"
+            , HA.class "gap-medium"
+            ]
+            [ Html.button
+                [ HE.onClick RemoveAllComponentFiltersPressed ]
+                [ Html.text "Reset selection" ]
+            , viewRadioButton
+                { checked = model.filterComponentsOperator
+                , name = "filter-components"
+                , onInput = FilterComponentsOperatorChanged True
+                , text = "Include all (AND)"
+                }
+            , viewRadioButton
+                { checked = not model.filterComponentsOperator
+                , name = "filter-components"
+                , onInput = FilterComponentsOperatorChanged False
+                , text = "Include any (OR)"
+                }
+            ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "scrollbox"
+            ]
+            (List.map
+                (\component ->
+                    Html.button
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HE.onClick (ComponentFilterAdded component)
+                        ]
+                        [ Html.text (String.Extra.toTitleCase component)
+                        , viewFilterIcon (Dict.get component model.filteredComponents)
+                        ]
+                )
+                [ "material"
+                , "somatic"
+                , "verbal"
+                ]
             )
         ]
 
@@ -2699,107 +2812,6 @@ viewFilterValues model =
                         ]
                     ]
                 ]
-            ]
-        , Html.div
-            [ HA.class "column"
-            , HA.class "gap-small"
-            ]
-            [ Html.h4
-                []
-                [ Html.text "Traditions" ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "align-baseline"
-                , HA.class "gap-medium"
-                ]
-                [ viewRadioButton
-                    { checked = model.filterTraditionsOperator
-                    , name = "filter-traditions"
-                    , onInput = FilterTraditionsOperatorChanged True
-                    , text = "Include all (AND)"
-                    }
-                , viewRadioButton
-                    { checked = not model.filterTraditionsOperator
-                    , name = "filter-traditions"
-                    , onInput = FilterTraditionsOperatorChanged False
-                    , text = "Include any (OR)"
-                    }
-                , Html.button
-                    [ HE.onClick RemoveAllTraditionFiltersPressed ]
-                    [ Html.text "Reset selection" ]
-                ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "scrollbox"
-                ]
-                (List.map
-                    (\tradition ->
-                        Html.button
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            , HE.onClick (TraditionFilterAdded tradition)
-                            ]
-                            [ Html.text (String.Extra.toTitleCase tradition)
-                            , viewFilterIcon (Dict.get tradition model.filteredTraditions)
-                            ]
-                    )
-                    [ "arcane"
-                    , "divine"
-                    , "occult"
-                    , "primal"
-                    ]
-                )
-            ]
-        , Html.div
-            [ HA.class "column"
-            , HA.class "gap-small"
-            ]
-            [ Html.h4
-                []
-                [ Html.text "Spell components" ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "align-baseline"
-                , HA.class "gap-medium"
-                ]
-                [ viewRadioButton
-                    { checked = model.filterComponentsOperator
-                    , name = "filter-components"
-                    , onInput = FilterComponentsOperatorChanged True
-                    , text = "Include all (AND)"
-                    }
-                , viewRadioButton
-                    { checked = not model.filterComponentsOperator
-                    , name = "filter-components"
-                    , onInput = FilterComponentsOperatorChanged False
-                    , text = "Include any (OR)"
-                    }
-                , Html.button
-                    [ HE.onClick RemoveAllComponentFiltersPressed ]
-                    [ Html.text "Reset selection" ]
-                ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "scrollbox"
-                ]
-                (List.map
-                    (\component ->
-                        Html.button
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            , HE.onClick (ComponentFilterAdded component)
-                            ]
-                            [ Html.text (String.Extra.toTitleCase component)
-                            , viewFilterIcon (Dict.get component model.filteredComponents)
-                            ]
-                    )
-                    [ "material"
-                    , "somatic"
-                    , "verbal"
-                    ]
-                )
             ]
         ]
 
