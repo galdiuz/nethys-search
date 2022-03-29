@@ -759,6 +759,22 @@ toggleBoolDict key dict =
         dict
 
 
+boolDictIncluded : Dict comparable Bool -> List comparable
+boolDictIncluded dict =
+    dict
+        |> Dict.toList
+        |> List.filter (Tuple.second)
+        |> List.map Tuple.first
+
+
+boolDictExcluded : Dict comparable Bool -> List comparable
+boolDictExcluded dict =
+    dict
+        |> Dict.toList
+        |> List.filter (Tuple.second >> not)
+        |> List.map Tuple.first
+
+
 parseUrl : String -> Url
 parseUrl url =
     Url.fromString url
@@ -1062,139 +1078,45 @@ sortDirFromString str =
 
 buildSearchFilterTerms : Model -> List (List ( String, Encode.Value ))
 buildSearchFilterTerms model =
-    let
-        includedComponents : List String
-        includedComponents =
-            model.filteredComponents
-                |> Dict.toList
-                |> List.filter (Tuple.second)
-                |> List.map Tuple.first
-
-        includedTraditions : List String
-        includedTraditions =
-            model.filteredTraditions
-                |> Dict.toList
-                |> List.filter (Tuple.second)
-                |> List.map Tuple.first
-
-        includedTraits : List String
-        includedTraits =
-            model.filteredTraits
-                |> Dict.toList
-                |> List.filter (Tuple.second)
-                |> List.map Tuple.first
-
-        includedTypes : List String
-        includedTypes =
-            model.filteredTypes
-                |> Dict.toList
-                |> List.filter (Tuple.second)
-                |> List.map Tuple.first
-    in
     List.concat
-        [ if List.isEmpty includedComponents then
-            []
+        [ List.map
+            (\( field, list, isAnd ) ->
+                if List.isEmpty list then
+                    []
 
-          else if model.filterComponentsOperator then
-            List.map
-                (\component ->
-                    [ ( "term"
-                      , Encode.object
-                            [ ( "component"
+                else if isAnd then
+                    List.map
+                        (\value ->
+                            [ ( "term"
                               , Encode.object
-                                    [ ( "value", Encode.string component )
+                                    [ ( field
+                                      , Encode.object
+                                            [ ( "value", Encode.string value )
+                                            ]
+                                      )
                                     ]
                               )
                             ]
-                      )
-                    ]
-                )
-                includedComponents
+                        )
+                        list
 
-          else
-            [ [ ( "terms"
-                , Encode.object
-                    [ ( "component"
-                      , Encode.list Encode.string includedComponents
-                      )
-                    ]
-                )
-              ]
-            ]
-
-        , if List.isEmpty includedTraditions then
-            []
-
-          else if model.filterTraditionsOperator then
-            List.map
-                (\tradition ->
-                    [ ( "term"
-                      , Encode.object
-                            [ ( "tradition"
-                              , Encode.object
-                                    [ ( "value", Encode.string tradition )
-                                    ]
+                else
+                    [ [ ( "terms"
+                        , Encode.object
+                            [ ( field
+                              , Encode.list Encode.string list
                               )
                             ]
-                      )
+                        )
+                      ]
                     ]
-                )
-                includedTraditions
-
-          else
-            [ [ ( "terms"
-                , Encode.object
-                    [ ( "tradition"
-                      , Encode.list Encode.string includedTraditions
-                      )
-                    ]
-                )
-              ]
+            )
+            [ ( "component", boolDictIncluded model.filteredComponents, model.filterComponentsOperator )
+            , ( "tradition", boolDictIncluded model.filteredTraditions, model.filterTraditionsOperator )
+            , ( "trait", boolDictIncluded model.filteredTraits, model.filterTraitsOperator )
+            , ( "type", boolDictIncluded model.filteredTypes, False )
             ]
-
-        , if List.isEmpty includedTraits then
-            []
-
-          else if model.filterTraitsOperator then
-            List.map
-                (\trait ->
-                    [ ( "term"
-                      , Encode.object
-                            [ ( "trait"
-                              , Encode.object
-                                    [ ( "value", Encode.string trait )
-                                    ]
-                              )
-                            ]
-                      )
-                    ]
-                )
-                includedTraits
-
-          else
-            [ [ ( "terms"
-                , Encode.object
-                    [ ( "trait"
-                      , Encode.list Encode.string includedTraits
-                      )
-                    ]
-                )
-              ]
-            ]
-
-        , if List.isEmpty includedTypes then
-            []
-
-          else
-            [ [ ( "terms"
-                , Encode.object
-                    [ ( "type"
-                      , Encode.list Encode.string includedTypes
-                      )
-                    ]
-                )
-              ]
-            ]
+            |> List.concat
 
         , List.map
             (\( field, value ) ->
@@ -1234,92 +1156,28 @@ buildSearchFilterTerms model =
 
 buildSearchMustNotTerms : Model -> List (List ( String, Encode.Value ))
 buildSearchMustNotTerms model =
-    let
-        excludedComponents : List String
-        excludedComponents =
-            model.filteredComponents
-                |> Dict.toList
-                |> List.filter (Tuple.second >> not)
-                |> List.map Tuple.first
+    List.map
+        (\( field, list ) ->
+            if List.isEmpty list then
+                []
 
-        excludedTraditions : List String
-        excludedTraditions =
-            model.filteredTraditions
-                |> Dict.toList
-                |> List.filter (Tuple.second >> not)
-                |> List.map Tuple.first
-
-        excludedTraits : List String
-        excludedTraits =
-            model.filteredTraits
-                |> Dict.toList
-                |> List.filter (Tuple.second >> not)
-                |> List.map Tuple.first
-
-        excludedTypes : List String
-        excludedTypes =
-            model.filteredTypes
-                |> Dict.toList
-                |> List.filter (Tuple.second >> not)
-                |> List.map Tuple.first
-    in
-    List.concat
-        [ if List.isEmpty excludedComponents then
-            []
-
-          else
-            [ [ ( "terms"
-                , Encode.object
-                    [ ( "component"
-                      , Encode.list Encode.string excludedComponents
-                      )
-                    ]
-                )
-              ]
-            ]
-
-        , if List.isEmpty excludedTraditions then
-            []
-
-          else
-            [ [ ( "terms"
-                , Encode.object
-                    [ ( "tradition"
-                      , Encode.list Encode.string excludedTraditions
-                      )
-                    ]
-                )
-              ]
-            ]
-
-        , if List.isEmpty excludedTraits then
-            []
-
-          else
-            [ [ ( "terms"
-                , Encode.object
-                    [ ( "trait"
-                      , Encode.list Encode.string excludedTraits
-                      )
-                    ]
-                )
-              ]
-            ]
-
-        , if List.isEmpty excludedTypes then
-            []
-
-          else
-            [ [ ( "terms"
-                , Encode.object
-                    [ ( "type"
-                      , Encode.list Encode.string excludedTypes
-                      )
-                    ]
-                )
-              ]
-            ]
+            else
+                [ [ ( "terms"
+                    , Encode.object
+                        [ ( field
+                          , Encode.list Encode.string list
+                          )
+                        ]
+                    )
+                  ]
+                ]
+        )
+        [ ( "component", boolDictExcluded model.filteredComponents )
+        , ( "tradition", boolDictExcluded model.filteredTraditions )
+        , ( "trait", boolDictExcluded model.filteredTraits )
+        , ( "type", boolDictExcluded model.filteredTypes )
         ]
+        |> List.concat
 
 
 buildStandardQueryBody : String -> List (List ( String, Encode.Value ))
@@ -2142,262 +2000,98 @@ viewQuery model =
 
 viewFilters : Model -> Html Msg
 viewFilters model =
-    let
-        includedComponents : List String
-        includedComponents =
-            model.filteredComponents
-                |> Dict.toList
-                |> List.filter (Tuple.second)
-                |> List.map Tuple.first
-
-        includedTraditions : List String
-        includedTraditions =
-            model.filteredTraditions
-                |> Dict.toList
-                |> List.filter (Tuple.second)
-                |> List.map Tuple.first
-
-        includedTraits : List String
-        includedTraits =
-            model.filteredTraits
-                |> Dict.toList
-                |> List.filter (Tuple.second)
-                |> List.map Tuple.first
-
-        includedTypes : List String
-        includedTypes =
-            model.filteredTypes
-                |> Dict.toList
-                |> List.filter (Tuple.second)
-                |> List.map Tuple.first
-
-        excludedComponents : List String
-        excludedComponents =
-            model.filteredComponents
-                |> Dict.toList
-                |> List.filter (Tuple.second >> not)
-                |> List.map Tuple.first
-
-        excludedTraditions : List String
-        excludedTraditions =
-            model.filteredTraditions
-                |> Dict.toList
-                |> List.filter (Tuple.second >> not)
-                |> List.map Tuple.first
-
-        excludedTraits : List String
-        excludedTraits =
-            model.filteredTraits
-                |> Dict.toList
-                |> List.filter (Tuple.second >> not)
-                |> List.map Tuple.first
-
-        excludedTypes : List String
-        excludedTypes =
-            model.filteredTypes
-                |> Dict.toList
-                |> List.filter (Tuple.second >> not)
-                |> List.map Tuple.first
-    in
     Html.div
         [ HA.class "row"
         , HA.class "gap-medium"
         , HA.class "align-baseline"
         ]
-        [ if List.isEmpty includedTraits then
-            Html.text ""
+        [ Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
+            , HA.class "align-baseline"
+            ]
+            (List.map
+                (\{ class, label, list, removeMsg } ->
+                    if List.isEmpty list then
+                        Html.text ""
 
-          else
-            Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "align-baseline"
-                ]
-                (List.append
-                    [ if model.filterTraitsOperator then
-                        Html.text "Include all traits:"
-
-                      else
-                        Html.text "Include any trait:"
-                    ]
-                    (List.map
-                        (\trait ->
-                            Html.button
-                                [ HA.class "trait"
-                                , HE.onClick (TraitFilterRemoved trait)
-                                ]
-                                [ Html.text trait ]
-                        )
-                        includedTraits
-                    )
+                    else
+                        Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HA.class "align-baseline"
+                            ]
+                            (List.append
+                                [ Html.text label ]
+                                (List.map
+                                    (\value ->
+                                        Html.button
+                                            [ HAE.attributeMaybe HA.class class
+                                            , HE.onClick (removeMsg value)
+                                            ]
+                                            [ Html.text (String.Extra.toSentenceCase value) ]
+                                    )
+                                    list
+                                )
+                            )
                 )
+                [ { class = Just "trait"
+                  , label =
+                        if model.filterTraitsOperator then
+                            "Include all traits:"
 
-        , if List.isEmpty excludedTraits then
-            Html.text ""
+                        else
+                            "Include any trait:"
+                  , list = boolDictIncluded model.filteredTraits
+                  , removeMsg = TraitFilterRemoved
+                  }
+                , { class = Just "trait"
+                  , label = "Exclude traits:"
+                  , list = boolDictExcluded model.filteredTraits
+                  , removeMsg = TraitFilterRemoved
+                  }
+                , { class = Just "filter-type"
+                  , label = "Include types:"
+                  , list = boolDictIncluded model.filteredTypes
+                  , removeMsg = TypeFilterRemoved
+                  }
+                , { class = Just "filter-type"
+                  , label = "Exclude types:"
+                  , list = boolDictExcluded model.filteredTypes
+                  , removeMsg = TypeFilterRemoved
+                  }
+                , { class = Nothing
+                  , label =
+                        if model.filterTraditionsOperator then
+                            "Include all traditions:"
 
-          else
-            Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "align-baseline"
+                        else
+                            "Include any tradition:"
+                  , list = boolDictIncluded model.filteredTraditions
+                  , removeMsg = TraditionFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude traditions:"
+                  , list = boolDictExcluded model.filteredTraditions
+                  , removeMsg = TraditionFilterRemoved
+                  }
+                , { class = Just "component"
+                  , label =
+                        if model.filterComponentsOperator then
+                            "Include all components:"
+
+                        else
+                            "Include any component:"
+                  , list = boolDictIncluded model.filteredComponents
+                  , removeMsg = ComponentFilterRemoved
+                  }
+                , { class = Just "component"
+                  , label = "Exclude components:"
+                  , list = boolDictExcluded model.filteredComponents
+                  , removeMsg = ComponentFilterRemoved
+                  }
                 ]
-                (List.append
-                    [ Html.text "Exclude traits:" ]
-                    (List.map
-                        (\trait ->
-                            Html.button
-                                [ HA.class "trait"
-                                , HE.onClick (TraitFilterRemoved trait)
-                                ]
-                                [ Html.text trait ]
-                        )
-                        excludedTraits
-                    )
-                )
-
-        , if List.isEmpty includedTypes then
-            Html.text ""
-
-          else
-            Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "align-baseline"
-                ]
-                (List.append
-                    [ Html.text "Include types:" ]
-                    (List.map
-                        (\type_ ->
-                            Html.button
-                                [ HA.class "filter-type"
-                                , HE.onClick (TypeFilterRemoved type_)
-                                ]
-                                [ Html.text type_ ]
-                        )
-                        includedTypes
-                    )
-                )
-
-        , if List.isEmpty excludedTypes then
-            Html.text ""
-
-          else
-            Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "align-baseline"
-                ]
-                (List.append
-                    [ Html.text "Exclude types:" ]
-                    (List.map
-                        (\type_ ->
-                            Html.button
-                                [ HA.class "filter-type"
-                                , HE.onClick (TypeFilterRemoved type_)
-                                ]
-                                [ Html.text type_ ]
-                        )
-                        excludedTypes
-                    )
-                )
-
-        , if List.isEmpty includedTraditions then
-            Html.text ""
-
-          else
-            Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "align-baseline"
-                ]
-                (List.append
-                    [ if model.filterTraditionsOperator then
-                        Html.text "Include all traditions:"
-
-                      else
-                        Html.text "Include any tradition:"
-                    ]
-                    (List.map
-                        (\tradition ->
-                            Html.button
-                                [ HE.onClick (TraditionFilterRemoved tradition)
-                                ]
-                                [ Html.text tradition ]
-                        )
-                        includedTraditions
-                    )
-                )
-
-        , if List.isEmpty excludedTraditions then
-            Html.text ""
-
-          else
-            Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "align-baseline"
-                ]
-                (List.append
-                    [ Html.text "Exclude traditions:" ]
-                    (List.map
-                        (\tradition ->
-                            Html.button
-                                [ HE.onClick (TraditionFilterRemoved tradition)
-                                ]
-                                [ Html.text tradition ]
-                        )
-                        excludedTraditions
-                    )
-                )
-
-        , if List.isEmpty includedComponents then
-            Html.text ""
-
-          else
-            Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "align-baseline"
-                ]
-                (List.append
-                    [ if model.filterComponentsOperator then
-                        Html.text "Include all components:"
-
-                      else
-                        Html.text "Include any component:"
-                    ]
-                    (List.map
-                        (\component ->
-                            Html.button
-                                [ HE.onClick (ComponentFilterRemoved component)
-                                ]
-                                [ Html.text component ]
-                        )
-                        includedComponents
-                    )
-                )
-
-        , if List.isEmpty excludedComponents then
-            Html.text ""
-
-          else
-            Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "align-baseline"
-                ]
-                (List.append
-                    [ Html.text "Exclude components:" ]
-                    (List.map
-                        (\component ->
-                            Html.button
-                                [ HE.onClick (ComponentFilterRemoved component)
-                                ]
-                                [ Html.text component ]
-                        )
-                        excludedComponents
-                    )
-                )
+            )
 
         , Html.div
             [ HA.class "row"
