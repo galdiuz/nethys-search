@@ -799,12 +799,12 @@ def parse_ritual(id: str, soup: BeautifulSoup):
     doc.cost = get_label_text(soup, 'Cost')
     doc.duration = get_label_text(soup, 'Duration')
     doc.heighten = get_heighten(soup)
-    doc.primary_check = get_label_text(soup, 'Primary Check')
+    doc.primary_check = get_label_text(soup, 'Primary Check', '', ';')
     doc.range = normalize_range(range)
     doc.range_raw = range
     doc.secondary_casters = [c for c in secondary_casters if c.isdigit()] if secondary_casters else None
     doc.secondary_casters_raw = secondary_casters
-    doc.secondary_check = get_label_text(soup, 'Secondary Checks')
+    doc.secondary_check = get_label_text(soup, 'Secondary Checks', '', ';')
     doc.target = get_label_text(soup, 'Target(s)')
     doc.trait = normalize_traits(traits)
     doc.trait_raw = traits
@@ -1283,7 +1283,7 @@ def split_on(string, split):
         return []
 
 
-def get_label_text(soup, label, stop_at=';'):
+def get_label_text(soup, label, stop_at=';', strip=None):
     parts = []
 
     if node := soup.find_next('b', text=label):
@@ -1308,7 +1308,13 @@ def get_label_text(soup, label, stop_at=';'):
     parts = [s.strip() for s in parts if s]
 
     if parts:
-        return ' '.join(parts).strip()
+        return (' '.join(parts)
+            .strip(strip)
+            .strip()
+            .replace(' ,', ',')
+            .replace(' ;', ';')
+            .replace(' )', ')')
+        )
 
     else:
         return None

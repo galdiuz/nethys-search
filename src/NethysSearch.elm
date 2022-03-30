@@ -1221,7 +1221,7 @@ documentDecoder =
     Field.attempt "perception" Decode.int <| \perception ->
     Field.attempt "prerequisite" Decode.string <| \prerequisites ->
     Field.attempt "price_raw" Decode.string <| \price ->
-    Field.attempt "primaryCheck" Decode.string <| \primaryCheck ->
+    Field.attempt "primary_check" Decode.string <| \primaryCheck ->
     Field.attempt "range_raw" Decode.string <| \range ->
     Field.attempt "reflex_save" Decode.int <| \ref ->
     Field.attempt "reload_raw" Decode.string <| \reload ->
