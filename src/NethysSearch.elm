@@ -24,6 +24,7 @@ import Process
 import Regex
 import Result.Extra
 import String.Extra
+import Svg
 import Svg.Attributes as SA
 import Task
 import Url exposing (Url)
@@ -92,6 +93,7 @@ type alias Document =
     , mysteries : List String
     , patronThemes : List String
     , perception : Maybe Int
+    , pfs : Maybe String
     , prerequisites : Maybe String
     , price : Maybe String
     , primaryCheck : Maybe String
@@ -1514,6 +1516,7 @@ documentDecoder =
     Field.attempt "mystery" stringListDecoder <| \mysteries ->
     Field.attempt "patron_theme" stringListDecoder <| \patronThemes ->
     Field.attempt "perception" Decode.int <| \perception ->
+    Field.attempt "pfs" Decode.string <| \pfs ->
     Field.attempt "prerequisite" Decode.string <| \prerequisites ->
     Field.attempt "price_raw" Decode.string <| \price ->
     Field.attempt "primary_check" Decode.string <| \primaryCheck ->
@@ -1587,6 +1590,7 @@ documentDecoder =
         , mysteries = Maybe.withDefault [] mysteries
         , patronThemes = Maybe.withDefault [] patronThemes
         , perception = perception
+        , pfs = pfs
         , prerequisites = prerequisites
         , price = price
         , primaryCheck = primaryCheck
@@ -3102,8 +3106,23 @@ viewSingleSearchResult model hit =
         [ Html.h2
             [ HA.class "title" ]
             [ Html.div
-                []
-                [ Html.a
+                [ HA.class "row"
+                , HA.class "gap-small"
+                , HA.class "align-center"
+                ]
+                [ case hit.source.pfs of
+                    Just "Standard" ->
+                        viewPfsStandard
+
+                    Just "Limited" ->
+                        viewPfsLimited
+
+                    Just "Restricted" ->
+                        viewPfsRestricted
+
+                    _ ->
+                        Html.text ""
+                , Html.a
                     [ HA.href (getUrl hit.source)
                     , HA.target "_blank"
                     ]
@@ -3745,6 +3764,85 @@ viewTrait trait =
                 HAE.empty
         ]
         [ Html.text trait ]
+
+
+viewPfsStandard : Html msg
+viewPfsStandard =
+    Svg.svg
+        [ SA.viewBox "0 0 100 100"
+        , SA.height "1em"
+        ]
+        [ Svg.circle
+            [ SA.cx "50"
+            , SA.cy "50"
+            , SA.r "50"
+            , SA.fill "#4ab5f1"
+            ]
+            []
+        , Svg.circle
+            [ SA.cx "50"
+            , SA.cy "50"
+            , SA.r "40"
+            , SA.fill "#94805d"
+            ]
+            []
+        ]
+
+
+viewPfsLimited : Html msg
+viewPfsLimited =
+    Svg.svg
+        [ SA.viewBox "0 0 100 100"
+        , SA.height "1em"
+        ]
+        [ Svg.rect
+            [ SA.height "80"
+            , SA.width "90"
+            , SA.fill "#ecef23"
+            , SA.x "5"
+            , SA.y "15"
+            ]
+            []
+        , Svg.polygon
+            [ SA.points "15,100 50,0, 85,100"
+            , SA.fill "#476468"
+            ]
+            []
+        ]
+
+
+viewPfsRestricted : Html msg
+viewPfsRestricted =
+    Svg.svg
+        [ SA.viewBox "0 0 100 100"
+        , SA.height "1em"
+        ]
+        [ Svg.line
+            [ SA.x1 "10"
+            , SA.x2 "90"
+            , SA.y1 "10"
+            , SA.y2 "90"
+            , SA.strokeWidth "30"
+            , SA.stroke "#e81d1d"
+            ]
+            []
+        , Svg.line
+            [ SA.x1 "10"
+            , SA.x2 "90"
+            , SA.y1 "90"
+            , SA.y2 "10"
+            , SA.strokeWidth "30"
+            , SA.stroke "#e81d1d"
+            ]
+            []
+        , Svg.circle
+            [ SA.cx "50"
+            , SA.cy "50"
+            , SA.r "35"
+            , SA.fill "#dddddd"
+            ]
+            []
+        ]
 
 
 stringContainsChar : String -> String -> Bool
