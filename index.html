@@ -28,12 +28,16 @@
             }
         });
 
-        app.ports.document_getNodeHeight.subscribe(id => {
+        app.ports.document_getElementHeight.subscribe(id => {
             window.requestAnimationFrame(() => {
                 let element = document.getElementById(id);
-                app.ports.document_receiveNodeHeight.send({
+                let height = element.scrollHeight;
+                let foldableChildren = element.getElementsByClassName('foldable-container');
+                let childrenHeights = Array.from(foldableChildren, c => c.clientHeight);
+                height -= childrenHeights.reduce((a, b) => a + b, 0);
+                app.ports.document_receiveElementHeight.send({
                     'id': id,
-                    'height': element.scrollHeight,
+                    'height': height,
                 });
             });
         });

@@ -24,6 +24,7 @@ import Process
 import Regex
 import Result.Extra
 import String.Extra
+import Svg.Attributes as SA
 import Task
 import Url exposing (Url)
 import Url.Builder
@@ -158,8 +159,7 @@ type Msg
     = ComponentFilterAdded String
     | ComponentFilterRemoved String
     | DebouncePassed Int
-    | GotEqsHelpHeight Int
-    | GotQueryOptionsHeight Int
+    | GotElementHeight String Int
     | GotSearchResult (Result Http.Error SearchResult)
     | FilterComponentsOperatorChanged Bool
     | FilterTraditionsOperatorChanged Bool
@@ -182,7 +182,7 @@ type Msg
     | SearchTypesChanged String
     | ScrollToTopPressed
     | ShowAdditionalInfoChanged Bool
-    | ShowEqsHelpPressed Bool
+    | ShowFoldableOptionBoxPressed String Bool
     | ShowMenuPressed Bool
     | ShowQueryOptionsPressed Bool
     | ShowSpoilersChanged Bool
@@ -204,8 +204,8 @@ type Msg
     | WindowResized Int Int
 
 
-port document_getNodeHeight : String -> Cmd msg
-port document_receiveNodeHeight : ({ id : String, height : Float } -> msg) -> Sub msg
+port document_getElementHeight : String -> Cmd msg
+port document_receiveElementHeight : ({ id : String, height : Float } -> msg) -> Sub msg
 port document_setTitle : String -> Cmd msg
 port localStorage_set : Encode.Value -> Cmd msg
 port localStorage_get : String -> Cmd msg
@@ -218,7 +218,7 @@ port navigation_urlChanged : (String -> msg) -> Sub msg
 type alias Model =
     { debounce : Int
     , elasticUrl : String
-    , eqsHelpHeight : Int
+    , elementHeights : Dict String Int
     , filteredComponents : Dict String Bool
     , filteredTraditions : Dict String Bool
     , filteredTraits : Dict String Bool
@@ -231,7 +231,6 @@ type alias Model =
     , menuOpen : Bool
     , overlayActive : Bool
     , query : String
-    , queryOptionsHeight : Int
     , queryOptionsOpen : Bool
     , queryType : QueryType
     , searchResults : List (Result Http.Error SearchResult)
@@ -275,7 +274,7 @@ init flagsValue =
     in
     ( { debounce = 0
       , elasticUrl = flags.elasticUrl
-      , eqsHelpHeight = 0
+      , elementHeights = Dict.empty
       , filteredComponents = Dict.empty
       , filteredTraditions = Dict.empty
       , filteredTraits = Dict.empty
@@ -288,7 +287,6 @@ init flagsValue =
       , menuOpen = False
       , overlayActive = False
       , query = ""
-      , queryOptionsHeight = 0
       , queryOptionsOpen = True
       , queryType = Standard
       , searchResults = []
@@ -312,7 +310,7 @@ init flagsValue =
         , localStorage_get "show-spoilers"
         , localStorage_get "show-traits"
         , localStorage_get "theme"
-        , getQueryOptionsHeight
+        , getElementHeight queryOptionsMeasureWrapperId
         ]
     )
         |> searchWithCurrentQuery
@@ -323,16 +321,9 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Browser.Events.onResize WindowResized
-        , document_receiveNodeHeight
+        , document_receiveElementHeight
             (\{ id, height } ->
-                if id == queryOptionsMeasureWrapperId then
-                    GotQueryOptionsHeight (round height)
-
-                else if id == eqsHelpMeasureWrapperId then
-                    GotEqsHelpHeight (round height)
-
-                else
-                    NoOp
+                GotElementHeight id (round height)
             )
         , localStorage_receive LocalStorageValueReceived
         , navigation_urlChanged UrlChanged
@@ -361,16 +352,8 @@ update msg model =
             else
                 ( model, Cmd.none )
 
-        GotEqsHelpHeight height ->
-            ( { model
-                | eqsHelpHeight = height
-                , queryOptionsHeight = model.queryOptionsHeight + (height - model.eqsHelpHeight)
-              }
-            , Cmd.none
-            )
-
-        GotQueryOptionsHeight height ->
-            ( { model | queryOptionsHeight = height }
+        GotElementHeight id height ->
+            ( { model | elementHeights = Dict.insert id height model.elementHeights }
             , Cmd.none
             )
 
@@ -567,12 +550,12 @@ update msg model =
 
         SearchTraitsChanged value ->
             ( { model | searchTraits = value }
-            , getQueryOptionsHeight
+            , getElementHeight queryOptionsMeasureWrapperId
             )
 
         SearchTypesChanged value ->
             ( { model | searchTypes = value }
-            , getQueryOptionsHeight
+            , getElementHeight filterTypesMeasureWrapperId
             )
 
         ScrollToTopPressed  ->
@@ -587,20 +570,16 @@ update msg model =
                 (if value then "1" else "0")
             )
 
-        ShowEqsHelpPressed show ->
+        ShowFoldableOptionBoxPressed id show ->
             if show then
                 ( model
-                , getEqsHelpHeight
+                , getElementHeight id
                 )
 
             else
-                ( { model
-                    | eqsHelpHeight = 0
-                    , queryOptionsHeight = model.queryOptionsHeight - model.eqsHelpHeight
-                  }
+                ( { model | elementHeights = Dict.insert id 0 model.elementHeights }
                 , Cmd.none
                 )
-
 
         ShowMenuPressed show ->
             ( { model
@@ -616,7 +595,7 @@ update msg model =
 
         ShowQueryOptionsPressed show ->
             ( { model | queryOptionsOpen = show }
-            , getQueryOptionsHeight
+            , getElementHeight queryOptionsMeasureWrapperId
             )
 
         ShowSpoilersChanged value ->
@@ -737,7 +716,16 @@ update msg model =
 
         WindowResized width height ->
             ( model
-            , getQueryOptionsHeight
+            , Cmd.batch
+                (measureWrapperIds
+                    |> List.filter
+                        (\id ->
+                            Dict.get id model.elementHeights
+                                |> Maybe.withDefault 0
+                                |> (/=) 0
+                        )
+                    |> List.map getElementHeight
+                )
             )
 
 
@@ -788,14 +776,9 @@ parseUrl url =
             }
 
 
-getQueryOptionsHeight : Cmd Msg
-getQueryOptionsHeight =
-    document_getNodeHeight queryOptionsMeasureWrapperId
-
-
-getEqsHelpHeight : Cmd Msg
-getEqsHelpHeight =
-    document_getNodeHeight eqsHelpMeasureWrapperId
+getElementHeight : String -> Cmd Msg
+getElementHeight id =
+    document_getElementHeight id
 
 
 saveToLocalStorage : String -> String -> Cmd msg
@@ -1931,7 +1914,7 @@ viewQuery model =
             [ HA.class "foldable-container"
             , HA.style "height"
                 (if model.queryOptionsOpen then
-                    String.fromInt model.queryOptionsHeight ++ "px"
+                    String.fromInt (getQueryOptionsHeight model) ++ "px"
 
                  else "0"
                 )
@@ -2149,786 +2132,775 @@ viewQueryOptions model =
         [ HA.class "column"
         , HA.class "gap-small"
         ]
-        [ viewQueryType model
-        , viewFilterTypes model
-        , viewFilterTraits model
-        , viewFilterTraditions model
-        , viewFilterComponents model
-        , viewFilterValues model
-        , viewSortResults model
+        [ viewFoldableOptionBox
+            model
+            "Query type"
+            queryTypeMeasureWrapperId
+            (viewQueryType model)
+        , viewFoldableOptionBox
+            model
+            "Filter types"
+            filterTypesMeasureWrapperId
+            (viewFilterTypes model)
+        , viewFoldableOptionBox
+            model
+            "Filter traits"
+            filterTraitsMeasureWrapperId
+            (viewFilterTraits model)
+        , viewFoldableOptionBox
+            model
+            "Filter traditions"
+            filterTraditionsMeasureWrapperId
+            (viewFilterTraditions model)
+        , viewFoldableOptionBox
+            model
+            "Filter spell components"
+            filterComponentsMeasureWrapperId
+            (viewFilterComponents model)
+        , viewFoldableOptionBox
+            model
+            "Filter numeric values"
+            filterValuesMeasureWrapperId
+            (viewFilterValues model)
+        , viewFoldableOptionBox
+            model
+            "Sort results"
+            sortResultsMeasureWrapperId
+            (viewSortResults model)
         ]
 
 
-viewQueryType : Model -> Html Msg
-viewQueryType model =
+viewFoldableOptionBox : Model -> String -> String -> List (Html Msg) -> Html Msg
+viewFoldableOptionBox model label wrapperId content =
+    let
+        height : Int
+        height =
+            Dict.get wrapperId model.elementHeights
+                |> Maybe.withDefault 0
+    in
     Html.div
         [ HA.class "option-container"
         , HA.class "column"
         ]
-        [ Html.div
-            [ HA.class "column"
-            , HA.class "gap-small"
+        [ Html.button
+            [ HA.style "border" "0"
+            , HA.style "padding" "0"
+            , HE.onClick (ShowFoldableOptionBoxPressed wrapperId (height == 0))
             ]
             [ Html.h3
-                []
-                [ Html.text "Query type" ]
-            , Html.div
                 [ HA.class "row"
-                , HA.class "align-baseline"
-                , HA.class "gap-medium"
+                , HA.class "gap-tiny"
                 ]
-                [ viewRadioButton
-                    { checked = model.queryType == Standard
-                    , name = "query-type"
-                    , onInput = QueryTypeSelected Standard
-                    , text = "Standard"
-                    }
-                , viewRadioButton
-                    { checked = model.queryType == ElasticsearchQueryString
-                    , name = "query-type"
-                    , onInput = QueryTypeSelected ElasticsearchQueryString
-                    , text = "Complex"
-                    }
-                , Html.button
-                    [ HE.onClick (ShowEqsHelpPressed (model.eqsHelpHeight == 0)) ]
-                    (if model.eqsHelpHeight == 0 then
-                        [ Html.text "Show help" ]
+                [ Html.text label
+                , FontAwesome.Icon.viewStyled
+                    [ SA.class "rotatable"
+                    , if height == 0 then
+                        SA.class ""
 
-                     else
-                        [ Html.text "Hide help" ]
-                    )
+                      else
+                        SA.class "rotate180"
+                    ]
+                    FontAwesome.Solid.chevronDown
                 ]
             ]
         , Html.div
             [ HA.class "foldable-container"
-            , HA.style "height" (String.fromInt model.eqsHelpHeight ++ "px")
+            , HA.style "height" (String.fromInt height ++ "px")
             ]
             [ Html.div
-                [ HA.id eqsHelpMeasureWrapperId
+                [ HA.id wrapperId
+                , HA.class "column"
+                , HA.class "gap-small"
                 , HA.style "padding-top" "var(--gap-small)"
                 ]
-                [ viewEqsHelp ]
+                content
             ]
         ]
 
 
-viewEqsHelp : Html msg
-viewEqsHelp =
-    Html.div
-        [ HA.class "column"
-        , HA.class "gap-small"
+viewQueryType : Model -> List (Html Msg)
+viewQueryType model =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "align-baseline"
+        , HA.class "gap-medium"
+        ]
+        [ viewRadioButton
+            { checked = model.queryType == Standard
+            , name = "query-type"
+            , onInput = QueryTypeSelected Standard
+            , text = "Standard"
+            }
+        , viewRadioButton
+            { checked = model.queryType == ElasticsearchQueryString
+            , name = "query-type"
+            , onInput = QueryTypeSelected ElasticsearchQueryString
+            , text = "Complex"
+            }
+        ]
+    , Html.div
+        []
+        [ Html.text "With the complex query type you can write queries using Elasticsearch Query String syntax. The general idea is that you can search in specific fields by searching "
+        , Html.span
+            [ HA.class "monospace" ]
+            [ Html.text "field:value" ]
+        , Html.text ". For full documentation on how the query syntax works see "
+        , Html.a
+            [ HA.href "https://www.elastic.co/guide/en/elasticsearch/reference/7.15/query-dsl-query-string-query.html#query-string-syntax"
+            , HA.target "_blank"
+            ]
+            [ Html.text "Elasticsearch's documentation" ]
+        , Html.text ". See below for a list of available fields. [n] means the field is numeric and supports range queries."
+        ]
+    , Html.div
+        [ HA.class "scrollbox"
+        , HA.class "column"
+        , HA.class "gap-medium"
         ]
         [ Html.div
-            []
-            [ Html.text "With the complex query type you can write queries using Elasticsearch Query String syntax. The general idea is that you can search in specific fields by searching "
-            , Html.span
-                [ HA.class "monospace" ]
-                [ Html.text "field:value" ]
-            , Html.text ". For full documentation on how the query syntax works see "
-            , Html.a
-                [ HA.href "https://www.elastic.co/guide/en/elasticsearch/reference/7.15/query-dsl-query-string-query.html#query-string-syntax"
-                , HA.target "_blank"
-                ]
-                [ Html.text "Elasticsearch's documentation" ]
-            , Html.text ". See below for a list of available fields. [n] means the field is numeric and supports range queries."
-            ]
-        , Html.div
-            [ HA.class "scrollbox"
-            , HA.class "column"
-            , HA.class "gap-medium"
-            ]
-            [ Html.div
-                [ HA.class "column"
-                , HA.class "gap-tiny"
-                ]
-                (List.append
-                    [ Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-medium"
-                        ]
-                        [ Html.div
-                            [ HA.class "bold"
-                            , HA.style "width" "35%"
-                            , HA.style "max-width" "200px"
-                            ]
-                            [ Html.text "Field" ]
-                        , Html.div
-                            [ HA.class "bold"
-                            , HA.style "max-width" "60%"
-                            ]
-                            [ Html.text "Description" ]
-                        ]
-                    ]
-                    (List.map
-                        (\( field, desc ) ->
-                            Html.div
-                                [ HA.class "row"
-                                , HA.class "gap-medium"
-                                ]
-                                [ Html.div
-                                    [ HA.style "width" "35%"
-                                    , HA.style "max-width" "200px"
-                                    , HA.style "word-break" "break-all"
-                                    , HA.class "monospace"
-                                    ]
-                                    [ Html.text field ]
-                                , Html.div
-                                    [ HA.style "max-width" "60%"
-                                    ]
-                                    [ Html.text desc ]
-                                ]
-                        )
-                        Data.fields
-                    )
-                )
-            , Html.div
-                [ HA.class "column" ]
-                [ Html.text "Valid types for resistance and weakness:"
-                , Html.div
-                    []
-                    (List.map
-                        (\type_ ->
-                            Html.span
-                                [ HA.class "monospace" ]
-                                [ Html.text type_ ]
-                        )
-                        Data.damageTypes
-                        |> List.intersperse (Html.text ", ")
-                    )
-                ]
-            ]
-        , Html.h3
-            []
-            [ Html.text "Example queries" ]
-        , Html.div
-            []
-            [ Html.div
-                []
-                [ Html.text "Spells or cantrips unique to the arcane tradition:" ]
-            , Html.div
-                [ HA.class "monospace" ]
-                [ Html.text "tradition:(arcane -divine -occult -primal) type:(spell OR cantrip)" ]
-            ]
-        , Html.div
-            []
-            [ Html.div
-                []
-                [ Html.text "Evil deities with dagger as their favored weapon:" ]
-            , Html.div
-                [ HA.class "monospace" ]
-                [ Html.text "alignment:?E favored_weapon:dagger" ]
-            ]
-        , Html.div
-            []
-            [ Html.div
-                []
-                [ Html.text "Non-consumable items between 500 and 1000 gp:" ]
-            , Html.div
-                [ HA.class "monospace" ]
-                [ Html.text "price:[50000 TO 100000] NOT trait:consumable" ]
-            ]
-        , Html.div
-            []
-            [ Html.div
-                []
-                [ Html.text "Spells up to level 5 with a range of at least 100 feet that are granted by any sorcerer bloodline:" ]
-            , Html.div
-                [ HA.class "monospace" ]
-                [ Html.text "type:spell level:<=5 range:>=100 bloodline:*" ]
-            ]
-        , Html.div
-            []
-            [ Html.div
-                []
-                [ Html.text "Rules pages that mention 'mental damage':" ]
-            , Html.div
-                [ HA.class "monospace" ]
-                [ Html.text "\"mental damage\" type:rules" ]
-            ]
-        , Html.div
-            []
-            [ Html.div
-                []
-                [ Html.text "Weapons with finesse and either disarm or trip:" ]
-            , Html.div
-                [ HA.class "monospace" ]
-                [ Html.text "type:weapon trait:finesse trait:(disarm OR trip)" ]
-            ]
-        , Html.div
-            []
-            [ Html.div
-                []
-                [ Html.text "Creatures resistant to fire but not all damage:" ]
-            , Html.div
-                [ HA.class "monospace" ]
-                [ Html.text "resistance.fire:* NOT resistance.all:*" ]
-            ]
-        ]
-
-
-viewFilterTypes : Model -> Html Msg
-viewFilterTypes model =
-    Html.div
-        [ HA.class "option-container"
-        , HA.class "column"
-        , HA.class "gap-small"
-        ]
-        [ Html.h3
-            []
-            [ Html.text "Filter types" ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "align-baseline"
-            , HA.class "gap-medium"
-            ]
-            [ Html.button
-                [ HE.onClick RemoveAllTypeFiltersPressed ]
-                [ Html.text "Reset selection" ]
-            ]
-
-        , Html.div
-            [ HA.class "row"
-            , HA.class "input-container"
-            ]
-            [ Html.input
-                [ HA.placeholder "Search among types"
-                , HA.type_ "text"
-                , HA.value model.searchTypes
-                , HE.onInput SearchTypesChanged
-                ]
-                []
-            , if String.isEmpty model.searchTypes then
-                Html.text ""
-
-              else
-                Html.button
-                    [ HA.class "input-button"
-                    , HE.onClick (SearchTypesChanged "")
-                    ]
-                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
-            ]
-
-        , Html.div
-            [ HA.class "row"
+            [ HA.class "column"
             , HA.class "gap-tiny"
-            , HA.class "scrollbox"
             ]
-            (List.map
-                (\type_ ->
-                    Html.button
-                        [ HA.class "filter-type"
-                        , HA.class "row"
-                        , HA.class "align-center"
-                        , HA.class "gap-tiny"
-                        , HE.onClick (TypeFilterAdded type_)
-                        ]
-                        [ Html.text type_
-                        , viewFilterIcon (Dict.get type_ model.filteredTypes)
-                        ]
-                )
-                (List.filter
-                    (String.toLower >> String.contains (String.toLower model.searchTypes))
-                    Data.types
-                )
-            )
-        ]
-
-
-viewFilterTraits : Model -> Html Msg
-viewFilterTraits model =
-    Html.div
-        [ HA.class "option-container"
-        , HA.class "column"
-        , HA.class "gap-small"
-        ]
-        [ Html.h3
-            []
-            [ Html.text "Filter traits" ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "align-baseline"
-            , HA.class "gap-medium"
-            ]
-            [ Html.button
-                [ HE.onClick RemoveAllTraitFiltersPressed ]
-                [ Html.text "Reset selection" ]
-            , viewRadioButton
-                { checked = model.filterTraitsOperator
-                , name = "filter-traits"
-                , onInput = FilterTraitsOperatorChanged True
-                , text = "Include all (AND)"
-                }
-            , viewRadioButton
-                { checked = not model.filterTraitsOperator
-                , name = "filter-traits"
-                , onInput = FilterTraitsOperatorChanged False
-                , text = "Include any (OR)"
-                }
-            ]
-
-        , Html.div
-            [ HA.class "row"
-            , HA.class "input-container"
-            ]
-            [ Html.input
-                [ HA.placeholder "Search among traits"
-                , HA.value model.searchTraits
-                , HA.type_ "text"
-                , HE.onInput SearchTraitsChanged
-                ]
-                []
-            , if String.isEmpty model.searchTraits then
-                Html.text ""
-
-              else
-                Html.button
-                    [ HA.class "input-button"
-                    , HE.onClick (SearchTraitsChanged "")
-                    ]
-                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
-            ]
-
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-tiny"
-            , HA.class "scrollbox"
-            ]
-            (List.map
-                (\trait ->
-                    Html.button
-                        [ HA.class "trait"
-                        , HA.class "row"
-                        , HA.class "align-center"
-                        , HA.class "gap-tiny"
-                        , HE.onClick (TraitFilterAdded trait)
-                        ]
-                        [ Html.text trait
-                        , viewFilterIcon (Dict.get trait model.filteredTraits)
-                        ]
-                )
-                (List.filter
-                    (String.toLower >> String.contains (String.toLower model.searchTraits))
-                    Data.traits
-                )
-            )
-        ]
-
-
-viewFilterTraditions : Model -> Html Msg
-viewFilterTraditions model =
-    Html.div
-        [ HA.class "option-container"
-        , HA.class "column"
-        , HA.class "gap-small"
-        ]
-        [ Html.h3
-            []
-            [ Html.text "Filter traditions" ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "align-baseline"
-            , HA.class "gap-medium"
-            ]
-            [ Html.button
-                [ HE.onClick RemoveAllTraditionFiltersPressed ]
-                [ Html.text "Reset selection" ]
-            , viewRadioButton
-                { checked = model.filterTraditionsOperator
-                , name = "filter-traditions"
-                , onInput = FilterTraditionsOperatorChanged True
-                , text = "Include all (AND)"
-                }
-            , viewRadioButton
-                { checked = not model.filterTraditionsOperator
-                , name = "filter-traditions"
-                , onInput = FilterTraditionsOperatorChanged False
-                , text = "Include any (OR)"
-                }
-            ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-tiny"
-            , HA.class "scrollbox"
-            ]
-            (List.map
-                (\tradition ->
-                    Html.button
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HE.onClick (TraditionFilterAdded tradition)
-                        ]
-                        [ Html.text (String.Extra.toTitleCase tradition)
-                        , viewFilterIcon (Dict.get tradition model.filteredTraditions)
-                        ]
-                )
-                [ "arcane"
-                , "divine"
-                , "occult"
-                , "primal"
-                ]
-            )
-        ]
-
-
-viewFilterComponents : Model -> Html Msg
-viewFilterComponents model =
-    Html.div
-        [ HA.class "option-container"
-        , HA.class "column"
-        , HA.class "gap-small"
-        ]
-        [ Html.h3
-            []
-            [ Html.text "Filter spell components" ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "align-baseline"
-            , HA.class "gap-medium"
-            ]
-            [ Html.button
-                [ HE.onClick RemoveAllComponentFiltersPressed ]
-                [ Html.text "Reset selection" ]
-            , viewRadioButton
-                { checked = model.filterComponentsOperator
-                , name = "filter-components"
-                , onInput = FilterComponentsOperatorChanged True
-                , text = "Include all (AND)"
-                }
-            , viewRadioButton
-                { checked = not model.filterComponentsOperator
-                , name = "filter-components"
-                , onInput = FilterComponentsOperatorChanged False
-                , text = "Include any (OR)"
-                }
-            ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-tiny"
-            , HA.class "scrollbox"
-            ]
-            (List.map
-                (\component ->
-                    Html.button
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HE.onClick (ComponentFilterAdded component)
-                        ]
-                        [ Html.text (String.Extra.toTitleCase component)
-                        , viewFilterIcon (Dict.get component model.filteredComponents)
-                        ]
-                )
-                [ "material"
-                , "somatic"
-                , "verbal"
-                ]
-            )
-        ]
-
-
-viewFilterValues : Model -> Html Msg
-viewFilterValues model =
-    Html.div
-        [ HA.class "option-container"
-        , HA.class "column"
-        , HA.class "gap-small"
-        ]
-        [ Html.h3
-            []
-            [ Html.text "Filter values" ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-large"
-            , HA.class "wrap"
-            ]
-            [ Html.button
-                [ HE.onClick RemoveAllValueFiltersPressed ]
-                [ Html.text "Reset all values" ]
-            ,Html.div
-                [ HA.class "row"
-                , HA.class "gap-small"
-                , HA.class "align-center"
-                ]
-                [ Html.h4
-                    []
-                    [ Html.text "Level" ]
-                , Html.div
+            (List.append
+                [ Html.div
                     [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HA.class "align-center"
+                    , HA.class "gap-medium"
                     ]
                     [ Html.div
-                        [ HA.class "input-container" ]
-                        [ Html.input
-                            [ HA.type_ "number"
-                            , HA.step "1"
-                            , HA.value (Maybe.withDefault "" (Dict.get "level" model.filteredFromValues))
-                            , HE.onInput (FilteredFromValueChanged "level")
-                            ]
-                            []
+                        [ HA.class "bold"
+                        , HA.style "width" "35%"
+                        , HA.style "max-width" "200px"
                         ]
-                    , Html.text "to"
+                        [ Html.text "Field" ]
                     , Html.div
-                        [ HA.class "input-container" ]
-                        [ Html.input
-                            [ HA.type_ "number"
-                            , HA.step "1"
-                            , HA.value (Maybe.withDefault "" (Dict.get "level" model.filteredToValues))
-                            , HE.onInput (FilteredToValueChanged "level")
-                            ]
-                            []
+                        [ HA.class "bold"
+                        , HA.style "max-width" "60%"
                         ]
+                        [ Html.text "Description" ]
                     ]
                 ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-small"
-                , HA.class "align-center"
-                ]
-                [ Html.h4
-                    []
-                    [ Html.text "Price" ]
-                , Html.div
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HA.class "align-center"
-                    ]
-                    [ Html.div
-                        [ HA.class "input-container"
-                        , HA.class "row"
-                        , HA.class "align-baseline"
-                        ]
-                        [ Html.input
-                            [ HA.type_ "number"
-                            , HA.step "1"
-                            , HA.value (Maybe.withDefault "" (Dict.get "price" model.filteredFromValues))
-                            , HE.onInput (FilteredFromValueChanged "price")
-                            ]
-                            []
-                        , Html.div
-                            [ HA.style "padding-right" "2px" ]
-                            [ Html.text "cp" ]
-                        ]
-                    , Html.text "to"
-                    , Html.div
-                        [ HA.class "input-container"
-                        , HA.class "row"
-                        , HA.class "align-baseline"
-                        ]
-                        [ Html.input
-                            [ HA.type_ "number"
-                            , HA.step "1"
-                            , HA.value (Maybe.withDefault "" (Dict.get "price" model.filteredToValues))
-                            , HE.onInput (FilteredToValueChanged "price")
-                            ]
-                            []
-                        , Html.div
-                            [ HA.style "padding-right" "2px" ]
-                            [ Html.text "cp" ]
-                        ]
-                    ]
-                ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-small"
-                , HA.class "align-center"
-                ]
-                [ Html.h4
-                    []
-                    [ Html.text "Bulk" ]
-                , Html.div
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HA.class "align-center"
-                    ]
-                    [ Html.div
-                        [ HA.class "input-container" ]
-                        [ Html.input
-                            [ HA.type_ "number"
-                            , HA.step "0.1"
-                            , HA.value (Maybe.withDefault "" (Dict.get "bulk" model.filteredFromValues))
-                            , HE.onInput (FilteredFromValueChanged "bulk")
-                            ]
-                            []
-                        ]
-                    , Html.text "to"
-                    , Html.div
-                        [ HA.class "input-container" ]
-                        [ Html.input
-                            [ HA.type_ "number"
-                            , HA.step "0.1"
-                            , HA.value (Maybe.withDefault "" (Dict.get "bulk" model.filteredToValues))
-                            , HE.onInput (FilteredToValueChanged "bulk")
-                            ]
-                            []
-                        ]
-                    , Html.text "(L bulk is 0,1)"
-                    ]
-                ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-small"
-                , HA.class "align-center"
-                ]
-                [ Html.h4
-                    []
-                    [ Html.text "Range" ]
-                , Html.div
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HA.class "align-center"
-                    ]
-                    [ Html.div
-                        [ HA.class "input-container"
-                        , HA.class "row"
-                        , HA.class "align-baseline"
-                        ]
-                        [ Html.input
-                            [ HA.type_ "number"
-                            , HA.step "1"
-                            , HA.value (Maybe.withDefault "" (Dict.get "range" model.filteredFromValues))
-                            , HE.onInput (FilteredFromValueChanged "range")
-                            ]
-                            []
-                        , Html.div
-                            [ HA.style "padding-right" "2px" ]
-                            [ Html.text "ft." ]
-                        ]
-                    , Html.text "to"
-                    , Html.div
-                        [ HA.class "input-container"
-                        , HA.class "row"
-                        , HA.class "align-baseline"
-                        ]
-                        [ Html.input
-                            [ HA.type_ "number"
-                            , HA.step "1"
-                            , HA.value (Maybe.withDefault "" (Dict.get "range" model.filteredToValues))
-                            , HE.onInput (FilteredToValueChanged "range")
-                            ]
-                            []
-                        , Html.div
-                            [ HA.style "padding-right" "2px" ]
-                            [ Html.text "ft." ]
-                        ]
-                    ]
-                ]
-            ]
-        ]
-
-
-viewSortResults : Model -> Html Msg
-viewSortResults model =
-    Html.div
-        [ HA.class "option-container"
-        , HA.class "column"
-        , HA.class "gap-small"
-        ]
-        [ Html.h3
-            []
-            [ Html.text "Sort results" ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-large"
-            ]
-            (List.concat
-                [ [ Html.button
-                        [ HE.onClick RemoveAllSortsPressed ]
-                        [ Html.text "Reset selection" ]
-                  ]
-                , (List.map
-                    (\field ->
+                (List.map
+                    (\( field, desc ) ->
                         Html.div
                             [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            , HA.class "align-baseline"
+                            , HA.class "gap-medium"
                             ]
-                            (List.append
-                                [ Html.text (sortFieldToLabel field)
+                            [ Html.div
+                                [ HA.style "width" "35%"
+                                , HA.style "max-width" "200px"
+                                , HA.style "word-break" "break-all"
+                                , HA.class "monospace"
                                 ]
-                                (viewSortButtons model field)
-                            )
+                                [ Html.text field ]
+                            , Html.div
+                                [ HA.style "max-width" "60%"
+                                ]
+                                [ Html.text desc ]
+                            ]
                     )
-                    [ "name.keyword"
-                    , "level"
-                    , "type"
-                    , "price"
-                    , "bulk"
-                    , "range"
-                    , "hp"
-                    , "ac"
-                    , "fortitude_save"
-                    , "reflex_save"
-                    , "will_save"
-                    , "perception"
-                    ]
-                  )
-                , [ Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HA.class "align-baseline"
-                        ]
-                        (List.append
-                            [ Html.select
-                                [ HE.onInput SortAbilityChanged ]
-                                (List.map
-                                    (\ability ->
-                                        Html.option
-                                            [ HA.value ability ]
-                                            [ Html.text (sortFieldToLabel ability) ]
-                                    )
-                                    [ "strength"
-                                    , "dexterity"
-                                    , "constitution"
-                                    , "intelligence"
-                                    , "wisdom"
-                                    , "charisma"
-                                    ]
-                                )
-                            ]
-                            (viewSortButtons model (model.selectedSortAbility))
-                        )
-                  , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HA.class "align-baseline"
-                        ]
-                        (List.append
-                            [ Html.select
-                                [ HE.onInput SortResistanceChanged ]
-                                (List.map
-                                    (\type_ ->
-                                        Html.option
-                                            [ HA.value type_ ]
-                                            [ Html.text (sortFieldToLabel ("resistance." ++ type_)) ]
-                                    )
-                                    Data.damageTypes
-                                )
-                            ]
-                            (viewSortButtons model ("resistance." ++ model.selectedSortResistance))
-                        )
-                  , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HA.class "align-baseline"
-                        ]
-                        (List.append
-                            [ Html.select
-                                [ HE.onInput SortWeaknessChanged ]
-                                (List.map
-                                    (\type_ ->
-                                        Html.option
-                                            [ HA.value type_ ]
-                                            [ Html.text (sortFieldToLabel ("weakness." ++ type_)) ]
-                                    )
-                                    Data.damageTypes
-                                )
-                            ]
-                            (viewSortButtons model ("weakness." ++ model.selectedSortWeakness))
-                        )
-                  ]
-                ]
+                    Data.fields
+                )
             )
+        , Html.div
+            [ HA.class "column" ]
+            [ Html.text "Valid types for resistance and weakness:"
+            , Html.div
+                []
+                (List.map
+                    (\type_ ->
+                        Html.span
+                            [ HA.class "monospace" ]
+                            [ Html.text type_ ]
+                    )
+                    Data.damageTypes
+                    |> List.intersperse (Html.text ", ")
+                )
+            ]
         ]
+    , Html.h3
+        []
+        [ Html.text "Example queries" ]
+    , Html.div
+        []
+        [ Html.div
+            []
+            [ Html.text "Spells or cantrips unique to the arcane tradition:" ]
+        , Html.div
+            [ HA.class "monospace" ]
+            [ Html.text "tradition:(arcane -divine -occult -primal) type:(spell OR cantrip)" ]
+        ]
+    , Html.div
+        []
+        [ Html.div
+            []
+            [ Html.text "Evil deities with dagger as their favored weapon:" ]
+        , Html.div
+            [ HA.class "monospace" ]
+            [ Html.text "alignment:?E favored_weapon:dagger" ]
+        ]
+    , Html.div
+        []
+        [ Html.div
+            []
+            [ Html.text "Non-consumable items between 500 and 1000 gp:" ]
+        , Html.div
+            [ HA.class "monospace" ]
+            [ Html.text "price:[50000 TO 100000] NOT trait:consumable" ]
+        ]
+    , Html.div
+        []
+        [ Html.div
+            []
+            [ Html.text "Spells up to level 5 with a range of at least 100 feet that are granted by any sorcerer bloodline:" ]
+        , Html.div
+            [ HA.class "monospace" ]
+            [ Html.text "type:spell level:<=5 range:>=100 bloodline:*" ]
+        ]
+    , Html.div
+        []
+        [ Html.div
+            []
+            [ Html.text "Rules pages that mention 'mental damage':" ]
+        , Html.div
+            [ HA.class "monospace" ]
+            [ Html.text "\"mental damage\" type:rules" ]
+        ]
+    , Html.div
+        []
+        [ Html.div
+            []
+            [ Html.text "Weapons with finesse and either disarm or trip:" ]
+        , Html.div
+            [ HA.class "monospace" ]
+            [ Html.text "type:weapon trait:finesse trait:(disarm OR trip)" ]
+        ]
+    , Html.div
+        []
+        [ Html.div
+            []
+            [ Html.text "Creatures resistant to fire but not all damage:" ]
+        , Html.div
+            [ HA.class "monospace" ]
+            [ Html.text "resistance.fire:* NOT resistance.all:*" ]
+        ]
+    ]
+
+
+viewFilterTypes : Model -> List (Html Msg)
+viewFilterTypes model =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "align-baseline"
+        , HA.class "gap-medium"
+        ]
+        [ Html.button
+            [ HE.onClick RemoveAllTypeFiltersPressed ]
+            [ Html.text "Reset selection" ]
+        ]
+
+    , Html.div
+        [ HA.class "row"
+        , HA.class "input-container"
+        ]
+        [ Html.input
+            [ HA.placeholder "Search among types"
+            , HA.type_ "text"
+            , HA.value model.searchTypes
+            , HE.onInput SearchTypesChanged
+            ]
+            []
+        , if String.isEmpty model.searchTypes then
+            Html.text ""
+
+          else
+            Html.button
+                [ HA.class "input-button"
+                , HE.onClick (SearchTypesChanged "")
+                ]
+                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+        ]
+
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (List.map
+            (\type_ ->
+                Html.button
+                    [ HA.class "filter-type"
+                    , HA.class "row"
+                    , HA.class "align-center"
+                    , HA.class "gap-tiny"
+                    , HE.onClick (TypeFilterAdded type_)
+                    ]
+                    [ Html.text type_
+                    , viewFilterIcon (Dict.get type_ model.filteredTypes)
+                    ]
+            )
+            (List.filter
+                (String.toLower >> String.contains (String.toLower model.searchTypes))
+                Data.types
+            )
+        )
+    ]
+
+
+viewFilterTraits : Model -> List (Html Msg)
+viewFilterTraits model =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "align-baseline"
+        , HA.class "gap-medium"
+        ]
+        [ Html.button
+            [ HE.onClick RemoveAllTraitFiltersPressed ]
+            [ Html.text "Reset selection" ]
+        , viewRadioButton
+            { checked = model.filterTraitsOperator
+            , name = "filter-traits"
+            , onInput = FilterTraitsOperatorChanged True
+            , text = "Include all (AND)"
+            }
+        , viewRadioButton
+            { checked = not model.filterTraitsOperator
+            , name = "filter-traits"
+            , onInput = FilterTraitsOperatorChanged False
+            , text = "Include any (OR)"
+            }
+        ]
+
+    , Html.div
+        [ HA.class "row"
+        , HA.class "input-container"
+        ]
+        [ Html.input
+            [ HA.placeholder "Search among traits"
+            , HA.value model.searchTraits
+            , HA.type_ "text"
+            , HE.onInput SearchTraitsChanged
+            ]
+            []
+        , if String.isEmpty model.searchTraits then
+            Html.text ""
+
+          else
+            Html.button
+                [ HA.class "input-button"
+                , HE.onClick (SearchTraitsChanged "")
+                ]
+                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+        ]
+
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (List.map
+            (\trait ->
+                Html.button
+                    [ HA.class "trait"
+                    , HA.class "row"
+                    , HA.class "align-center"
+                    , HA.class "gap-tiny"
+                    , HE.onClick (TraitFilterAdded trait)
+                    ]
+                    [ Html.text trait
+                    , viewFilterIcon (Dict.get trait model.filteredTraits)
+                    ]
+            )
+            (List.filter
+                (String.toLower >> String.contains (String.toLower model.searchTraits))
+                Data.traits
+            )
+        )
+    ]
+
+
+viewFilterTraditions : Model -> List (Html Msg)
+viewFilterTraditions model =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "align-baseline"
+        , HA.class "gap-medium"
+        ]
+        [ Html.button
+            [ HE.onClick RemoveAllTraditionFiltersPressed ]
+            [ Html.text "Reset selection" ]
+        , viewRadioButton
+            { checked = model.filterTraditionsOperator
+            , name = "filter-traditions"
+            , onInput = FilterTraditionsOperatorChanged True
+            , text = "Include all (AND)"
+            }
+        , viewRadioButton
+            { checked = not model.filterTraditionsOperator
+            , name = "filter-traditions"
+            , onInput = FilterTraditionsOperatorChanged False
+            , text = "Include any (OR)"
+            }
+        ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (List.map
+            (\tradition ->
+                Html.button
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HE.onClick (TraditionFilterAdded tradition)
+                    ]
+                    [ Html.text (String.Extra.toTitleCase tradition)
+                    , viewFilterIcon (Dict.get tradition model.filteredTraditions)
+                    ]
+            )
+            [ "arcane"
+            , "divine"
+            , "occult"
+            , "primal"
+            ]
+        )
+    ]
+
+
+viewFilterComponents : Model -> List (Html Msg)
+viewFilterComponents model =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "align-baseline"
+        , HA.class "gap-medium"
+        ]
+        [ Html.button
+            [ HE.onClick RemoveAllComponentFiltersPressed ]
+            [ Html.text "Reset selection" ]
+        , viewRadioButton
+            { checked = model.filterComponentsOperator
+            , name = "filter-components"
+            , onInput = FilterComponentsOperatorChanged True
+            , text = "Include all (AND)"
+            }
+        , viewRadioButton
+            { checked = not model.filterComponentsOperator
+            , name = "filter-components"
+            , onInput = FilterComponentsOperatorChanged False
+            , text = "Include any (OR)"
+            }
+        ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (List.map
+            (\component ->
+                Html.button
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HE.onClick (ComponentFilterAdded component)
+                    ]
+                    [ Html.text (String.Extra.toTitleCase component)
+                    , viewFilterIcon (Dict.get component model.filteredComponents)
+                    ]
+            )
+            [ "material"
+            , "somatic"
+            , "verbal"
+            ]
+        )
+    ]
+
+
+viewFilterValues : Model -> List (Html Msg)
+viewFilterValues model =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "gap-large"
+        , HA.class "wrap"
+        ]
+        [ Html.button
+            [ HE.onClick RemoveAllValueFiltersPressed ]
+            [ Html.text "Reset all values" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-small"
+            , HA.class "align-center"
+            ]
+            [ Html.h4
+                []
+                [ Html.text "Level" ]
+            , Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-center"
+                ]
+                [ Html.div
+                    [ HA.class "input-container" ]
+                    [ Html.input
+                        [ HA.type_ "number"
+                        , HA.step "1"
+                        , HA.value (Maybe.withDefault "" (Dict.get "level" model.filteredFromValues))
+                        , HE.onInput (FilteredFromValueChanged "level")
+                        ]
+                        []
+                    ]
+                , Html.text "to"
+                , Html.div
+                    [ HA.class "input-container" ]
+                    [ Html.input
+                        [ HA.type_ "number"
+                        , HA.step "1"
+                        , HA.value (Maybe.withDefault "" (Dict.get "level" model.filteredToValues))
+                        , HE.onInput (FilteredToValueChanged "level")
+                        ]
+                        []
+                    ]
+                ]
+            ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-small"
+            , HA.class "align-center"
+            ]
+            [ Html.h4
+                []
+                [ Html.text "Price" ]
+            , Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-center"
+                ]
+                [ Html.div
+                    [ HA.class "input-container"
+                    , HA.class "row"
+                    , HA.class "align-baseline"
+                    ]
+                    [ Html.input
+                        [ HA.type_ "number"
+                        , HA.step "1"
+                        , HA.value (Maybe.withDefault "" (Dict.get "price" model.filteredFromValues))
+                        , HE.onInput (FilteredFromValueChanged "price")
+                        ]
+                        []
+                    , Html.div
+                        [ HA.style "padding-right" "2px" ]
+                        [ Html.text "cp" ]
+                    ]
+                , Html.text "to"
+                , Html.div
+                    [ HA.class "input-container"
+                    , HA.class "row"
+                    , HA.class "align-baseline"
+                    ]
+                    [ Html.input
+                        [ HA.type_ "number"
+                        , HA.step "1"
+                        , HA.value (Maybe.withDefault "" (Dict.get "price" model.filteredToValues))
+                        , HE.onInput (FilteredToValueChanged "price")
+                        ]
+                        []
+                    , Html.div
+                        [ HA.style "padding-right" "2px" ]
+                        [ Html.text "cp" ]
+                    ]
+                ]
+            ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-small"
+            , HA.class "align-center"
+            ]
+            [ Html.h4
+                []
+                [ Html.text "Bulk" ]
+            , Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-center"
+                ]
+                [ Html.div
+                    [ HA.class "input-container" ]
+                    [ Html.input
+                        [ HA.type_ "number"
+                        , HA.step "0.1"
+                        , HA.value (Maybe.withDefault "" (Dict.get "bulk" model.filteredFromValues))
+                        , HE.onInput (FilteredFromValueChanged "bulk")
+                        ]
+                        []
+                    ]
+                , Html.text "to"
+                , Html.div
+                    [ HA.class "input-container" ]
+                    [ Html.input
+                        [ HA.type_ "number"
+                        , HA.step "0.1"
+                        , HA.value (Maybe.withDefault "" (Dict.get "bulk" model.filteredToValues))
+                        , HE.onInput (FilteredToValueChanged "bulk")
+                        ]
+                        []
+                    ]
+                , Html.text "(L bulk is 0,1)"
+                ]
+            ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-small"
+            , HA.class "align-center"
+            ]
+            [ Html.h4
+                []
+                [ Html.text "Range" ]
+            , Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-center"
+                ]
+                [ Html.div
+                    [ HA.class "input-container"
+                    , HA.class "row"
+                    , HA.class "align-baseline"
+                    ]
+                    [ Html.input
+                        [ HA.type_ "number"
+                        , HA.step "1"
+                        , HA.value (Maybe.withDefault "" (Dict.get "range" model.filteredFromValues))
+                        , HE.onInput (FilteredFromValueChanged "range")
+                        ]
+                        []
+                    , Html.div
+                        [ HA.style "padding-right" "2px" ]
+                        [ Html.text "ft." ]
+                    ]
+                , Html.text "to"
+                , Html.div
+                    [ HA.class "input-container"
+                    , HA.class "row"
+                    , HA.class "align-baseline"
+                    ]
+                    [ Html.input
+                        [ HA.type_ "number"
+                        , HA.step "1"
+                        , HA.value (Maybe.withDefault "" (Dict.get "range" model.filteredToValues))
+                        , HE.onInput (FilteredToValueChanged "range")
+                        ]
+                        []
+                    , Html.div
+                        [ HA.style "padding-right" "2px" ]
+                        [ Html.text "ft." ]
+                    ]
+                ]
+            ]
+        ]
+    ]
+
+
+viewSortResults : Model -> List (Html Msg)
+viewSortResults model =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "gap-large"
+        ]
+        (List.concat
+            [ [ Html.button
+                    [ HE.onClick RemoveAllSortsPressed ]
+                    [ Html.text "Reset selection" ]
+              ]
+            , (List.map
+                (\field ->
+                    Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HA.class "align-baseline"
+                        ]
+                        (List.append
+                            [ Html.text (sortFieldToLabel field)
+                            ]
+                            (viewSortButtons model field)
+                        )
+                )
+                [ "name.keyword"
+                , "level"
+                , "type"
+                , "price"
+                , "bulk"
+                , "range"
+                , "hp"
+                , "ac"
+                , "fortitude_save"
+                , "reflex_save"
+                , "will_save"
+                , "perception"
+                ]
+              )
+            , [ Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HA.class "align-baseline"
+                    ]
+                    (List.append
+                        [ Html.select
+                            [ HE.onInput SortAbilityChanged ]
+                            (List.map
+                                (\ability ->
+                                    Html.option
+                                        [ HA.value ability ]
+                                        [ Html.text (sortFieldToLabel ability) ]
+                                )
+                                [ "strength"
+                                , "dexterity"
+                                , "constitution"
+                                , "intelligence"
+                                , "wisdom"
+                                , "charisma"
+                                ]
+                            )
+                        ]
+                        (viewSortButtons model (model.selectedSortAbility))
+                    )
+              , Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HA.class "align-baseline"
+                    ]
+                    (List.append
+                        [ Html.select
+                            [ HE.onInput SortResistanceChanged ]
+                            (List.map
+                                (\type_ ->
+                                    Html.option
+                                        [ HA.value type_ ]
+                                        [ Html.text (sortFieldToLabel ("resistance." ++ type_)) ]
+                                )
+                                Data.damageTypes
+                            )
+                        ]
+                        (viewSortButtons model ("resistance." ++ model.selectedSortResistance))
+                    )
+              , Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HA.class "align-baseline"
+                    ]
+                    (List.append
+                        [ Html.select
+                            [ HE.onInput SortWeaknessChanged ]
+                            (List.map
+                                (\type_ ->
+                                    Html.option
+                                        [ HA.value type_ ]
+                                        [ Html.text (sortFieldToLabel ("weakness." ++ type_)) ]
+                                )
+                                Data.damageTypes
+                            )
+                        ]
+                        (viewSortButtons model ("weakness." ++ model.selectedSortWeakness))
+                    )
+              ]
+            ]
+        )
+    ]
 
 
 viewSortButtons : Model -> String -> List (Html Msg)
@@ -3784,14 +3756,65 @@ stringContainsChar str chars =
         chars
 
 
+getQueryOptionsHeight : Model -> Int
+getQueryOptionsHeight model =
+    measureWrapperIds
+        |> List.map (\id -> Dict.get id model.elementHeights)
+        |> List.map (Maybe.withDefault 0)
+        |> List.sum
+
+
+measureWrapperIds : List String
+measureWrapperIds =
+    [ queryOptionsMeasureWrapperId
+    , queryTypeMeasureWrapperId
+    , filterComponentsMeasureWrapperId
+    , filterTraditionsMeasureWrapperId
+    , filterTraitsMeasureWrapperId
+    , filterTypesMeasureWrapperId
+    , filterValuesMeasureWrapperId
+    , sortResultsMeasureWrapperId
+    ]
+
+
 queryOptionsMeasureWrapperId : String
 queryOptionsMeasureWrapperId =
     "query-options-measure-wrapper"
 
 
-eqsHelpMeasureWrapperId : String
-eqsHelpMeasureWrapperId =
-    "eqs-help-measure-wrapper"
+queryTypeMeasureWrapperId : String
+queryTypeMeasureWrapperId =
+    "query-type-measure-wrapper"
+
+
+filterTypesMeasureWrapperId : String
+filterTypesMeasureWrapperId =
+    "filter-types-measure-wrapper"
+
+
+filterComponentsMeasureWrapperId : String
+filterComponentsMeasureWrapperId =
+    "filter-components-measure-wrapper"
+
+
+filterTraitsMeasureWrapperId : String
+filterTraitsMeasureWrapperId =
+    "filter-traits-measure-wrapper"
+
+
+filterValuesMeasureWrapperId : String
+filterValuesMeasureWrapperId =
+    "filter-values-measure-wrapper"
+
+
+filterTraditionsMeasureWrapperId : String
+filterTraditionsMeasureWrapperId =
+    "filter-traditions-measure-wrapper"
+
+
+sortResultsMeasureWrapperId : String
+sortResultsMeasureWrapperId =
+    "sort-results-measure-wrapper"
 
 
 css : String
@@ -4065,6 +4088,14 @@ css =
     .foldable-container {
         transition: height ease-in-out 0.2s;
         overflow: hidden;
+    }
+
+    .rotatable {
+        transition: transform ease-in-out 0.2s
+    }
+
+    .rotate180 {
+        transform: rotate(-180deg);
     }
 
     .scrollbox {
