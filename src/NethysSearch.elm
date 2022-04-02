@@ -308,7 +308,7 @@ init flagsValue =
       , menuOpen = False
       , overlayActive = False
       , query = ""
-      , queryOptionsOpen = True
+      , queryOptionsOpen = False
       , queryType = Standard
       , searchResults = []
       , searchTraits = ""
@@ -334,7 +334,6 @@ init flagsValue =
         , localStorage_get "show-spoilers"
         , localStorage_get "show-traits"
         , localStorage_get "theme"
-        , getElementHeight queryOptionsMeasureWrapperId
         ]
     )
         |> searchWithCurrentQuery
