@@ -61,18 +61,21 @@ type alias Document =
     , alignment : Maybe String
     , ammunition : Maybe String
     , area : Maybe String
+    , armorGroup : Maybe String
     , aspect : Maybe String
     , bloodlines : List String
     , breadcrumbs : Maybe String
     , bulk : Maybe String
     , cast : Maybe String
     , charisma : Maybe Int
+    , checkPenalty : Maybe Int
     , components : List String
     , constitution : Maybe Int
     , cost : Maybe String
     , creatureFamily : Maybe String
     , damage : Maybe String
     , deities : List String
+    , dexCap : Maybe Int
     , dexterity : Maybe Int
     , divineFont : Maybe String
     , domains : List String
@@ -108,6 +111,7 @@ type alias Document =
     , secondaryChecks : Maybe String
     , skills : List String
     , source : Maybe String
+    , speedPenalty : Maybe String
     , spellList : Maybe String
     , spoilers : Maybe String
     , strength : Maybe Int
@@ -1599,18 +1603,21 @@ documentDecoder =
     Field.attempt "alignment" Decode.string <| \alignment ->
     Field.attempt "ammunition" Decode.string <| \ammunition ->
     Field.attempt "area" Decode.string <| \area ->
+    Field.attempt "armor_group" Decode.string <| \armorGroup ->
     Field.attempt "aspect" Decode.string <| \aspect ->
     Field.attempt "breadcrumbs" Decode.string <| \breadcrumbs ->
     Field.attempt "bloodline" stringListDecoder <| \bloodlines ->
     Field.attempt "bulk_raw" Decode.string <| \bulk ->
     Field.attempt "cast" Decode.string <| \cast ->
     Field.attempt "charisma" Decode.int <| \charisma ->
+    Field.attempt "check_penalty" Decode.int <| \checkPenalty ->
     Field.attempt "component" (Decode.list Decode.string) <| \components ->
     Field.attempt "constitution" Decode.int <| \constitution ->
     Field.attempt "cost" Decode.string <| \cost ->
     Field.attempt "creature_family" Decode.string <| \creatureFamily ->
     Field.attempt "damage" Decode.string <| \damage ->
     Field.attempt "deity" stringListDecoder <| \deities ->
+    Field.attempt "dex_cap" Decode.int <| \dexCap ->
     Field.attempt "dexterity" Decode.int <| \dexterity ->
     Field.attempt "divine_font" Decode.string <| \divineFont ->
     Field.attempt "domain" (Decode.list Decode.string) <| \domains ->
@@ -1646,6 +1653,7 @@ documentDecoder =
     Field.attempt "secondary_check" Decode.string <| \secondaryChecks ->
     Field.attempt "skill" stringListDecoder <| \skills ->
     Field.attempt "source" Decode.string <| \source ->
+    Field.attempt "speed_penalty" Decode.string <| \speedPenalty ->
     Field.attempt "spell_list" Decode.string <| \spellList ->
     Field.attempt "spoilers" Decode.string <| \spoilers ->
     Field.attempt "strength" Decode.int <| \strength ->
@@ -1673,18 +1681,21 @@ documentDecoder =
         , alignment = alignment
         , ammunition = ammunition
         , area = area
+        , armorGroup = armorGroup
         , aspect = aspect
         , breadcrumbs = breadcrumbs
         , bloodlines = Maybe.withDefault [] bloodlines
         , bulk = bulk
         , cast = cast
         , charisma = charisma
+        , checkPenalty = checkPenalty
         , components = Maybe.withDefault [] components
         , constitution = constitution
         , cost = cost
         , creatureFamily = creatureFamily
         , damage = damage
         , deities = Maybe.withDefault [] deities
+        , dexCap = dexCap
         , dexterity = dexterity
         , divineFont = divineFont
         , domains = Maybe.withDefault [] domains
@@ -1720,6 +1731,7 @@ documentDecoder =
         , secondaryChecks = secondaryChecks
         , skills = Maybe.withDefault [] skills
         , source = source
+        , speedPenalty = speedPenalty
         , spellList = spellList
         , spoilers = spoilers
         , strength = strength
@@ -3392,6 +3404,43 @@ viewSearchResultAdditionalInfo hit =
                         , hit.source.requirements
                             |> Maybe.map (viewLabelAndText "Requirements")
                         ]
+
+                "armor" ->
+                    [ Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-medium"
+                        ]
+                        (Maybe.Extra.values
+                            [ hit.source.price
+                                |> Maybe.map (viewLabelAndText "Price")
+                            , hit.source.ac
+                                |> Maybe.map numberWithSign
+                                |> Maybe.map (viewLabelAndText "AC Bonus")
+                            , hit.source.dexCap
+                                |> Maybe.map numberWithSign
+                                |> Maybe.map (viewLabelAndText "Dex Cap")
+                            , hit.source.checkPenalty
+                                |> Maybe.map numberWithSign
+                                |> Maybe.map (viewLabelAndText "Check Penalty")
+                            , hit.source.speedPenalty
+                                |> Maybe.map (viewLabelAndText "Speed Penalty")
+                            ]
+                        )
+                    , Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-medium"
+                        ]
+                        (Maybe.Extra.values
+                            [ hit.source.strength
+                                |> Maybe.map String.fromInt
+                                |> Maybe.map (viewLabelAndText "Strength")
+                            , hit.source.bulk
+                                |> Maybe.map (viewLabelAndText "Bulk")
+                            , hit.source.armorGroup
+                                |> Maybe.map (viewLabelAndText "Armor Group")
+                            ]
+                        )
+                    ]
 
                 "background" ->
                     Maybe.Extra.values
