@@ -2091,8 +2091,17 @@ viewQuery model =
                     , List.map
                         (\( field, dir ) ->
                             Html.button
-                                [ HE.onClick (SortRemoved field) ]
-                                [ Html.text (sortFieldToLabel field ++ " " ++ sortDirToString dir) ]
+                                [ HA.class "row"
+                                , HA.class "gap-tiny"
+                                , HE.onClick (SortRemoved field)
+                                ]
+                                [ Html.text (sortFieldToLabel field ++ " " ++ sortDirToString dir)
+                                , if dir == Asc then
+                                    getSortAscIcon field
+
+                                  else
+                                    getSortDescIcon field
+                                ]
                         )
                         model.sort
                     ]
@@ -2976,12 +2985,15 @@ viewFilterValues model =
 viewSortResults : Model -> List (Html Msg)
 viewSortResults model =
     [ Html.div
-        [ HA.class "row"
-        , HA.class "gap-large"
+        [ HA.class "grid"
+        , HA.style "grid-template-columns" "repeat(auto-fill,minmax(330px, 1fr))"
+        , HA.class "gap-medium"
         ]
         (List.concat
             [ [ Html.button
-                    [ HE.onClick RemoveAllSortsPressed ]
+                    [ HA.style "justify-self" "flex-start"
+                    , HE.onClick RemoveAllSortsPressed
+                    ]
                     [ Html.text "Reset selection" ]
               ]
             , (List.map
@@ -2992,9 +3004,9 @@ viewSortResults model =
                         , HA.class "align-baseline"
                         ]
                         (List.append
+                            (viewSortButtons model field)
                             [ Html.text (sortFieldToLabel field)
                             ]
-                            (viewSortButtons model field)
                         )
                 )
                 [ "name.keyword"
@@ -3017,8 +3029,11 @@ viewSortResults model =
                     , HA.class "align-baseline"
                     ]
                     (List.append
+                        (viewSortButtons model (model.selectedSortAbility))
                         [ Html.select
-                            [ HE.onInput SortAbilityChanged ]
+                            [ HA.class "input-container"
+                            , HE.onInput SortAbilityChanged
+                            ]
                             (List.map
                                 (\ability ->
                                     Html.option
@@ -3034,7 +3049,6 @@ viewSortResults model =
                                 ]
                             )
                         ]
-                        (viewSortButtons model (model.selectedSortAbility))
                     )
               , Html.div
                     [ HA.class "row"
@@ -3042,18 +3056,21 @@ viewSortResults model =
                     , HA.class "align-baseline"
                     ]
                     (List.append
-                        [ Html.select
-                            [ HE.onInput SortResistanceChanged ]
-                            (List.map
-                                (\type_ ->
-                                    Html.option
-                                        [ HA.value type_ ]
-                                        [ Html.text (sortFieldToLabel ("resistance." ++ type_)) ]
-                                )
-                                Data.damageTypes
-                            )
-                        ]
                         (viewSortButtons model ("resistance." ++ model.selectedSortResistance))
+                        [ Html.select
+                            [ HA.class "input-container"
+                            , HE.onInput SortResistanceChanged
+                            ]
+                            (List.map
+                                (\type_ ->
+                                    Html.option
+                                        [ HA.value type_ ]
+                                        [ Html.text (String.Extra.humanize type_) ]
+                                )
+                                Data.damageTypes
+                            )
+                        , Html.text "resistance"
+                        ]
                     )
               , Html.div
                     [ HA.class "row"
@@ -3061,18 +3078,21 @@ viewSortResults model =
                     , HA.class "align-baseline"
                     ]
                     (List.append
+                        (viewSortButtons model ("weakness." ++ model.selectedSortWeakness))
                         [ Html.select
-                            [ HE.onInput SortWeaknessChanged ]
+                            [ HA.class "input-container"
+                            , HE.onInput SortWeaknessChanged
+                            ]
                             (List.map
                                 (\type_ ->
                                     Html.option
                                         [ HA.value type_ ]
-                                        [ Html.text (sortFieldToLabel ("weakness." ++ type_)) ]
+                                        [ Html.text (String.Extra.humanize type_) ]
                                 )
                                 Data.damageTypes
                             )
+                        , Html.text "weakness"
                         ]
-                        (viewSortButtons model ("weakness." ++ model.selectedSortWeakness))
                     )
               ]
             ]
@@ -3097,8 +3117,12 @@ viewSortButtons model field =
              else
                 "excluded"
             )
+        , HA.class "row"
+        , HA.class "gap-tiny"
         ]
-        [ Html.text "Asc" ]
+        [ Html.text "Asc"
+        , getSortAscIcon field
+        ]
     , Html.button
         [ HE.onClick
             (if List.member ( field, Desc ) model.sort then
@@ -3114,8 +3138,12 @@ viewSortButtons model field =
              else
                 "excluded"
             )
+        , HA.class "row"
+        , HA.class "gap-tiny"
         ]
-        [ Html.text "Desc" ]
+        [ Html.text "Desc"
+        , getSortDescIcon field
+        ]
     ]
 
 
@@ -3933,6 +3961,24 @@ getTraitClass trait =
             HAE.empty
 
 
+getSortAscIcon : String -> Html msg
+getSortAscIcon field =
+    if List.member field [ "name.keyword", "type" ] then
+        FontAwesome.Icon.viewIcon FontAwesome.Solid.sortAlphaUp
+
+    else
+        FontAwesome.Icon.viewIcon FontAwesome.Solid.sortNumericUp
+
+
+getSortDescIcon : String -> Html msg
+getSortDescIcon field =
+    if List.member field [ "name.keyword", "type" ] then
+        FontAwesome.Icon.viewIcon FontAwesome.Solid.sortAlphaDownAlt
+
+    else
+        FontAwesome.Icon.viewIcon FontAwesome.Solid.sortNumericDownAlt
+
+
 viewPfsIcon : String -> Html msg
 viewPfsIcon pfs =
     case String.toLower pfs of
@@ -4188,6 +4234,7 @@ css =
     }
 
     select {
+        color: var(--color-text);
         font-size: var(--font-normal);
     }
 
@@ -4232,7 +4279,7 @@ css =
 
     .content-container {
         box-sizing: border-box;
-        max-width: 1000px;
+        max-width: 1100px;
         padding: 8px;
         width: 100%;
     }
@@ -4243,7 +4290,11 @@ css =
         flex-wrap: wrap;
     }
 
-    .column:empty, .row:empty {
+    .grid {
+        display: grid;
+    }
+
+    .column:empty, .row:empty, .grid:empty {
         display: none;
     }
 
@@ -4271,7 +4322,7 @@ css =
         gap: var(--gap-medium);
     }
 
-    .gap-medium.row, .gap-large.row {
+    .gap-medium.row, .gap-large.row, .gap-medium.grid, .gap-large.grid {
         row-gap: var(--gap-tiny);
     }
 
@@ -4293,6 +4344,7 @@ css =
 
     .input-container:focus-within {
         border-color: var(--color-text);
+        outline: 0;
     }
 
     .icon-font {
