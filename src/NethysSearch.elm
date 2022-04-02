@@ -167,9 +167,12 @@ type Msg
     | DebouncePassed Int
     | GotElementHeight String Int
     | GotSearchResult (Result Http.Error SearchResult)
+    | FilterAbilityChanged String
     | FilterComponentsOperatorChanged Bool
+    | FilterResistanceChanged String
     | FilterTraditionsOperatorChanged Bool
     | FilterTraitsOperatorChanged Bool
+    | FilterWeaknessChanged String
     | FilteredFromValueChanged String String
     | FilteredToValueChanged String String
     | LoadMorePressed
@@ -246,6 +249,9 @@ type alias Model =
     , searchResults : List (Result Http.Error SearchResult)
     , searchTraits : String
     , searchTypes : String
+    , selectedFilterAbility : String
+    , selectedFilterResistance : String
+    , selectedFilterWeakness : String
     , selectedSortAbility : String
     , selectedSortResistance : String
     , selectedSortWeakness : String
@@ -303,6 +309,9 @@ init flagsValue =
       , searchResults = []
       , searchTraits = ""
       , searchTypes = ""
+      , selectedFilterAbility = "strength"
+      , selectedFilterResistance = "acid"
+      , selectedFilterWeakness = "acid"
       , selectedSortAbility = "strength"
       , selectedSortResistance = "acid"
       , selectedSortWeakness = "acid"
@@ -379,9 +388,19 @@ update msg model =
             , Cmd.none
             )
 
+        FilterAbilityChanged value ->
+            ( { model | selectedFilterAbility = value }
+            , Cmd.none
+            )
+
         FilterComponentsOperatorChanged value ->
             ( model
             , updateUrl { model | filterComponentsOperator = value }
+            )
+
+        FilterResistanceChanged value ->
+            ( { model | selectedFilterResistance = value }
+            , Cmd.none
             )
 
         FilterTraditionsOperatorChanged value ->
@@ -392,6 +411,11 @@ update msg model =
         FilterTraitsOperatorChanged value ->
             ( model
             , updateUrl { model | filterTraitsOperator = value }
+            )
+
+        FilterWeaknessChanged value ->
+            ( { model | selectedFilterWeakness = value }
+            , Cmd.none
             )
 
         FilteredFromValueChanged key value ->
@@ -2813,184 +2837,358 @@ viewFilterPfs model =
 
 viewFilterValues : Model -> List (Html Msg)
 viewFilterValues model =
-    [ Html.div
-        [ HA.class "row"
+    [ Html.button
+        [ HA.style "align-self" "flex-start"
+        , HA.style "justify-self" "flex-start"
+        , HE.onClick RemoveAllValueFiltersPressed
+        ]
+        [ Html.text "Reset all values" ]
+    , Html.div
+        [ HA.class "grid"
         , HA.class "gap-large"
-        , HA.class "wrap"
+        , HA.style "grid-template-columns" "repeat(auto-fill,minmax(250px, 1fr))"
+        , HA.style "row-gap" "var(--gap-medium)"
         ]
-        [ Html.button
-            [ HE.onClick RemoveAllValueFiltersPressed ]
-            [ Html.text "Reset all values" ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-small"
-            , HA.class "align-center"
-            ]
-            [ Html.h4
-                []
-                [ Html.text "Level" ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "align-center"
-                ]
-                [ Html.div
-                    [ HA.class "input-container" ]
-                    [ Html.input
-                        [ HA.type_ "number"
-                        , HA.step "1"
-                        , HA.value (Maybe.withDefault "" (Dict.get "level" model.filteredFromValues))
-                        , HE.onInput (FilteredFromValueChanged "level")
+        (List.concat
+            [ List.map
+                (\{ field, hint, step, suffix } ->
+                    Html.div
+                        [ HA.class "column"
+                        , HA.class "gap-tiny"
                         ]
-                        []
-                    ]
-                , Html.text "to"
-                , Html.div
-                    [ HA.class "input-container" ]
-                    [ Html.input
-                        [ HA.type_ "number"
-                        , HA.step "1"
-                        , HA.value (Maybe.withDefault "" (Dict.get "level" model.filteredToValues))
-                        , HE.onInput (FilteredToValueChanged "level")
+                        [ Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-small"
+                            ]
+                            [ Html.h4
+                                []
+                                [ Html.text (sortFieldToLabel field) ]
+                            , Html.text (Maybe.withDefault "" hint)
+                            ]
+                        , Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HA.class "align-baseline"
+                            ]
+                            [ Html.div
+                                [ HA.class "input-container"
+                                , HA.class "row"
+                                , HA.class "align-baseline"
+                                ]
+                                [ Html.input
+                                    [ HA.type_ "number"
+                                    , HA.step step
+                                    , HA.value (Maybe.withDefault "" (Dict.get field model.filteredFromValues))
+                                    , HE.onInput (FilteredFromValueChanged field)
+                                    ]
+                                    []
+                                , case suffix of
+                                    Just s ->
+                                        Html.div
+                                            [ HA.style "padding-right" "2px" ]
+                                            [ Html.text s ]
+
+                                    Nothing ->
+                                        Html.text ""
+                                ]
+                            , Html.text "to"
+                            , Html.div
+                                [ HA.class "input-container"
+                                , HA.class "row"
+                                , HA.class "align-baseline"
+                                ]
+                                [ Html.input
+                                    [ HA.type_ "number"
+                                    , HA.step step
+                                    , HA.value (Maybe.withDefault "" (Dict.get field model.filteredToValues))
+                                    , HE.onInput (FilteredToValueChanged field)
+                                    ]
+                                    []
+                                , case suffix of
+                                    Just s ->
+                                        Html.div
+                                            [ HA.style "padding-right" "2px" ]
+                                            [ Html.text s ]
+
+                                    Nothing ->
+                                        Html.text ""
+                                ]
+                            ]
                         ]
-                        []
-                    ]
+                )
+                [ { field = "level"
+                  , hint = Nothing
+                  , step = "1"
+                  , suffix = Nothing
+                  }
+                , { field = "price"
+                  , hint = Nothing
+                  , step = "1"
+                  , suffix = Just "cp"
+                  }
+                , { field = "bulk"
+                  , hint = Just "(L bulk is 0,1)"
+                  , step = "0.1"
+                  , suffix = Nothing
+                  }
+                , { field = "range"
+                  , hint = Nothing
+                  , step = "1"
+                  , suffix = Just "ft."
+                  }
+                , { field = "hp"
+                  , hint = Nothing
+                  , step = "1"
+                  , suffix = Nothing
+                  }
+                , { field = "ac"
+                  , hint = Nothing
+                  , step = "1"
+                  , suffix = Nothing
+                  }
+                , { field = "fortitude_save"
+                  , hint = Nothing
+                  , step = "1"
+                  , suffix = Nothing
+                  }
+                , { field = "reflex_save"
+                  , hint = Nothing
+                  , step = "1"
+                  , suffix = Nothing
+                  }
+                , { field = "will_save"
+                  , hint = Nothing
+                  , step = "1"
+                  , suffix = Nothing
+                  }
+                , { field = "perception"
+                  , hint = Nothing
+                  , step = "1"
+                  , suffix = Nothing
+                  }
                 ]
-            ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-small"
-            , HA.class "align-center"
-            ]
-            [ Html.h4
-                []
-                [ Html.text "Price" ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "align-center"
-                ]
-                [ Html.div
-                    [ HA.class "input-container"
-                    , HA.class "row"
-                    , HA.class "align-baseline"
+            , [ Html.div
+                    [ HA.class "column"
+                    , HA.class "gap-tiny"
                     ]
-                    [ Html.input
-                        [ HA.type_ "number"
-                        , HA.step "1"
-                        , HA.value (Maybe.withDefault "" (Dict.get "price" model.filteredFromValues))
-                        , HE.onInput (FilteredFromValueChanged "price")
+                    [ Html.h4
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HA.class "align-center"
                         ]
-                        []
+                        [ Html.select
+                            [ HA.class "input-container"
+                            , HA.style "align-self" "flex-start"
+                            , HE.onInput FilterAbilityChanged
+                            ]
+                            (List.map
+                                (\ability ->
+                                    Html.option
+                                        [ HA.value ability ]
+                                        [ Html.text (sortFieldToLabel ability)
+                                        ]
+                                )
+                                [ "strength"
+                                , "dexterity"
+                                , "constitution"
+                                , "intelligence"
+                                , "wisdom"
+                                , "charisma"
+                                ]
+                            )
+                        , Html.text "score"
+                        ]
                     , Html.div
-                        [ HA.style "padding-right" "2px" ]
-                        [ Html.text "cp" ]
-                    ]
-                , Html.text "to"
-                , Html.div
-                    [ HA.class "input-container"
-                    , HA.class "row"
-                    , HA.class "align-baseline"
-                    ]
-                    [ Html.input
-                        [ HA.type_ "number"
-                        , HA.step "1"
-                        , HA.value (Maybe.withDefault "" (Dict.get "price" model.filteredToValues))
-                        , HE.onInput (FilteredToValueChanged "price")
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HA.class "align-center"
                         ]
-                        []
+                        [ Html.div
+                            [ HA.class "input-container"
+                            , HA.class "row"
+                            , HA.class "align-baseline"
+                            ]
+                            [ Html.input
+                                [ HA.type_ "number"
+                                , HA.step "1"
+                                , HA.value (Maybe.withDefault "" (Dict.get model.selectedFilterAbility model.filteredFromValues))
+                                , HE.onInput (FilteredFromValueChanged model.selectedFilterAbility)
+                                ]
+                                []
+                            ]
+                        , Html.text "to"
+                        , Html.div
+                            [ HA.class "input-container"
+                            , HA.class "row"
+                            , HA.class "align-baseline"
+                            ]
+                            [ Html.input
+                                [ HA.type_ "number"
+                                , HA.step "1"
+                                , HA.value (Maybe.withDefault "" (Dict.get model.selectedFilterAbility model.filteredToValues))
+                                , HE.onInput (FilteredToValueChanged model.selectedFilterAbility)
+                                ]
+                                []
+                            ]
+                        ]
+                    ]
+              , Html.div
+                    [ HA.class "column"
+                    , HA.class "gap-tiny"
+                    ]
+                    [ Html.h4
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HA.class "align-baseline"
+                        ]
+                        [ Html.select
+                            [ HA.class "input-container"
+                            , HE.onInput FilterResistanceChanged
+                            ]
+                            (List.map
+                                (\type_ ->
+                                    Html.option
+                                        [ HA.value type_ ]
+                                        [ Html.text (String.Extra.humanize type_) ]
+                                )
+                                Data.damageTypes
+                            )
+                        , Html.text "resistance"
+                        ]
                     , Html.div
-                        [ HA.style "padding-right" "2px" ]
-                        [ Html.text "cp" ]
-                    ]
-                ]
-            ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-small"
-            , HA.class "align-center"
-            ]
-            [ Html.h4
-                []
-                [ Html.text "Bulk" ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "align-center"
-                ]
-                [ Html.div
-                    [ HA.class "input-container" ]
-                    [ Html.input
-                        [ HA.type_ "number"
-                        , HA.step "0.1"
-                        , HA.value (Maybe.withDefault "" (Dict.get "bulk" model.filteredFromValues))
-                        , HE.onInput (FilteredFromValueChanged "bulk")
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HA.class "align-center"
                         ]
-                        []
-                    ]
-                , Html.text "to"
-                , Html.div
-                    [ HA.class "input-container" ]
-                    [ Html.input
-                        [ HA.type_ "number"
-                        , HA.step "0.1"
-                        , HA.value (Maybe.withDefault "" (Dict.get "bulk" model.filteredToValues))
-                        , HE.onInput (FilteredToValueChanged "bulk")
+                        [ Html.div
+                            [ HA.class "input-container"
+                            , HA.class "row"
+                            , HA.class "align-baseline"
+                            ]
+                            [ Html.input
+                                [ HA.type_ "number"
+                                , HA.step "1"
+                                , HA.value
+                                    (Maybe.withDefault
+                                        ""
+                                        (Dict.get
+                                            ("resistance." ++ model.selectedFilterResistance)
+                                            model.filteredFromValues
+                                        )
+                                    )
+                                , HE.onInput
+                                    (FilteredFromValueChanged
+                                        ("resistance." ++ model.selectedFilterResistance)
+                                    )
+                                ]
+                                []
+                            ]
+                        , Html.text "to"
+                        , Html.div
+                            [ HA.class "input-container"
+                            , HA.class "row"
+                            , HA.class "align-baseline"
+                            ]
+                            [ Html.input
+                                [ HA.type_ "number"
+                                , HA.step "1"
+                                , HA.value
+                                    (Maybe.withDefault
+                                        ""
+                                        (Dict.get
+                                            ("resistance." ++ model.selectedFilterResistance)
+                                            model.filteredToValues
+                                        )
+                                    )
+                                , HE.onInput
+                                    (FilteredToValueChanged
+                                        ("resistance." ++ model.selectedFilterResistance)
+                                    )
+                                ]
+                                []
+                            ]
                         ]
-                        []
                     ]
-                , Html.text "(L bulk is 0,1)"
-                ]
-            ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-small"
-            , HA.class "align-center"
-            ]
-            [ Html.h4
-                []
-                [ Html.text "Range" ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "align-center"
-                ]
-                [ Html.div
-                    [ HA.class "input-container"
-                    , HA.class "row"
-                    , HA.class "align-baseline"
+              , Html.div
+                    [ HA.class "column"
+                    , HA.class "gap-tiny"
                     ]
-                    [ Html.input
-                        [ HA.type_ "number"
-                        , HA.step "1"
-                        , HA.value (Maybe.withDefault "" (Dict.get "range" model.filteredFromValues))
-                        , HE.onInput (FilteredFromValueChanged "range")
+                    [ Html.h4
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HA.class "align-baseline"
                         ]
-                        []
+                        [ Html.select
+                            [ HA.class "input-container"
+                            , HE.onInput FilterWeaknessChanged
+                            ]
+                            (List.map
+                                (\type_ ->
+                                    Html.option
+                                        [ HA.value type_ ]
+                                        [ Html.text (String.Extra.humanize type_) ]
+                                )
+                                Data.damageTypes
+                            )
+                        , Html.text "weakness"
+                        ]
                     , Html.div
-                        [ HA.style "padding-right" "2px" ]
-                        [ Html.text "ft." ]
-                    ]
-                , Html.text "to"
-                , Html.div
-                    [ HA.class "input-container"
-                    , HA.class "row"
-                    , HA.class "align-baseline"
-                    ]
-                    [ Html.input
-                        [ HA.type_ "number"
-                        , HA.step "1"
-                        , HA.value (Maybe.withDefault "" (Dict.get "range" model.filteredToValues))
-                        , HE.onInput (FilteredToValueChanged "range")
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HA.class "align-center"
                         ]
-                        []
-                    , Html.div
-                        [ HA.style "padding-right" "2px" ]
-                        [ Html.text "ft." ]
+                        [ Html.div
+                            [ HA.class "input-container"
+                            , HA.class "row"
+                            , HA.class "align-baseline"
+                            ]
+                            [ Html.input
+                                [ HA.type_ "number"
+                                , HA.step "1"
+                                , HA.value
+                                    (Maybe.withDefault
+                                        ""
+                                        (Dict.get
+                                            ("weakness." ++ model.selectedFilterWeakness)
+                                            model.filteredFromValues
+                                        )
+                                    )
+                                , HE.onInput
+                                    (FilteredFromValueChanged
+                                        ("weakness." ++ model.selectedFilterWeakness)
+                                    )
+                                ]
+                                []
+                            ]
+                        , Html.text "to"
+                        , Html.div
+                            [ HA.class "input-container"
+                            , HA.class "row"
+                            , HA.class "align-baseline"
+                            ]
+                            [ Html.input
+                                [ HA.type_ "number"
+                                , HA.step "1"
+                                , HA.value
+                                    (Maybe.withDefault
+                                        ""
+                                        (Dict.get
+                                            ("weakness." ++ model.selectedFilterWeakness)
+                                            model.filteredToValues
+                                        )
+                                    )
+                                , HE.onInput
+                                    (FilteredToValueChanged
+                                        ("weakness." ++ model.selectedFilterWeakness)
+                                    )
+                                ]
+                                []
+                            ]
+                        ]
                     ]
                 ]
             ]
-        ]
+        )
     ]
 
 
@@ -2998,7 +3196,7 @@ viewSortResults : Model -> List (Html Msg)
 viewSortResults model =
     [ Html.div
         [ HA.class "grid"
-        , HA.style "grid-template-columns" "repeat(auto-fill,minmax(330px, 1fr))"
+        , HA.style "grid-template-columns" "repeat(auto-fill,minmax(250px, 1fr))"
         , HA.class "gap-medium"
         ]
         (List.concat
@@ -3062,53 +3260,59 @@ viewSortResults model =
                             )
                         ]
                     )
-              , Html.div
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HA.class "align-baseline"
-                    ]
-                    (List.append
-                        (viewSortButtons model ("resistance." ++ model.selectedSortResistance))
-                        [ Html.select
-                            [ HA.class "input-container"
-                            , HE.onInput SortResistanceChanged
-                            ]
-                            (List.map
-                                (\type_ ->
-                                    Html.option
-                                        [ HA.value type_ ]
-                                        [ Html.text (String.Extra.humanize type_) ]
-                                )
-                                Data.damageTypes
-                            )
-                        , Html.text "resistance"
-                        ]
-                    )
-              , Html.div
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HA.class "align-baseline"
-                    ]
-                    (List.append
-                        (viewSortButtons model ("weakness." ++ model.selectedSortWeakness))
-                        [ Html.select
-                            [ HA.class "input-container"
-                            , HE.onInput SortWeaknessChanged
-                            ]
-                            (List.map
-                                (\type_ ->
-                                    Html.option
-                                        [ HA.value type_ ]
-                                        [ Html.text (String.Extra.humanize type_) ]
-                                )
-                                Data.damageTypes
-                            )
-                        , Html.text "weakness"
-                        ]
-                    )
               ]
             ]
         )
+    , Html.div
+        [ HA.class "grid"
+        , HA.style "grid-template-columns" "repeat(auto-fill,minmax(340px, 1fr))"
+        , HA.class "gap-medium"
+        ]
+        [ Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-baseline"
+                ]
+                (List.append
+                    (viewSortButtons model ("resistance." ++ model.selectedSortResistance))
+                    [ Html.select
+                        [ HA.class "input-container"
+                        , HE.onInput SortResistanceChanged
+                        ]
+                        (List.map
+                            (\type_ ->
+                                Html.option
+                                    [ HA.value type_ ]
+                                    [ Html.text (String.Extra.humanize type_) ]
+                            )
+                            Data.damageTypes
+                        )
+                    , Html.text "resistance"
+                    ]
+                )
+          , Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-baseline"
+                ]
+                (List.append
+                    (viewSortButtons model ("weakness." ++ model.selectedSortWeakness))
+                    [ Html.select
+                        [ HA.class "input-container"
+                        , HE.onInput SortWeaknessChanged
+                        ]
+                        (List.map
+                            (\type_ ->
+                                Html.option
+                                    [ HA.value type_ ]
+                                    [ Html.text (String.Extra.humanize type_) ]
+                            )
+                            Data.damageTypes
+                        )
+                    , Html.text "weakness"
+                    ]
+                )
+          ]
     ]
 
 
@@ -4328,7 +4532,7 @@ css =
 
     .content-container {
         box-sizing: border-box;
-        max-width: 1100px;
+        max-width: 1000px;
         padding: 8px;
         width: 100%;
     }
@@ -4371,8 +4575,12 @@ css =
         gap: var(--gap-medium);
     }
 
-    .gap-medium.row, .gap-large.row, .gap-medium.grid, .gap-large.grid {
+    .gap-medium.row, .gap-large.row {
         row-gap: var(--gap-tiny);
+    }
+
+    .gap-medium.grid, .gap-large.grid {
+        row-gap: var(--gap-small);
     }
 
     .gap-small {
