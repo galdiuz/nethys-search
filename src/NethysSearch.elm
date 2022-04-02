@@ -172,10 +172,13 @@ type Msg
     | LocalStorageValueReceived Decode.Value
     | MenuOpenDelayPassed
     | NoOp
+    | PfsFilterAdded String
+    | PfsFilterRemoved String
     | QueryChanged String
     | QueryTypeSelected QueryType
     | RemoveAllSortsPressed
     | RemoveAllComponentFiltersPressed
+    | RemoveAllPfsFiltersPressed
     | RemoveAllTraditionFiltersPressed
     | RemoveAllTraitFiltersPressed
     | RemoveAllTypeFiltersPressed
@@ -222,6 +225,7 @@ type alias Model =
     , elasticUrl : String
     , elementHeights : Dict String Int
     , filteredComponents : Dict String Bool
+    , filteredPfs : Dict String Bool
     , filteredTraditions : Dict String Bool
     , filteredTraits : Dict String Bool
     , filteredTypes : Dict String Bool
@@ -278,6 +282,7 @@ init flagsValue =
       , elasticUrl = flags.elasticUrl
       , elementHeights = Dict.empty
       , filteredComponents = Dict.empty
+      , filteredPfs = Dict.empty
       , filteredTraditions = Dict.empty
       , filteredTraits = Dict.empty
       , filteredTypes = Dict.empty
@@ -502,6 +507,16 @@ update msg model =
             , Cmd.none
             )
 
+        PfsFilterAdded pfs ->
+            ( model
+            , updateUrl { model | filteredPfs = toggleBoolDict pfs model.filteredPfs }
+            )
+
+        PfsFilterRemoved pfs ->
+            ( model
+            , updateUrl { model | filteredPfs = Dict.remove pfs model.filteredPfs }
+            )
+
         QueryChanged str ->
             ( { model
                 | query = str
@@ -524,6 +539,11 @@ update msg model =
         RemoveAllComponentFiltersPressed ->
             ( model
             , updateUrl { model | filteredComponents = Dict.empty }
+            )
+
+        RemoveAllPfsFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredPfs = Dict.empty }
             )
 
         RemoveAllTraditionFiltersPressed ->
@@ -862,6 +882,20 @@ updateUrl ({ url } as model) =
                 else
                   "or"
               )
+            , ( "include-pfs"
+              , model.filteredPfs
+                    |> Dict.toList
+                    |> List.filter (Tuple.second)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "exclude-pfs"
+              , model.filteredPfs
+                    |> Dict.toList
+                    |> List.filter (Tuple.second >> not)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
             , ( "include-traditions"
               , model.filteredTraditions
                     |> Dict.toList
@@ -1086,10 +1120,46 @@ buildSearchFilterTerms model =
                         list
 
                 else
-                    [ [ ( "terms"
+                    [ [ ( "bool"
                         , Encode.object
-                            [ ( field
-                              , Encode.list Encode.string list
+                            [ ( "should"
+                              , Encode.list Encode.object
+                                    (Maybe.Extra.values
+                                        [ if List.isEmpty (List.filter ((/=) "none") list) then
+                                            Nothing
+
+                                          else
+                                            [ ( "terms"
+                                              , Encode.object
+                                                    [ ( field
+                                                      , Encode.list Encode.string (List.filter ((/=) "none") list)
+                                                      )
+                                                    ]
+                                              )
+                                            ]
+                                                |> Just
+
+                                        , if List.member "none" list then
+                                            [ ( "bool"
+                                              , Encode.object
+                                                    [ ( "must_not"
+                                                      , Encode.object
+                                                            [ ( "exists"
+                                                              , Encode.object
+                                                                    [ ( "field", Encode.string field )
+                                                                    ]
+                                                              )
+                                                            ]
+                                                      )
+                                                    ]
+                                              )
+                                            ]
+                                                |> Just
+
+                                          else
+                                            Nothing
+                                        ]
+                                    )
                               )
                             ]
                         )
@@ -1097,6 +1167,7 @@ buildSearchFilterTerms model =
                     ]
             )
             [ ( "component", boolDictIncluded model.filteredComponents, model.filterComponentsOperator )
+            , ( "pfs", boolDictIncluded model.filteredPfs, False )
             , ( "tradition", boolDictIncluded model.filteredTraditions, model.filterTraditionsOperator )
             , ( "trait", boolDictIncluded model.filteredTraits, model.filterTraitsOperator )
             , ( "type", boolDictIncluded model.filteredTypes, False )
@@ -1147,17 +1218,45 @@ buildSearchMustNotTerms model =
                 []
 
             else
-                [ [ ( "terms"
-                    , Encode.object
-                        [ ( field
-                          , Encode.list Encode.string list
+                Maybe.Extra.values
+                    [ if List.isEmpty (List.filter ((/=) "none") list) then
+                        Nothing
+
+                      else
+                        [ ( "terms"
+                          , Encode.object
+                                [ ( field
+                                  , Encode.list Encode.string (List.filter ((/=) "none") list)
+                                  )
+                                ]
                           )
                         ]
-                    )
-                  ]
-                ]
+                            |> Just
+
+                    , if List.member "none" list then
+                        [ ( "bool"
+                          , Encode.object
+                                [ ( "must_not"
+                                  , Encode.list Encode.object
+                                        [ [ ( "exists"
+                                            , Encode.object
+                                                [ ( "field", Encode.string field )
+                                                ]
+                                            )
+                                          ]
+                                        ]
+                                  )
+                                ]
+                          )
+                        ]
+                            |> Just
+
+                      else
+                        Nothing
+                    ]
         )
         [ ( "component", boolDictExcluded model.filteredComponents )
+        , ( "pfs", boolDictExcluded model.filteredPfs )
         , ( "tradition", boolDictExcluded model.filteredTraditions )
         , ( "trait", boolDictExcluded model.filteredTraits )
         , ( "type", boolDictExcluded model.filteredTypes )
@@ -1239,6 +1338,21 @@ updateModelFromQueryString url model =
                     |> Maybe.map (String.split ",")
                     |> Maybe.withDefault []
                     |> List.map (\component -> ( component, False ))
+                )
+                |> Dict.fromList
+        , filteredPfs =
+            List.append
+                (getQueryParam url "include-pfs"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\pfs -> ( pfs, True ))
+                )
+                (getQueryParam url "exclude-pfs"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\pfs -> ( pfs, False ))
                 )
                 |> Dict.fromList
         , filteredTraditions =
@@ -1354,6 +1468,7 @@ searchWithCurrentQuery : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 searchWithCurrentQuery ( model, cmd ) =
     if String.isEmpty (String.trim model.query)
         && Dict.isEmpty model.filteredComponents
+        && Dict.isEmpty model.filteredPfs
         && Dict.isEmpty model.filteredTraditions
         && Dict.isEmpty model.filteredTraits
         && Dict.isEmpty model.filteredTypes
@@ -1990,12 +2105,12 @@ viewFilters model =
     Html.div
         [ HA.class "row"
         , HA.class "gap-medium"
-        , HA.class "align-baseline"
+        , HA.class "align-center"
         ]
         [ Html.div
             [ HA.class "row"
             , HA.class "gap-medium"
-            , HA.class "align-baseline"
+            , HA.class "align-center"
             ]
             (List.map
                 (\{ class, label, list, removeMsg } ->
@@ -2006,17 +2121,21 @@ viewFilters model =
                         Html.div
                             [ HA.class "row"
                             , HA.class "gap-tiny"
-                            , HA.class "align-baseline"
+                            , HA.class "align-center"
                             ]
                             (List.append
                                 [ Html.text label ]
                                 (List.map
                                     (\value ->
                                         Html.button
-                                            [ HAE.attributeMaybe HA.class class
+                                            [ HA.class "row"
+                                            , HA.class "gap-tiny"
+                                            , HAE.attributeMaybe HA.class class
                                             , HE.onClick (removeMsg value)
                                             ]
-                                            [ Html.text (String.Extra.toSentenceCase value) ]
+                                            [ viewPfsIcon value
+                                            , Html.text (String.Extra.toSentenceCase value)
+                                            ]
                                     )
                                     list
                                 )
@@ -2076,6 +2195,16 @@ viewFilters model =
                   , label = "Exclude components:"
                   , list = boolDictExcluded model.filteredComponents
                   , removeMsg = ComponentFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Include PFS:"
+                  , list = boolDictIncluded model.filteredPfs
+                  , removeMsg = PfsFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude PFS:"
+                  , list = boolDictExcluded model.filteredPfs
+                  , removeMsg = PfsFilterRemoved
                   }
                 ]
             )
@@ -2161,6 +2290,11 @@ viewQueryOptions model =
             "Filter spell components"
             filterComponentsMeasureWrapperId
             (viewFilterComponents model)
+        , viewFoldableOptionBox
+            model
+            "Filter PFS status"
+            filterPfsMeasureWrapperId
+            (viewFilterPfs model)
         , viewFoldableOptionBox
             model
             "Filter numeric values"
@@ -2612,6 +2746,43 @@ viewFilterComponents model =
             [ "material"
             , "somatic"
             , "verbal"
+            ]
+        )
+    ]
+
+
+viewFilterPfs : Model -> List (Html Msg)
+viewFilterPfs model =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "align-baseline"
+        , HA.class "gap-medium"
+        ]
+        [ Html.button
+            [ HE.onClick RemoveAllPfsFiltersPressed ]
+            [ Html.text "Reset selection" ]
+        ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (List.map
+            (\pfs ->
+                Html.button
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HE.onClick (PfsFilterAdded pfs)
+                    ]
+                    [ viewPfsIcon pfs
+                    , Html.text (String.Extra.toTitleCase pfs)
+                    , viewFilterIcon (Dict.get pfs model.filteredPfs)
+                    ]
+            )
+            [ "none"
+            , "standard"
+            , "limited"
+            , "restricted"
             ]
         )
     ]
@@ -3110,18 +3281,7 @@ viewSingleSearchResult model hit =
                 , HA.class "gap-small"
                 , HA.class "align-center"
                 ]
-                [ case hit.source.pfs of
-                    Just "Standard" ->
-                        viewPfsStandard
-
-                    Just "Limited" ->
-                        viewPfsLimited
-
-                    Just "Restricted" ->
-                        viewPfsRestricted
-
-                    _ ->
-                        Html.text ""
+                [ viewPfsIcon (Maybe.withDefault "" hit.source.pfs)
                 , Html.a
                     [ HA.href (getUrl hit.source)
                     , HA.target "_blank"
@@ -3766,6 +3926,22 @@ viewTrait trait =
         [ Html.text trait ]
 
 
+viewPfsIcon : String -> Html msg
+viewPfsIcon pfs =
+    case String.toLower pfs of
+        "standard" ->
+            viewPfsStandard
+
+        "limited" ->
+            viewPfsLimited
+
+        "restricted" ->
+            viewPfsRestricted
+
+        _ ->
+            Html.text ""
+
+
 viewPfsStandard : Html msg
 viewPfsStandard =
     Svg.svg
@@ -3804,7 +3980,7 @@ viewPfsLimited =
             ]
             []
         , Svg.polygon
-            [ SA.points "15,100 50,0, 85,100"
+            [ SA.points "15,100 25,50 50,0 75,50 85,100"
             , SA.fill "#476468"
             ]
             []
@@ -3867,6 +4043,7 @@ measureWrapperIds =
     [ queryOptionsMeasureWrapperId
     , queryTypeMeasureWrapperId
     , filterComponentsMeasureWrapperId
+    , filterPfsMeasureWrapperId
     , filterTraditionsMeasureWrapperId
     , filterTraitsMeasureWrapperId
     , filterTypesMeasureWrapperId
@@ -3900,14 +4077,19 @@ filterTraitsMeasureWrapperId =
     "filter-traits-measure-wrapper"
 
 
-filterValuesMeasureWrapperId : String
-filterValuesMeasureWrapperId =
-    "filter-values-measure-wrapper"
-
-
 filterTraditionsMeasureWrapperId : String
 filterTraditionsMeasureWrapperId =
     "filter-traditions-measure-wrapper"
+
+
+filterPfsMeasureWrapperId : String
+filterPfsMeasureWrapperId =
+    "filter-pfs-measure-wrapper"
+
+
+filterValuesMeasureWrapperId : String
+filterValuesMeasureWrapperId =
+    "filter-values-measure-wrapper"
 
 
 sortResultsMeasureWrapperId : String
