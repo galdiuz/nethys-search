@@ -146,11 +146,20 @@ def parse_action(id: str, soup: BeautifulSoup):
 def parse_ancestry(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'ancestry', 'Ancestries', 'Ancestry')
     traits = get_traits(soup)
+    hp = get_values_under_title(soup, 'Hit Points')
+    size = get_values_under_title(soup, 'Size')
+    speed = get_values_under_title(soup, 'Speed')
 
     doc.name = soup.find('h1', class_='title').text
     doc.type = 'Ancestry'
     doc.trait = normalize_traits(traits)
     doc.trait_raw = traits
+
+    doc.ability_boost = get_values_under_title(soup, 'Ability Boosts')
+    doc.ability_flaw = get_values_under_title(soup, 'Ability Flaw(s)')
+    doc.hp = hp[0] if hp else None
+    doc.size = size[0].split(' or ') if size else None
+    doc.speed = speed[0] if speed else None
 
     doc.save()
 
@@ -490,7 +499,7 @@ def parse_equipment(id: str, soup: BeautifulSoup):
 def parse_familiar(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'familiar', 'Familiars', 'Familiar Ability')
 
-    doc.abilityType = get_label_text(soup, 'Ability Type')
+    doc.ability_type = get_label_text(soup, 'Ability Type')
 
     doc.save()
 
@@ -1339,6 +1348,24 @@ def get_label_links(soup, label):
 
     else:
         return []
+
+
+def get_values_under_title(soup: BeautifulSoup, title: str):
+    node = soup.find('h2', text=title)
+
+    if not node:
+        return []
+
+    values = []
+
+    while node := node.next_sibling:
+        if node.name == 'h2':
+            break
+
+        elif node.text:
+            values.append(node.text)
+
+    return values
 
 
 def get_actions(soup, label):

@@ -37,6 +37,8 @@ damageTypes =
 fields : List ( String, String )
 fields =
     [ ( "ability", "Ability related to a deity or skill" )
+    , ( "ability_boost", "Ancestry ability boost" )
+    , ( "ability_flaw", "Ancestry ability flaw" )
     , ( "ability_type", "Familiar ability type (Familiar / Master)" )
     , ( "ac", "[n] Armor class of an armor, creature, or shield" )
     , ( "actions", "Actions required to use an action, feat, or creature ability" )

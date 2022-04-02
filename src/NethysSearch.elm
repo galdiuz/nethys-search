@@ -53,6 +53,8 @@ type alias Document =
     , type_ : String
     , url : String
     , abilities : List String
+    , abilityBoosts : List String
+    , abilityFlaws : List String
     , abilityType : Maybe String
     , ac : Maybe Int
     , actions : Maybe String
@@ -109,8 +111,10 @@ type alias Document =
     , savingThrow : Maybe String
     , secondaryCasters : Maybe String
     , secondaryChecks : Maybe String
+    , sizes : List String
     , skills : List String
     , source : Maybe String
+    , speed : Maybe String
     , speedPenalty : Maybe String
     , spellList : Maybe String
     , spoilers : Maybe String
@@ -1619,6 +1623,8 @@ documentDecoder =
     Field.require "type" Decode.string <| \type_ ->
     Field.require "url" Decode.string <| \url ->
     Field.attempt "ability" stringListDecoder <| \abilities ->
+    Field.attempt "ability_boost" stringListDecoder <| \abilityBoosts ->
+    Field.attempt "ability_flaw" stringListDecoder <| \abilityFlaws ->
     Field.attempt "ability_type" Decode.string <| \abilityType ->
     Field.attempt "ac" Decode.int <| \ac ->
     Field.attempt "actions" Decode.string <| \actions ->
@@ -1675,8 +1681,10 @@ documentDecoder =
     Field.attempt "saving_throw" Decode.string <| \savingThrow ->
     Field.attempt "secondary_casters_raw" Decode.string <| \secondaryCasters ->
     Field.attempt "secondary_check" Decode.string <| \secondaryChecks ->
+    Field.attempt "size" stringListDecoder <| \sizes ->
     Field.attempt "skill" stringListDecoder <| \skills ->
     Field.attempt "source" Decode.string <| \source ->
+    Field.attempt "speed" Decode.string <| \speed ->
     Field.attempt "speed_penalty" Decode.string <| \speedPenalty ->
     Field.attempt "spell_list" Decode.string <| \spellList ->
     Field.attempt "spoilers" Decode.string <| \spoilers ->
@@ -1697,6 +1705,8 @@ documentDecoder =
         , type_ = type_
         , url = url
         , abilities = Maybe.withDefault [] abilities
+        , abilityBoosts = Maybe.withDefault [] abilityBoosts
+        , abilityFlaws = Maybe.withDefault [] abilityFlaws
         , abilityType = abilityType
         , ac = ac
         , actions = actions
@@ -1753,8 +1763,10 @@ documentDecoder =
         , savingThrow = savingThrow
         , secondaryCasters = secondaryCasters
         , secondaryChecks = secondaryChecks
+        , sizes = Maybe.withDefault [] sizes
         , skills = Maybe.withDefault [] skills
         , source = source
+        , speed = speed
         , speedPenalty = speedPenalty
         , spellList = spellList
         , spoilers = spoilers
@@ -3608,6 +3620,38 @@ viewSearchResultAdditionalInfo hit =
                         , hit.source.requirements
                             |> Maybe.map (viewLabelAndText "Requirements")
                         ]
+
+                "ancestry" ->
+                    [ Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-medium"
+                        ]
+                        (Maybe.Extra.values
+                            [ hit.source.hp
+                                |> Maybe.map String.fromInt
+                                |> Maybe.map (viewLabelAndText "HP")
+                            , hit.source.sizes
+                                |> nonEmptyList
+                                |> Maybe.map (String.join " or ")
+                                |> Maybe.map (viewLabelAndText "Size")
+                            , hit.source.speed
+                                |> Maybe.map (viewLabelAndText "Speed")
+                            ]
+                        )
+                    , Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-medium"
+                        ]
+                        (Maybe.Extra.values
+                            [ hit.source.abilityBoosts
+                                |> nonEmptyList
+                                |> Maybe.map (viewLabelAndPluralizedText "Ability Bost" "Ability Boosts")
+                            , hit.source.abilityFlaws
+                                |> nonEmptyList
+                                |> Maybe.map (viewLabelAndPluralizedText "Ability Flaw" "Ability Flaws")
+                            ]
+                        )
+                    ]
 
                 "armor" ->
                     [ Html.div
