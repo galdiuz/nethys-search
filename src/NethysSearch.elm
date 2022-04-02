@@ -2131,6 +2131,7 @@ viewFilters model =
                                             [ HA.class "row"
                                             , HA.class "gap-tiny"
                                             , HAE.attributeMaybe HA.class class
+                                            , getTraitClass value
                                             , HE.onClick (removeMsg value)
                                             ]
                                             [ viewPfsIcon value
@@ -2639,6 +2640,7 @@ viewFilterTraits model =
             (\trait ->
                 Html.button
                     [ HA.class "trait"
+                    , getTraitClass trait
                     , HA.class "row"
                     , HA.class "align-center"
                     , HA.class "gap-tiny"
@@ -3862,68 +3864,73 @@ viewTrait : String -> Html msg
 viewTrait trait =
     Html.div
         [ HA.class "trait"
-        , case trait of
-            "Uncommon" ->
-                HA.class "trait-uncommon"
-
-            "Rare" ->
-                HA.class "trait-rare"
-
-            "Unique" ->
-                HA.class "trait-unique"
-
-            "Tiny" ->
-                HA.class "trait-size"
-
-            "Small" ->
-                HA.class "trait-size"
-
-            "Medium" ->
-                HA.class "trait-size"
-
-            "Large" ->
-                HA.class "trait-size"
-
-            "Huge" ->
-                HA.class "trait-size"
-
-            "Gargantuan" ->
-                HA.class "trait-size"
-
-            "No Alignment" ->
-                HA.class "trait-alignment"
-
-            "LG" ->
-                HA.class "trait-alignment"
-
-            "LN" ->
-                HA.class "trait-alignment"
-
-            "LE" ->
-                HA.class "trait-alignment"
-
-            "NG" ->
-                HA.class "trait-alignment"
-
-            "N" ->
-                HA.class "trait-alignment"
-
-            "NE" ->
-                HA.class "trait-alignment"
-
-            "CG" ->
-                HA.class "trait-alignment"
-
-            "CN" ->
-                HA.class "trait-alignment"
-
-            "CE" ->
-                HA.class "trait-alignment"
-
-            _ ->
-                HAE.empty
+        , getTraitClass trait
         ]
         [ Html.text trait ]
+
+
+getTraitClass : String -> Html.Attribute msg
+getTraitClass trait =
+    case trait of
+        "Uncommon" ->
+            HA.class "trait-uncommon"
+
+        "Rare" ->
+            HA.class "trait-rare"
+
+        "Unique" ->
+            HA.class "trait-unique"
+
+        "Tiny" ->
+            HA.class "trait-size"
+
+        "Small" ->
+            HA.class "trait-size"
+
+        "Medium" ->
+            HA.class "trait-size"
+
+        "Large" ->
+            HA.class "trait-size"
+
+        "Huge" ->
+            HA.class "trait-size"
+
+        "Gargantuan" ->
+            HA.class "trait-size"
+
+        "No Alignment" ->
+            HA.class "trait-alignment"
+
+        "LG" ->
+            HA.class "trait-alignment"
+
+        "LN" ->
+            HA.class "trait-alignment"
+
+        "LE" ->
+            HA.class "trait-alignment"
+
+        "NG" ->
+            HA.class "trait-alignment"
+
+        "N" ->
+            HA.class "trait-alignment"
+
+        "NE" ->
+            HA.class "trait-alignment"
+
+        "CG" ->
+            HA.class "trait-alignment"
+
+        "CN" ->
+            HA.class "trait-alignment"
+
+        "CE" ->
+            HA.class "trait-alignment"
+
+        _ ->
+            HAE.empty
 
 
 viewPfsIcon : String -> Html msg
