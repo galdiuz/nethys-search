@@ -102,7 +102,7 @@ def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type: s
     title = soup.find('h1', class_='title')
 
     name, title_type, level, pfs = get_title_data(title)
-    source = get_label_text(soup, 'Source')
+    sources = get_label_links(soup, 'Source')
 
     doc = Doc()
     doc.meta.id = category + '-' + id
@@ -113,8 +113,8 @@ def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type: s
     doc.type = title_type or type
     doc.pfs = pfs
     doc.text = title.parent.get_text(' ', strip=True)
-    doc.source = normalize_source(source)
-    doc.source_raw = source
+    doc.source = [ normalize_source(source) for source in sources ]
+    doc.source_raw = sources
     doc.spoilers = get_spoilers(soup)
     doc.level = level
 

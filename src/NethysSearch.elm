@@ -113,7 +113,7 @@ type alias Document =
     , secondaryChecks : Maybe String
     , sizes : List String
     , skills : List String
-    , source : Maybe String
+    , sources : List String
     , speed : Maybe String
     , speedPenalty : Maybe String
     , spellList : Maybe String
@@ -1802,7 +1802,7 @@ documentDecoder =
     Field.attempt "secondary_check" Decode.string <| \secondaryChecks ->
     Field.attempt "size" stringListDecoder <| \sizes ->
     Field.attempt "skill" stringListDecoder <| \skills ->
-    Field.attempt "source" Decode.string <| \source ->
+    Field.attempt "source" stringListDecoder <| \sources ->
     Field.attempt "speed_raw" Decode.string <| \speed ->
     Field.attempt "speed_penalty" Decode.string <| \speedPenalty ->
     Field.attempt "spell_list" Decode.string <| \spellList ->
@@ -1884,7 +1884,7 @@ documentDecoder =
         , secondaryChecks = secondaryChecks
         , sizes = Maybe.withDefault [] sizes
         , skills = Maybe.withDefault [] skills
-        , source = source
+        , sources = Maybe.withDefault [] sources
         , speed = speed
         , speedPenalty = speedPenalty
         , spellList = spellList
@@ -3932,8 +3932,9 @@ viewSearchResultAdditionalInfo hit =
         , HA.class "gap-tiny"
         ]
         (List.append
-            (hit.source.source
-                |> Maybe.map (viewLabelAndText "Source")
+            (hit.source.sources
+                |> nonEmptyList
+                |> Maybe.map (viewLabelAndPluralizedText "Source" "Sources")
                 |> Maybe.map List.singleton
                 |> Maybe.withDefault []
             )
