@@ -176,6 +176,7 @@ type Msg
     | FilterAbilityChanged String
     | FilterComponentsOperatorChanged Bool
     | FilterResistanceChanged String
+    | FilterSpeedChanged String
     | FilterTraditionsOperatorChanged Bool
     | FilterTraitsOperatorChanged Bool
     | FilterWeaknessChanged String
@@ -213,6 +214,7 @@ type Msg
     | SortAdded String SortDir
     | SortRemoved String
     | SortResistanceChanged String
+    | SortSpeedChanged String
     | SortWeaknessChanged String
     | ThemeSelected Theme
     | TraditionFilterAdded String
@@ -263,9 +265,11 @@ type alias Model =
     , searchTypes : String
     , selectedFilterAbility : String
     , selectedFilterResistance : String
+    , selectedFilterSpeed : String
     , selectedFilterWeakness : String
     , selectedSortAbility : String
     , selectedSortResistance : String
+    , selectedSortSpeed : String
     , selectedSortWeakness : String
     , showHeader : Bool
     , showResultAdditionalInfo : Bool
@@ -325,9 +329,11 @@ init flagsValue =
       , searchTypes = ""
       , selectedFilterAbility = "strength"
       , selectedFilterResistance = "acid"
+      , selectedFilterSpeed = "land"
       , selectedFilterWeakness = "acid"
       , selectedSortAbility = "strength"
       , selectedSortResistance = "acid"
+      , selectedSortSpeed = "land"
       , selectedSortWeakness = "acid"
       , showHeader = flags.showHeader
       , showResultAdditionalInfo = True
@@ -423,6 +429,11 @@ update msg model =
 
         FilterResistanceChanged value ->
             ( { model | selectedFilterResistance = value }
+            , Cmd.none
+            )
+
+        FilterSpeedChanged value ->
+            ( { model | selectedFilterSpeed = value }
             , Cmd.none
             )
 
@@ -728,6 +739,11 @@ update msg model =
 
         SortResistanceChanged value ->
             ( { model | selectedSortResistance = value }
+            , Cmd.none
+            )
+
+        SortSpeedChanged value ->
+            ( { model | selectedSortSpeed = value }
             , Cmd.none
             )
 
@@ -1787,7 +1803,7 @@ documentDecoder =
     Field.attempt "size" stringListDecoder <| \sizes ->
     Field.attempt "skill" stringListDecoder <| \skills ->
     Field.attempt "source" Decode.string <| \source ->
-    Field.attempt "speed" Decode.string <| \speed ->
+    Field.attempt "speed_raw" Decode.string <| \speed ->
     Field.attempt "speed_penalty" Decode.string <| \speedPenalty ->
     Field.attempt "spell_list" Decode.string <| \spellList ->
     Field.attempt "spoilers" Decode.string <| \spoilers ->
@@ -3197,7 +3213,7 @@ viewFilterValues model =
                         ]
                         [ Html.select
                             [ HA.class "input-container"
-                            , HA.style "align-self" "flex-start"
+                            , HA.value model.selectedFilterAbility
                             , HE.onInput FilterAbilityChanged
                             ]
                             (List.map
@@ -3246,6 +3262,85 @@ viewFilterValues model =
                                 , HA.step "1"
                                 , HA.value (Maybe.withDefault "" (Dict.get model.selectedFilterAbility model.filteredToValues))
                                 , HE.onInput (FilteredToValueChanged model.selectedFilterAbility)
+                                ]
+                                []
+                            ]
+                        ]
+                    ]
+                , Html.div
+                    [ HA.class "column"
+                    , HA.class "gap-tiny"
+                    ]
+                    [ Html.h4
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HA.class "align-center"
+                        ]
+                        [ Html.select
+                            [ HA.class "input-container"
+                            , HA.value model.selectedFilterSpeed
+                            , HE.onInput FilterSpeedChanged
+                            ]
+                            (List.map
+                                (\speed ->
+                                    Html.option
+                                        [ HA.value speed ]
+                                        [ Html.text (String.Extra.toTitleCase speed)
+                                        ]
+                                )
+                                Data.speedTypes
+                            )
+                        , Html.text "speed"
+                        ]
+                    , Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HA.class "align-center"
+                        ]
+                        [ Html.div
+                            [ HA.class "input-container"
+                            , HA.class "row"
+                            , HA.class "align-baseline"
+                            ]
+                            [ Html.input
+                                [ HA.type_ "number"
+                                , HA.step "1"
+                                , HA.value
+                                    (Maybe.withDefault
+                                        ""
+                                        (Dict.get
+                                            ("speed." ++ model.selectedFilterSpeed)
+                                            model.filteredFromValues
+                                        )
+                                    )
+                                , HE.onInput
+                                    (FilteredFromValueChanged
+                                        ("speed." ++ model.selectedFilterSpeed)
+                                    )
+                                ]
+                                []
+                            ]
+                        , Html.text "to"
+                        , Html.div
+                            [ HA.class "input-container"
+                            , HA.class "row"
+                            , HA.class "align-baseline"
+                            ]
+                            [ Html.input
+                                [ HA.type_ "number"
+                                , HA.step "1"
+                                , HA.value
+                                    (Maybe.withDefault
+                                        ""
+                                        (Dict.get
+                                            ("speed." ++ model.selectedFilterSpeed)
+                                            model.filteredToValues
+                                        )
+                                    )
+                                , HE.onInput
+                                    (FilteredToValueChanged
+                                        ("speed." ++ model.selectedFilterSpeed)
+                                    )
                                 ]
                                 []
                             ]
@@ -3415,7 +3510,7 @@ viewSortResults : Model -> List (Html Msg)
 viewSortResults model =
     [ Html.div
         [ HA.class "grid"
-        , HA.style "grid-template-columns" "repeat(auto-fill,minmax(250px, 1fr))"
+        , HA.style "grid-template-columns" "repeat(auto-fill,minmax(260px, 1fr))"
         , HA.class "gap-medium"
         ]
         (List.concat
@@ -3479,6 +3574,29 @@ viewSortResults model =
                             )
                         ]
                     )
+              , Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HA.class "align-baseline"
+                    ]
+                    (List.append
+                        (viewSortButtons model ("speed." ++ model.selectedSortSpeed))
+                        [ Html.select
+                            [ HA.class "input-container"
+                            , HA.value model.selectedSortSpeed
+                            , HE.onInput SortSpeedChanged
+                            ]
+                            (List.map
+                                (\speed ->
+                                    Html.option
+                                        [ HA.value speed ]
+                                        [ Html.text (String.Extra.humanize speed) ]
+                                )
+                                Data.speedTypes
+                            )
+                        , Html.text "speed"
+                        ]
+                    )
               ]
             ]
         )
@@ -3496,6 +3614,7 @@ viewSortResults model =
                     (viewSortButtons model ("resistance." ++ model.selectedSortResistance))
                     [ Html.select
                         [ HA.class "input-container"
+                        , HA.value model.selectedSortResistance
                         , HE.onInput SortResistanceChanged
                         ]
                         (List.map
@@ -3518,6 +3637,7 @@ viewSortResults model =
                     (viewSortButtons model ("weakness." ++ model.selectedSortWeakness))
                     [ Html.select
                         [ HA.class "input-container"
+                        , HA.value model.selectedSortWeakness
                         , HE.onInput SortWeaknessChanged
                         ]
                         (List.map
@@ -3989,6 +4109,8 @@ viewSearchResultAdditionalInfo hit =
                                 ]
                             )
                                 |> Just
+                        , hit.source.speed
+                            |> Maybe.map (viewLabelAndText "Speed")
                         ]
 
                 "deity" ->

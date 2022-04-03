@@ -159,7 +159,8 @@ def parse_ancestry(id: str, soup: BeautifulSoup):
     doc.ability_flaw = get_values_under_title(soup, 'Ability Flaw(s)')
     doc.hp = hp[0] if hp else None
     doc.size = size[0].split(' or ') if size else None
-    doc.speed = speed[0] if speed else None
+    doc.speed = normalize_speed(speed[0]) if speed else None
+    doc.speed_raw = speed[0] if speed else None
 
     doc.save()
 
@@ -424,13 +425,15 @@ def parse_druidic_order(id: str, soup: BeautifulSoup):
 def parse_eidolon(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'eidolon', 'Eidolons', 'Summoner Eidolon')
     traits = get_traits(soup)
+    speed = get_label_text(soup, 'Speed')
 
     doc.home_plane = get_label_text(soup, 'Home Plane')
     doc.language = get_label_text(soup, 'Languages')
     doc.sense = get_label_text(soup, 'Senses')
     doc.size = get_label_text(soup, 'Size')
     doc.skill = split_comma(get_label_text(soup, 'Skills'))
-    doc.speed = get_label_text(soup, 'Speed')
+    doc.speed = normalize_speed(speed)
+    doc.speed_raw = speed
     doc.tradition = get_label_text(soup, 'Tradition')
     doc.trait = normalize_traits(traits)
     doc.trait_raw = traits
@@ -668,6 +671,7 @@ def parse_creature(id: str, soup: BeautifulSoup, url: str):
     title = list(soup.find_all('h1', class_='title'))[1]
     name, type, level, pfs = get_title_data(title)
     traits = get_traits(soup)
+    speed = get_label_text(soup, 'Speed')
     resistances = split_comma_special(get_label_text(soup, 'Resistances', ''))
     weaknesses = split_comma_special(get_label_text(soup, 'Weaknesses', ''))
     fort_save = int(get_label_text(soup, 'Fort', ';,('))
@@ -687,7 +691,8 @@ def parse_creature(id: str, soup: BeautifulSoup, url: str):
     doc.perception = get_label_text(soup, 'Perception')
     doc.sense = get_senses(get_label_text(soup, 'Perception', ''))
     doc.skill = split_comma(get_label_text(soup, 'Skills'))
-    doc.speed = get_label_text(soup, 'Speed')
+    doc.speed = normalize_speed(speed)
+    doc.speed_raw = speed
     doc.item = split_comma(get_label_text(soup, 'Items'))
 
     doc.strength = get_label_text(soup, 'Str', ',')
@@ -1218,6 +1223,45 @@ def normalize_resistance(values: str):
     return resistances
 
 
+def normalize_speed(value: str):
+    speed = {
+        'burrow': None,
+        'climb': None,
+        'fly': None,
+        'land': None,
+        'swim': None,
+    }
+
+    if not value:
+        return speed
+
+    values = value.split(', ')
+
+    for s in values:
+        match = re.match(r'((\w+) )?(\d+)( feet)?', s)
+
+        if match:
+            type = match.group(2)
+            number = match.group(3)
+
+            if type is None:
+                speed['land'] = number
+
+            elif type == 'burrow':
+                speed['burrow'] = number
+
+            elif type == 'climb':
+                speed['climb'] = number
+
+            elif type == 'fly':
+                speed['fly'] = number
+
+            elif type == 'swim':
+                speed['swim'] = number
+
+    return speed
+
+
 def translate_damage_types(value: str, exceptions: str):
     if value == 'physical':
         types = physical_types()
@@ -1535,6 +1579,13 @@ class Doc(Document):
     secondary_casters = Integer()
     size = Keyword(normalizer="lowercase")
     source = Keyword(normalizer="lowercase")
+    speed = Object(properties={
+        'burrow': Integer(),
+        'climb': Integer(),
+        'fly': Integer(),
+        'land': Integer(),
+        'swim': Integer(),
+    })
     str = Alias(path="strength")
     strength = Integer()
     text = Text()

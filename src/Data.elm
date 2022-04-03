@@ -143,7 +143,8 @@ fields =
     , ( "slingers_reload", "Gunslinger way's slinger's reload" )
     , ( "source", "Source book name" )
     , ( "source_raw", "Source book exactly as written incl. page" )
-    , ( "speed", "Speeds" )
+    , ( "speed.<type>", "[n] Speed of <type>. Valid types are burrow, climb, fly, land, and swim. Use speed.\\* to match any type." )
+    , ( "speed_raw", "Speed exactly as written" )
     , ( "speed_penalty", "Speed penalty of armor or shield" )
     , ( "spell_list", "Spell list of a Sorcerer bloodline or witch patron theme" )
     , ( "spoilers", "Adventure path name if there is a spoiler warning on the page" )
@@ -197,7 +198,7 @@ sortFields =
             (List.map
                 (\type_ ->
                     ( "resistance." ++ type_
-                    , (type_ |> String.Extra.humanize) ++ " resistance"
+                    , (String.Extra.humanize type_) ++ " resistance"
                     )
                 )
                 damageTypes
@@ -206,11 +207,30 @@ sortFields =
             (List.map
                 (\type_ ->
                     ( "weakness." ++ type_
-                    , (type_ |> String.Extra.humanize) ++ " weakness"
+                    , (String.Extra.humanize type_) ++ " weakness"
                     )
                 )
                 damageTypes
             )
+        |> List.append
+            (List.map
+                (\speed ->
+                    ( "speed." ++ speed
+                    , (String.Extra.humanize speed) ++ " speed"
+                    )
+                )
+                speedTypes
+            )
+
+
+speedTypes : List String
+speedTypes =
+    [ "burrow"
+    , "climb"
+    , "fly"
+    , "land"
+    , "swim"
+    ]
 
 
 traits : List String
