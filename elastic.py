@@ -1502,6 +1502,7 @@ def damageTypesObject():
 
 class Doc(Document):
     ac = Integer()
+    alignment = Keyword(normalizer="lowercase")
     bulk = Float()
     category = Keyword(normalizer="lowercase")
     cha = Alias(path="charisma")

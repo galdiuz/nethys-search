@@ -166,7 +166,9 @@ type Theme
 
 
 type Msg
-    = ComponentFilterAdded String
+    = AlignmentFilterAdded String
+    | AlignmentFilterRemoved String
+    | ComponentFilterAdded String
     | ComponentFilterRemoved String
     | DebouncePassed Int
     | GotElementHeight String Int
@@ -188,6 +190,7 @@ type Msg
     | QueryChanged String
     | QueryTypeSelected QueryType
     | RemoveAllSortsPressed
+    | RemoveAllAlignmentFiltersPressed
     | RemoveAllComponentFiltersPressed
     | RemoveAllPfsFiltersPressed
     | RemoveAllTraditionFiltersPressed
@@ -235,6 +238,7 @@ type alias Model =
     { debounce : Int
     , elasticUrl : String
     , elementHeights : Dict String Int
+    , filteredAlignments : Dict String Bool
     , filteredComponents : Dict String Bool
     , filteredPfs : Dict String Bool
     , filteredTraditions : Dict String Bool
@@ -295,6 +299,7 @@ init flagsValue =
     ( { debounce = 0
       , elasticUrl = flags.elasticUrl
       , elementHeights = Dict.empty
+      , filteredAlignments = Dict.empty
       , filteredComponents = Dict.empty
       , filteredPfs = Dict.empty
       , filteredTraditions = Dict.empty
@@ -356,6 +361,16 @@ subscriptions model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        AlignmentFilterAdded alignment ->
+            ( model
+            , updateUrl { model | filteredAlignments = toggleBoolDict alignment model.filteredAlignments }
+            )
+
+        AlignmentFilterRemoved alignment ->
+            ( model
+            , updateUrl { model | filteredAlignments = Dict.remove alignment model.filteredAlignments }
+            )
+
         ComponentFilterAdded component ->
             ( model
             , updateUrl { model | filteredComponents = toggleBoolDict component model.filteredComponents }
@@ -565,6 +580,11 @@ update msg model =
         RemoveAllSortsPressed ->
             ( model
             , updateUrl { model | sort = [] }
+            )
+
+        RemoveAllAlignmentFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredAlignments = Dict.empty }
             )
 
         RemoveAllComponentFiltersPressed ->
@@ -892,6 +912,20 @@ updateUrl ({ url } as model) =
                     |> List.map Tuple.first
                     |> String.join ","
               )
+            , ( "include-alignments"
+              , model.filteredAlignments
+                    |> Dict.toList
+                    |> List.filter (Tuple.second)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "exclude-alignments"
+              , model.filteredAlignments
+                    |> Dict.toList
+                    |> List.filter (Tuple.second >> not)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
             , ( "include-components"
               , model.filteredComponents
                     |> Dict.toList
@@ -1197,7 +1231,8 @@ buildSearchFilterTerms model =
                       ]
                     ]
             )
-            [ ( "component", boolDictIncluded model.filteredComponents, model.filterComponentsOperator )
+            [ ( "alignment", boolDictIncluded model.filteredAlignments, False )
+            , ( "component", boolDictIncluded model.filteredComponents, model.filterComponentsOperator )
             , ( "pfs", boolDictIncluded model.filteredPfs, False )
             , ( "tradition", boolDictIncluded model.filteredTraditions, model.filterTraditionsOperator )
             , ( "trait", boolDictIncluded model.filteredTraits, model.filterTraitsOperator )
@@ -1286,7 +1321,8 @@ buildSearchMustNotTerms model =
                         Nothing
                     ]
         )
-        [ ( "component", boolDictExcluded model.filteredComponents )
+        [ ( "alignment", boolDictExcluded model.filteredAlignments )
+        , ( "component", boolDictExcluded model.filteredComponents )
         , ( "pfs", boolDictExcluded model.filteredPfs )
         , ( "tradition", boolDictExcluded model.filteredTraditions )
         , ( "trait", boolDictExcluded model.filteredTraits )
@@ -1356,6 +1392,21 @@ updateModelFromQueryString url model =
 
                 _ ->
                     Standard
+        , filteredAlignments =
+            List.append
+                (getQueryParam url "include-alignments"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\alignment -> ( alignment, True ))
+                )
+                (getQueryParam url "exclude-alignments"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\alignment -> ( alignment, False ))
+                )
+                |> Dict.fromList
         , filteredComponents =
             List.append
                 (getQueryParam url "include-components"
@@ -1498,6 +1549,7 @@ getQueryParam url param =
 searchWithCurrentQuery : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 searchWithCurrentQuery ( model, cmd ) =
     if String.isEmpty (String.trim model.query)
+        && Dict.isEmpty model.filteredAlignments
         && Dict.isEmpty model.filteredComponents
         && Dict.isEmpty model.filteredPfs
         && Dict.isEmpty model.filteredTraditions
@@ -2238,6 +2290,16 @@ viewFilters model =
                   , list = boolDictExcluded model.filteredTraditions
                   , removeMsg = TraditionFilterRemoved
                   }
+                , { class = Just "trait trait-alignment"
+                  , label = "Include alignments:"
+                  , list = boolDictIncluded model.filteredAlignments
+                  , removeMsg = AlignmentFilterRemoved
+                  }
+                , { class = Just "trait trait-alignment"
+                  , label = "Exclude alignments:"
+                  , list = boolDictExcluded model.filteredAlignments
+                  , removeMsg = AlignmentFilterRemoved
+                  }
                 , { class = Just "component"
                   , label =
                         if model.filterComponentsOperator then
@@ -2337,6 +2399,11 @@ viewQueryOptions model =
             "Filter traits"
             filterTraitsMeasureWrapperId
             (viewFilterTraits model)
+        , viewFoldableOptionBox
+            model
+            "Filter alignments"
+            filterAlignmentsMeasureWrapperId
+            (viewFilterAlignments model)
         , viewFoldableOptionBox
             model
             "Filter traditions"
@@ -2758,6 +2825,40 @@ viewFilterTraditions model =
             , "occult"
             , "primal"
             ]
+        )
+    ]
+
+
+viewFilterAlignments : Model -> List (Html Msg)
+viewFilterAlignments model =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "align-baseline"
+        , HA.class "gap-medium"
+        ]
+        [ Html.button
+            [ HE.onClick RemoveAllAlignmentFiltersPressed ]
+            [ Html.text "Reset selection" ]
+        ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (List.map
+            (\(alignment, label) ->
+                Html.button
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HA.class "trait"
+                    , HA.class "trait-alignment"
+                    , HE.onClick (AlignmentFilterAdded alignment)
+                    ]
+                    [ Html.text label
+                    , viewFilterIcon (Dict.get alignment model.filteredAlignments)
+                    ]
+            )
+            Data.alignments
         )
     ]
 
@@ -4391,6 +4492,7 @@ measureWrapperIds : List String
 measureWrapperIds =
     [ queryOptionsMeasureWrapperId
     , queryTypeMeasureWrapperId
+    , filterAlignmentsMeasureWrapperId
     , filterComponentsMeasureWrapperId
     , filterPfsMeasureWrapperId
     , filterTraditionsMeasureWrapperId
@@ -4414,6 +4516,11 @@ queryTypeMeasureWrapperId =
 filterTypesMeasureWrapperId : String
 filterTypesMeasureWrapperId =
     "filter-types-measure-wrapper"
+
+
+filterAlignmentsMeasureWrapperId : String
+filterAlignmentsMeasureWrapperId =
+    "filter-alignments-measure-wrapper"
 
 
 filterComponentsMeasureWrapperId : String

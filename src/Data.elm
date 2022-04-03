@@ -3,6 +3,21 @@ module Data exposing (..)
 import String.Extra
 
 
+alignments : List ( String, String )
+alignments =
+    [ ( "ce", "Chaotic Evil" )
+    , ( "cg", "Chaotic Good" )
+    , ( "cn", "Chaotic Neutral" )
+    , ( "le", "Lawful Evil" )
+    , ( "lg", "Lawful Good" )
+    , ( "ln", "Lawful Neutral" )
+    , ( "n", "Neutral" )
+    , ( "ne", "Neutral Evil" )
+    , ( "ng", "Neutral Good" )
+    , ( "no alignment", "No Alignment")
+    ]
+
+
 damageTypes : List String
 damageTypes =
     [ "acid"
@@ -245,9 +260,6 @@ traits =
     , "Boggard"
     , "Bomb"
     , "Bulwark"
-    , "CE"
-    , "CG"
-    , "CN"
     , "Caligni"
     , "Cantrip"
     , "Capacity"
@@ -404,9 +416,6 @@ traits =
     , "Kitsune"
     , "Kobold"
     , "Kovintus"
-    , "LE"
-    , "LG"
-    , "LN"
     , "Large"
     , "Lawful"
     , "Legacy"
@@ -443,13 +452,9 @@ traits =
     , "Munavri"
     , "Mutagen"
     , "Mutant"
-    , "N"
-    , "NE"
-    , "NG"
     , "Nagaji"
     , "Necromancy"
     , "Negative"
-    , "No Alignment"
     , "Noisy"
     , "Nonlethal"
     , "Nymph"
