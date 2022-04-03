@@ -193,6 +193,7 @@ type Msg
     | RemoveAllAlignmentFiltersPressed
     | RemoveAllComponentFiltersPressed
     | RemoveAllPfsFiltersPressed
+    | RemoveAllSizeFiltersPressed
     | RemoveAllTraditionFiltersPressed
     | RemoveAllTraitFiltersPressed
     | RemoveAllTypeFiltersPressed
@@ -206,6 +207,8 @@ type Msg
     | ShowQueryOptionsPressed Bool
     | ShowSpoilersChanged Bool
     | ShowTraitsChanged Bool
+    | SizeFilterAdded String
+    | SizeFilterRemoved String
     | SortAbilityChanged String
     | SortAdded String SortDir
     | SortRemoved String
@@ -241,6 +244,7 @@ type alias Model =
     , filteredAlignments : Dict String Bool
     , filteredComponents : Dict String Bool
     , filteredPfs : Dict String Bool
+    , filteredSizes : Dict String Bool
     , filteredTraditions : Dict String Bool
     , filteredTraits : Dict String Bool
     , filteredTypes : Dict String Bool
@@ -302,6 +306,7 @@ init flagsValue =
       , filteredAlignments = Dict.empty
       , filteredComponents = Dict.empty
       , filteredPfs = Dict.empty
+      , filteredSizes = Dict.empty
       , filteredTraditions = Dict.empty
       , filteredTraits = Dict.empty
       , filteredTypes = Dict.empty
@@ -597,6 +602,11 @@ update msg model =
             , updateUrl { model | filteredPfs = Dict.empty }
             )
 
+        RemoveAllSizeFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredSizes = Dict.empty }
+            )
+
         RemoveAllTraditionFiltersPressed ->
             ( model
             , updateUrl { model | filteredTraditions = Dict.empty }
@@ -683,6 +693,16 @@ update msg model =
             , saveToLocalStorage
                 "show-traits"
                 (if value then "1" else "0")
+            )
+
+        SizeFilterAdded size ->
+            ( model
+            , updateUrl { model | filteredSizes = toggleBoolDict size model.filteredSizes }
+            )
+
+        SizeFilterRemoved size ->
+            ( model
+            , updateUrl { model | filteredSizes = Dict.remove size model.filteredSizes }
             )
 
         SortAbilityChanged value ->
@@ -961,6 +981,20 @@ updateUrl ({ url } as model) =
                     |> List.map Tuple.first
                     |> String.join ","
               )
+            , ( "include-sizes"
+              , model.filteredSizes
+                    |> Dict.toList
+                    |> List.filter (Tuple.second)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "exclude-sizes"
+              , model.filteredSizes
+                    |> Dict.toList
+                    |> List.filter (Tuple.second >> not)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
             , ( "include-traditions"
               , model.filteredTraditions
                     |> Dict.toList
@@ -1234,6 +1268,7 @@ buildSearchFilterTerms model =
             [ ( "alignment", boolDictIncluded model.filteredAlignments, False )
             , ( "component", boolDictIncluded model.filteredComponents, model.filterComponentsOperator )
             , ( "pfs", boolDictIncluded model.filteredPfs, False )
+            , ( "size", boolDictIncluded model.filteredSizes, False )
             , ( "tradition", boolDictIncluded model.filteredTraditions, model.filterTraditionsOperator )
             , ( "trait", boolDictIncluded model.filteredTraits, model.filterTraitsOperator )
             , ( "type", boolDictIncluded model.filteredTypes, False )
@@ -1324,6 +1359,7 @@ buildSearchMustNotTerms model =
         [ ( "alignment", boolDictExcluded model.filteredAlignments )
         , ( "component", boolDictExcluded model.filteredComponents )
         , ( "pfs", boolDictExcluded model.filteredPfs )
+        , ( "size", boolDictExcluded model.filteredSizes )
         , ( "tradition", boolDictExcluded model.filteredTraditions )
         , ( "trait", boolDictExcluded model.filteredTraits )
         , ( "type", boolDictExcluded model.filteredTypes )
@@ -1435,6 +1471,21 @@ updateModelFromQueryString url model =
                     |> Maybe.map (String.split ",")
                     |> Maybe.withDefault []
                     |> List.map (\pfs -> ( pfs, False ))
+                )
+                |> Dict.fromList
+        , filteredSizes =
+            List.append
+                (getQueryParam url "include-sizes"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\size -> ( size, True ))
+                )
+                (getQueryParam url "exclude-sizes"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\size -> ( size, False ))
                 )
                 |> Dict.fromList
         , filteredTraditions =
@@ -1552,6 +1603,7 @@ searchWithCurrentQuery ( model, cmd ) =
         && Dict.isEmpty model.filteredAlignments
         && Dict.isEmpty model.filteredComponents
         && Dict.isEmpty model.filteredPfs
+        && Dict.isEmpty model.filteredSizes
         && Dict.isEmpty model.filteredTraditions
         && Dict.isEmpty model.filteredTraits
         && Dict.isEmpty model.filteredTypes
@@ -2325,6 +2377,16 @@ viewFilters model =
                   , list = boolDictExcluded model.filteredPfs
                   , removeMsg = PfsFilterRemoved
                   }
+                , { class = Just "trait trait-size"
+                  , label = "Include sizes:"
+                  , list = boolDictIncluded model.filteredSizes
+                  , removeMsg = SizeFilterRemoved
+                  }
+                , { class = Just "trait trait-size"
+                  , label = "Exclude sizes:"
+                  , list = boolDictExcluded model.filteredSizes
+                  , removeMsg = SizeFilterRemoved
+                  }
                 ]
             )
 
@@ -2419,6 +2481,11 @@ viewQueryOptions model =
             "Filter PFS status"
             filterPfsMeasureWrapperId
             (viewFilterPfs model)
+        , viewFoldableOptionBox
+            model
+            "Filter sizes"
+            filterSizesMeasureWrapperId
+            (viewFilterSizes model)
         , viewFoldableOptionBox
             model
             "Filter numeric values"
@@ -2942,6 +3009,46 @@ viewFilterPfs model =
             , "standard"
             , "limited"
             , "restricted"
+            ]
+        )
+    ]
+
+
+viewFilterSizes : Model -> List (Html Msg)
+viewFilterSizes model =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "align-baseline"
+        , HA.class "gap-medium"
+        ]
+        [ Html.button
+            [ HE.onClick RemoveAllSizeFiltersPressed ]
+            [ Html.text "Reset selection" ]
+        ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (List.map
+            (\size ->
+                Html.button
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HA.class "trait"
+                    , HA.class "trait-size"
+                    , HE.onClick (SizeFilterAdded size)
+                    ]
+                    [ Html.text (String.Extra.toTitleCase size)
+                    , viewFilterIcon (Dict.get size model.filteredSizes)
+                    ]
+            )
+            [ "tiny"
+            , "small"
+            , "medium"
+            , "large"
+            , "huge"
+            , "gargantuan"
             ]
         )
     ]
@@ -4495,6 +4602,7 @@ measureWrapperIds =
     , filterAlignmentsMeasureWrapperId
     , filterComponentsMeasureWrapperId
     , filterPfsMeasureWrapperId
+    , filterSizesMeasureWrapperId
     , filterTraditionsMeasureWrapperId
     , filterTraitsMeasureWrapperId
     , filterTypesMeasureWrapperId
@@ -4536,6 +4644,11 @@ filterTraitsMeasureWrapperId =
 filterTraditionsMeasureWrapperId : String
 filterTraditionsMeasureWrapperId =
     "filter-traditions-measure-wrapper"
+
+
+filterSizesMeasureWrapperId : String
+filterSizesMeasureWrapperId =
+    "filter-sizes-measure-wrapper"
 
 
 filterPfsMeasureWrapperId : String

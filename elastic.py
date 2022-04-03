@@ -1533,6 +1533,7 @@ class Doc(Document):
     required_abilities = Integer()
     resistance = damageTypesObject()
     secondary_casters = Integer()
+    size = Keyword(normalizer="lowercase")
     source = Keyword(normalizer="lowercase")
     str = Alias(path="strength")
     strength = Integer()
