@@ -119,6 +119,7 @@ type alias Document =
     , spellList : Maybe String
     , spoilers : Maybe String
     , strength : Maybe Int
+    , subCategory : Maybe String
     , targets : Maybe String
     , traditions : List String
     , traits : List String
@@ -173,6 +174,7 @@ type Msg
     | DebouncePassed Int
     | GotElementHeight String Int
     | GotSearchResult (Result Http.Error SearchResult)
+    | GotSourcesResult (Result Http.Error (List Document))
     | FilterAbilityChanged String
     | FilterComponentsOperatorChanged Bool
     | FilterResistanceChanged String
@@ -195,10 +197,13 @@ type Msg
     | RemoveAllComponentFiltersPressed
     | RemoveAllPfsFiltersPressed
     | RemoveAllSizeFiltersPressed
+    | RemoveAllSourceBookFiltersPressed
+    | RemoveAllSourceCategoryFiltersPressed
     | RemoveAllTraditionFiltersPressed
     | RemoveAllTraitFiltersPressed
     | RemoveAllTypeFiltersPressed
     | RemoveAllValueFiltersPressed
+    | SearchSourceBooksChanged String
     | SearchTraitsChanged String
     | SearchTypesChanged String
     | ScrollToTopPressed
@@ -216,6 +221,10 @@ type Msg
     | SortResistanceChanged String
     | SortSpeedChanged String
     | SortWeaknessChanged String
+    | SourceBookFilterAdded String
+    | SourceBookFilterRemoved String
+    | SourceCategoryFilterAdded String
+    | SourceCategoryFilterRemoved String
     | ThemeSelected Theme
     | TraditionFilterAdded String
     | TraditionFilterRemoved String
@@ -247,6 +256,8 @@ type alias Model =
     , filteredComponents : Dict String Bool
     , filteredPfs : Dict String Bool
     , filteredSizes : Dict String Bool
+    , filteredSourceBooks : Dict String Bool
+    , filteredSourceCategories : Dict String Bool
     , filteredTraditions : Dict String Bool
     , filteredTraits : Dict String Bool
     , filteredTypes : Dict String Bool
@@ -260,6 +271,7 @@ type alias Model =
     , query : String
     , queryOptionsOpen : Bool
     , queryType : QueryType
+    , searchSourceBooks : String
     , searchResults : List (Result Http.Error SearchResult)
     , searchTraits : String
     , searchTypes : String
@@ -276,6 +288,7 @@ type alias Model =
     , showResultSpoilers : Bool
     , showResultTraits : Bool
     , sort : List ( String, SortDir )
+    , sources : Maybe (List Document)
     , theme : Theme
     , tracker : Maybe Int
     , url : Url
@@ -310,6 +323,8 @@ init flagsValue =
       , filteredAlignments = Dict.empty
       , filteredComponents = Dict.empty
       , filteredPfs = Dict.empty
+      , filteredSourceBooks = Dict.empty
+      , filteredSourceCategories = Dict.empty
       , filteredSizes = Dict.empty
       , filteredTraditions = Dict.empty
       , filteredTraits = Dict.empty
@@ -324,6 +339,7 @@ init flagsValue =
       , query = ""
       , queryOptionsOpen = False
       , queryType = Standard
+      , searchSourceBooks = ""
       , searchResults = []
       , searchTraits = ""
       , searchTypes = ""
@@ -340,6 +356,7 @@ init flagsValue =
       , showResultSpoilers = True
       , showResultTraits = True
       , sort = []
+      , sources = Nothing
       , theme = Dark
       , tracker = Nothing
       , url = url
@@ -354,6 +371,7 @@ init flagsValue =
     )
         |> searchWithCurrentQuery
         |> updateTitle
+        |> getSources
 
 
 subscriptions : Model -> Sub Msg
@@ -416,6 +434,16 @@ update msg model =
               }
             , Cmd.none
             )
+
+        GotSourcesResult result ->
+            ( { model | sources = Just (Result.withDefault [] result) }
+            , Cmd.none
+            )
+                |> (if not (Dict.isEmpty model.filteredSourceCategories) then
+                        searchWithCurrentQuery
+                    else
+                        identity
+                   )
 
         FilterAbilityChanged value ->
             ( { model | selectedFilterAbility = value }
@@ -618,6 +646,16 @@ update msg model =
             , updateUrl { model | filteredSizes = Dict.empty }
             )
 
+        RemoveAllSourceBookFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredSourceBooks = Dict.empty }
+            )
+
+        RemoveAllSourceCategoryFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredSourceCategories = Dict.empty }
+            )
+
         RemoveAllTraditionFiltersPressed ->
             ( model
             , updateUrl { model | filteredTraditions = Dict.empty }
@@ -642,9 +680,14 @@ update msg model =
                 }
             )
 
+        SearchSourceBooksChanged value ->
+            ( { model | searchSourceBooks = value }
+            , getElementHeight filterSourcesMeasureWrapperId
+            )
+
         SearchTraitsChanged value ->
             ( { model | searchTraits = value }
-            , getElementHeight queryOptionsMeasureWrapperId
+            , getElementHeight filterTraitsMeasureWrapperId
             )
 
         SearchTypesChanged value ->
@@ -750,6 +793,39 @@ update msg model =
         SortWeaknessChanged value ->
             ( { model | selectedSortWeakness = value }
             , Cmd.none
+            )
+
+        SourceBookFilterAdded book ->
+            ( model
+            , updateUrl { model | filteredSourceBooks = toggleBoolDict book model.filteredSourceBooks }
+            )
+
+        SourceBookFilterRemoved book ->
+            ( model
+            , updateUrl { model | filteredSourceBooks = Dict.remove book model.filteredSourceBooks }
+            )
+
+        SourceCategoryFilterAdded category ->
+            ( model
+            , updateUrl
+                { model
+                    | filteredSourceCategories = toggleBoolDict category model.filteredSourceCategories
+                    , filteredSourceBooks =
+                        Dict.filter
+                            (\source _ ->
+                                model.sources
+                                    |> Maybe.andThen (List.Extra.find (.name >> ((==) source)))
+                                    |> Maybe.andThen .subCategory
+                                    |> Maybe.map String.toLower
+                                    |> (/=) (Just category)
+                            )
+                            model.filteredSourceBooks
+                }
+            )
+
+        SourceCategoryFilterRemoved category ->
+            ( model
+            , updateUrl { model | filteredSourceCategories = Dict.remove category model.filteredSourceCategories }
             )
 
         ThemeSelected theme ->
@@ -1006,6 +1082,34 @@ updateUrl ({ url } as model) =
               )
             , ( "exclude-sizes"
               , model.filteredSizes
+                    |> Dict.toList
+                    |> List.filter (Tuple.second >> not)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "include-source-books"
+              , model.filteredSourceBooks
+                    |> Dict.toList
+                    |> List.filter (Tuple.second)
+                    |> List.map Tuple.first
+                    |> String.join ";"
+              )
+            , ( "exclude-source-books"
+              , model.filteredSourceBooks
+                    |> Dict.toList
+                    |> List.filter (Tuple.second >> not)
+                    |> List.map Tuple.first
+                    |> String.join ";"
+              )
+            , ( "include-source-categories"
+              , model.filteredSourceCategories
+                    |> Dict.toList
+                    |> List.filter (Tuple.second)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "exclude-source-categories"
+              , model.filteredSourceCategories
                     |> Dict.toList
                     |> List.filter (Tuple.second >> not)
                     |> List.map Tuple.first
@@ -1285,6 +1389,7 @@ buildSearchFilterTerms model =
             , ( "component", boolDictIncluded model.filteredComponents, model.filterComponentsOperator )
             , ( "pfs", boolDictIncluded model.filteredPfs, False )
             , ( "size", boolDictIncluded model.filteredSizes, False )
+            , ( "source", boolDictIncluded model.filteredSourceBooks, False )
             , ( "tradition", boolDictIncluded model.filteredTraditions, model.filterTraditionsOperator )
             , ( "trait", boolDictIncluded model.filteredTraits, model.filterTraitsOperator )
             , ( "type", boolDictIncluded model.filteredTypes, False )
@@ -1324,63 +1429,131 @@ buildSearchFilterTerms model =
                 ]
             )
             (Dict.toList model.filteredToValues)
+
+        , if List.isEmpty (boolDictIncluded model.filteredSourceCategories) then
+            []
+
+          else
+            [ ( "bool"
+              , Encode.object
+                    [ ( "should"
+                      , Encode.list Encode.object
+                            (List.map
+                                (\category ->
+                                    [ ( "terms"
+                                      , Encode.object
+                                            [ ( "source"
+                                              , Encode.list Encode.string
+                                                    (List.filterMap
+                                                        (\source ->
+                                                            if Maybe.map String.toLower source.subCategory
+                                                                == Just category
+                                                            then
+                                                                Just source.name
+
+                                                            else
+                                                                Nothing
+                                                        )
+                                                        (Maybe.withDefault [] model.sources)
+                                                    )
+                                              )
+                                            ]
+                                      )
+                                    ]
+                                )
+                                (boolDictIncluded model.filteredSourceCategories)
+                            )
+                      )
+                    ]
+              )
+            ]
+                |> List.singleton
         ]
 
 
 buildSearchMustNotTerms : Model -> List (List ( String, Encode.Value ))
 buildSearchMustNotTerms model =
-    List.map
-        (\( field, list ) ->
-            if List.isEmpty list then
-                []
+    List.concat
+        [ List.map
+            (\( field, list ) ->
+                if List.isEmpty list then
+                    []
 
-            else
-                Maybe.Extra.values
-                    [ if List.isEmpty (List.filter ((/=) "none") list) then
-                        Nothing
+                else
+                    Maybe.Extra.values
+                        [ if List.isEmpty (List.filter ((/=) "none") list) then
+                            Nothing
 
-                      else
-                        [ ( "terms"
-                          , Encode.object
-                                [ ( field
-                                  , Encode.list Encode.string (List.filter ((/=) "none") list)
-                                  )
-                                ]
+                          else
+                            [ ( "terms"
+                              , Encode.object
+                                    [ ( field
+                                      , Encode.list Encode.string (List.filter ((/=) "none") list)
+                                      )
+                                    ]
+                              )
+                            ]
+                                |> Just
+
+                        , if List.member "none" list then
+                            [ ( "bool"
+                              , Encode.object
+                                    [ ( "must_not"
+                                      , Encode.list Encode.object
+                                            [ [ ( "exists"
+                                                , Encode.object
+                                                    [ ( "field", Encode.string field )
+                                                    ]
+                                                )
+                                              ]
+                                            ]
+                                      )
+                                    ]
+                              )
+                            ]
+                                |> Just
+
+                          else
+                            Nothing
+                        ]
+            )
+            [ ( "alignment", boolDictExcluded model.filteredAlignments )
+            , ( "component", boolDictExcluded model.filteredComponents )
+            , ( "pfs", boolDictExcluded model.filteredPfs )
+            , ( "size", boolDictExcluded model.filteredSizes )
+            , ( "source", boolDictExcluded model.filteredSourceBooks )
+            , ( "tradition", boolDictExcluded model.filteredTraditions )
+            , ( "trait", boolDictExcluded model.filteredTraits )
+            , ( "type", boolDictExcluded model.filteredTypes )
+            ]
+                |> List.concat
+
+        , List.map
+            (\category ->
+                [ ( "terms"
+                  , Encode.object
+                        [ ( "source"
+                          , Encode.list Encode.string
+                                (List.filterMap
+                                    (\source ->
+
+                                        if Maybe.map String.toLower source.subCategory
+                                            == Just category
+                                        then
+                                            Just source.name
+
+                                        else
+                                            Nothing
+                                    )
+                                    (Maybe.withDefault [] model.sources)
+                                )
                           )
                         ]
-                            |> Just
-
-                    , if List.member "none" list then
-                        [ ( "bool"
-                          , Encode.object
-                                [ ( "must_not"
-                                  , Encode.list Encode.object
-                                        [ [ ( "exists"
-                                            , Encode.object
-                                                [ ( "field", Encode.string field )
-                                                ]
-                                            )
-                                          ]
-                                        ]
-                                  )
-                                ]
-                          )
-                        ]
-                            |> Just
-
-                      else
-                        Nothing
-                    ]
-        )
-        [ ( "alignment", boolDictExcluded model.filteredAlignments )
-        , ( "component", boolDictExcluded model.filteredComponents )
-        , ( "pfs", boolDictExcluded model.filteredPfs )
-        , ( "size", boolDictExcluded model.filteredSizes )
-        , ( "tradition", boolDictExcluded model.filteredTraditions )
-        , ( "trait", boolDictExcluded model.filteredTraits )
-        , ( "type", boolDictExcluded model.filteredTypes )
+                  )
+                ]
+            )
+            (boolDictExcluded model.filteredSourceCategories)
         ]
-        |> List.concat
 
 
 buildStandardQueryBody : String -> List (List ( String, Encode.Value ))
@@ -1504,6 +1677,36 @@ updateModelFromQueryString url model =
                     |> List.map (\size -> ( size, False ))
                 )
                 |> Dict.fromList
+        , filteredSourceBooks =
+            List.append
+                (getQueryParam url "include-source-books"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ";")
+                    |> Maybe.withDefault []
+                    |> List.map (\size -> ( size, True ))
+                )
+                (getQueryParam url "exclude-source-books"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ";")
+                    |> Maybe.withDefault []
+                    |> List.map (\size -> ( size, False ))
+                )
+                |> Dict.fromList
+        , filteredSourceCategories =
+            List.append
+                (getQueryParam url "include-source-categories"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\size -> ( size, True ))
+                )
+                (getQueryParam url "exclude-source-categories"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\size -> ( size, False ))
+                )
+                |> Dict.fromList
         , filteredTraditions =
             List.append
                 (getQueryParam url "include-traditions"
@@ -1615,16 +1818,22 @@ getQueryParam url param =
 
 searchWithCurrentQuery : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 searchWithCurrentQuery ( model, cmd ) =
-    if String.isEmpty (String.trim model.query)
+    if (String.isEmpty (String.trim model.query)
         && Dict.isEmpty model.filteredAlignments
         && Dict.isEmpty model.filteredComponents
         && Dict.isEmpty model.filteredPfs
         && Dict.isEmpty model.filteredSizes
+        && Dict.isEmpty model.filteredSourceBooks
+        && Dict.isEmpty model.filteredSourceCategories
         && Dict.isEmpty model.filteredTraditions
         && Dict.isEmpty model.filteredTraits
         && Dict.isEmpty model.filteredTypes
         && Dict.isEmpty model.filteredFromValues
         && Dict.isEmpty model.filteredToValues
+    )
+    || (not (Dict.isEmpty model.filteredSourceCategories)
+        && Maybe.Extra.isNothing model.sources
+    )
     then
         ( { model | searchResults = [] }
         , Cmd.batch
@@ -1684,6 +1893,44 @@ updateTitle ( model, cmd ) =
     )
 
 
+getSources : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+getSources ( model, cmd ) =
+    ( model
+    , Cmd.batch
+        [ cmd
+        , Http.request
+            { method = "POST"
+            , url = model.elasticUrl ++ "/_search"
+            , headers = []
+            , body = Http.jsonBody (buildSourcesBody)
+            , expect = Http.expectJson GotSourcesResult sourcesDecoder
+            , timeout = Just 10000
+            , tracker = Nothing
+            }
+        ]
+    )
+
+
+buildSourcesBody : Encode.Value
+buildSourcesBody =
+    Encode.object
+        [ ( "query"
+          , Encode.object
+                [ ( "term"
+                  , Encode.object
+                        [ ( "category", Encode.string "source" )
+                        ]
+                  )
+                ]
+          )
+        , ( "_source"
+          , Encode.object
+            [ ( "excludes", Encode.list Encode.string [ "text" ] ) ]
+          )
+        , ( "size", Encode.int 500 )
+        ]
+
+
 flagsDecoder : Decode.Decoder Flags
 flagsDecoder =
     Field.require "currentUrl" Decode.string <| \currentUrl ->
@@ -1710,6 +1957,11 @@ esResultDecoder =
         { hits = hits
         , total = total
         }
+
+
+sourcesDecoder : Decode.Decoder (List Document)
+sourcesDecoder =
+    Decode.at [ "hits", "hits" ] (Decode.list (Decode.field "_source" documentDecoder))
 
 
 hitDecoder : Decode.Decoder a -> Decode.Decoder (Hit a)
@@ -1808,6 +2060,7 @@ documentDecoder =
     Field.attempt "spell_list" Decode.string <| \spellList ->
     Field.attempt "spoilers" Decode.string <| \spoilers ->
     Field.attempt "strength" Decode.int <| \strength ->
+    Field.attempt "sub_category" Decode.string <| \subCategory ->
     Field.attempt "target" Decode.string <| \targets ->
     Field.attempt "tradition" stringListDecoder <| \traditions ->
     Field.attempt "trait_raw" (Decode.list Decode.string) <| \maybeTraits ->
@@ -1890,6 +2143,7 @@ documentDecoder =
         , spellList = spellList
         , spoilers = spoilers
         , strength = strength
+        , subCategory = subCategory
         , targets = targets
         , traditions = Maybe.withDefault [] traditions
         , traits = Maybe.withDefault [] maybeTraits
@@ -2403,6 +2657,26 @@ viewFilters model =
                   , list = boolDictExcluded model.filteredSizes
                   , removeMsg = SizeFilterRemoved
                   }
+                , { class = Nothing
+                  , label = "Include source books:"
+                  , list = boolDictIncluded model.filteredSourceBooks
+                  , removeMsg = SourceBookFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude source books:"
+                  , list = boolDictExcluded model.filteredSourceBooks
+                  , removeMsg = SourceBookFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Include source categories:"
+                  , list = boolDictIncluded model.filteredSourceCategories
+                  , removeMsg = SourceCategoryFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude source categories:"
+                  , list = boolDictExcluded model.filteredSourceCategories
+                  , removeMsg = SourceCategoryFilterRemoved
+                  }
                 ]
             )
 
@@ -2502,6 +2776,11 @@ viewQueryOptions model =
             "Filter sizes"
             filterSizesMeasureWrapperId
             (viewFilterSizes model)
+        , viewFoldableOptionBox
+            model
+            "Filter sources"
+            filterSourcesMeasureWrapperId
+            (viewFilterSources model)
         , viewFoldableOptionBox
             model
             "Filter numeric values"
@@ -3066,6 +3345,126 @@ viewFilterSizes model =
             , "huge"
             , "gargantuan"
             ]
+        )
+    ]
+
+
+viewFilterSources : Model -> List (Html Msg)
+viewFilterSources model =
+    [ Html.h4
+        []
+        [ Html.text "Filter source categories" ]
+    , Html.button
+        [ HA.style "align-self" "flex-start"
+        , HA.style "justify-self" "flex-start"
+        , HE.onClick RemoveAllSourceCategoryFiltersPressed
+        ]
+        [ Html.text "Reset all values" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (List.map
+            (\category ->
+                Html.button
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HE.onClick (SourceCategoryFilterAdded category)
+                    ]
+                    [ Html.text (String.Extra.toTitleCase category)
+                    , viewFilterIcon (Dict.get category model.filteredSourceCategories)
+                    ]
+            )
+            Data.sourceCategories
+        )
+    , Html.h4
+        []
+        [ Html.text "Filter source books" ]
+    , Html.button
+        [ HA.style "align-self" "flex-start"
+        , HA.style "justify-self" "flex-start"
+        , HE.onClick RemoveAllSourceBookFiltersPressed
+        ]
+        [ Html.text "Reset all values" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "input-container"
+        ]
+        [ Html.input
+            [ HA.placeholder "Search among source books"
+            , HA.value model.searchSourceBooks
+            , HA.type_ "text"
+            , HE.onInput SearchSourceBooksChanged
+            ]
+            []
+        , if String.isEmpty model.searchSourceBooks then
+            Html.text ""
+
+          else
+            Html.button
+                [ HA.class "input-button"
+                , HE.onClick (SearchSourceBooksChanged "")
+                ]
+                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+        ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (case model.sources of
+            Just sources ->
+                (List.map
+                    (\source ->
+                        let
+                            filteredCategory : Maybe Bool
+                            filteredCategory =
+                                Maybe.andThen
+                                    (\subCategory ->
+                                        Dict.get (String.toLower subCategory) model.filteredSourceCategories
+                                    )
+                                    source.subCategory
+                        in
+                        Html.button
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HA.class "nowrap"
+                            , HA.class "align-center"
+                            , HA.style "text-align" "left"
+                            -- , HA.style "max-width" "95%"
+                            , HE.onClick (SourceBookFilterAdded source.name)
+                            , HA.disabled (Maybe.Extra.isJust filteredCategory)
+                            , HAE.attributeIf (Maybe.Extra.isJust filteredCategory) (HA.class "excluded")
+                            ]
+                            [ Html.div
+                                []
+                                [ Html.text source.name ]
+                            , viewFilterIcon
+                                (Maybe.Extra.or
+                                    (Dict.get source.name model.filteredSourceBooks)
+                                    filteredCategory
+                                )
+                            ]
+                    )
+                    (List.filter
+                        (.name >> String.toLower >> String.contains (String.toLower model.searchSourceBooks))
+                        (List.sortBy .name sources)
+                    )
+                )
+
+            Nothing ->
+                [ Html.div
+                    [ HA.class "row"
+                    , HA.style "height" "72px"
+                    , HA.style "margin" "auto"
+                    ]
+                    [ Html.div
+                        [ HA.class "loader"
+                        ]
+                        []
+                    ]
+                ]
         )
     ]
 
@@ -4710,6 +5109,22 @@ stringContainsChar str chars =
         chars
 
 
+capitalizeSource : String -> String
+capitalizeSource str =
+    str
+        |> String.Extra.toTitleCase
+        |> String.replace " In " " in "
+        |> String.replace " Of " " of "
+        |> String.replace " On " " on "
+        |> String.replace " Or " " or "
+        |> String.replace " To " " to "
+        |> String.replace " The " " the "
+        |> String.replace ": the " ": The "
+        |> String.replace ", the " ", The "
+        |> String.replace "Pfs " "PFS "
+        |> String.replace "Gm's " "GM's "
+
+
 getQueryOptionsHeight : Model -> Int
 getQueryOptionsHeight model =
     measureWrapperIds
@@ -4726,6 +5141,7 @@ measureWrapperIds =
     , filterComponentsMeasureWrapperId
     , filterPfsMeasureWrapperId
     , filterSizesMeasureWrapperId
+    , filterSourcesMeasureWrapperId
     , filterTraditionsMeasureWrapperId
     , filterTraitsMeasureWrapperId
     , filterTypesMeasureWrapperId
@@ -4772,6 +5188,11 @@ filterTraditionsMeasureWrapperId =
 filterSizesMeasureWrapperId : String
 filterSizesMeasureWrapperId =
     "filter-sizes-measure-wrapper"
+
+
+filterSourcesMeasureWrapperId : String
+filterSourcesMeasureWrapperId =
+    "filter-sources-measure-wrapper"
 
 
 filterPfsMeasureWrapperId : String

@@ -233,6 +233,18 @@ speedTypes =
     ]
 
 
+sourceCategories : List String
+sourceCategories =
+    [ "adventure paths"
+    , "adventures"
+    , "blog posts"
+    , "comics"
+    , "lost omens"
+    , "rulebooks"
+    , "society"
+    ]
+
+
 traits : List String
 traits =
     [ "Aasimar"

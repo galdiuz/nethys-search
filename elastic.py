@@ -885,6 +885,10 @@ def parse_skill(id: str, soup: BeautifulSoup):
 def parse_source(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'source', 'Sources', 'Source')
 
+    doc.source = [ doc.name ]
+    doc.source_raw = [ doc.name ]
+    doc.sub_category = soup.find('u').text
+
     doc.save()
 
 
@@ -1037,7 +1041,7 @@ def normalize_source(source: str) -> str:
 
     index = source.find(' pg. ')
 
-    if index:
+    if index != -1:
         source = source[:index]
 
     return source
@@ -1588,6 +1592,7 @@ class Doc(Document):
     })
     str = Alias(path="strength")
     strength = Integer()
+    sub_category = Keyword(normalizer="lowercase")
     text = Text()
     trait = Keyword(normalizer="lowercase")
     type = Keyword(normalizer="lowercase")
