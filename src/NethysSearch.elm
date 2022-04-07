@@ -179,6 +179,7 @@ type Msg
     | FilterComponentsOperatorChanged Bool
     | FilterResistanceChanged String
     | FilterSpeedChanged String
+    | FilterSpoilersChanged Bool
     | FilterTraditionsOperatorChanged Bool
     | FilterTraitsOperatorChanged Bool
     | FilterWeaknessChanged String
@@ -264,6 +265,7 @@ type alias Model =
     , filteredFromValues : Dict String String
     , filteredToValues : Dict String String
     , filterComponentsOperator : Bool
+    , filterSpoilers : Bool
     , filterTraditionsOperator : Bool
     , filterTraitsOperator : Bool
     , menuOpen : Bool
@@ -332,6 +334,7 @@ init flagsValue =
       , filteredFromValues = Dict.empty
       , filteredToValues = Dict.empty
       , filterComponentsOperator = True
+      , filterSpoilers = False
       , filterTraditionsOperator = True
       , filterTraitsOperator = True
       , menuOpen = False
@@ -463,6 +466,11 @@ update msg model =
         FilterSpeedChanged value ->
             ( { model | selectedFilterSpeed = value }
             , Cmd.none
+            )
+
+        FilterSpoilersChanged value ->
+            ( model
+            , updateUrl { model | filterSpoilers = value }
             )
 
         FilterTraditionsOperatorChanged value ->
@@ -1131,10 +1139,10 @@ updateUrl ({ url } as model) =
               )
             , ( "traditions-operator"
               , if model.filterTraditionsOperator then
-                  ""
+                    ""
 
                 else
-                  "or"
+                    "or"
               )
             , ( "values-from"
               , model.filteredFromValues
@@ -1147,6 +1155,13 @@ updateUrl ({ url } as model) =
                     |> Dict.toList
                     |> List.map (\( field, value ) -> field ++ ":" ++ value)
                     |> String.join ","
+              )
+            , ( "spoilers"
+              , if model.filterSpoilers then
+                    "hide"
+
+                else
+                    ""
               )
             , ( "sort"
               , model.sort
@@ -1553,6 +1568,18 @@ buildSearchMustNotTerms model =
                 ]
             )
             (boolDictExcluded model.filteredSourceCategories)
+
+        , if model.filterSpoilers then
+            [ ( "exists"
+              , Encode.object
+                    [ ( "field", Encode.string "spoilers" )
+                    ]
+              )
+            ]
+                |> List.singleton
+
+          else
+            []
         ]
 
 
@@ -1753,6 +1780,7 @@ updateModelFromQueryString url model =
                 )
                 |> Dict.fromList
         , filterComponentsOperator = getQueryParam url "components-operator" /= "or"
+        , filterSpoilers = getQueryParam url "spoilers" == "hide"
         , filterTraditionsOperator = getQueryParam url "traditions-operator" /= "or"
         , filterTraitsOperator = getQueryParam url "traits-operator" /= "or"
         , filteredFromValues =
@@ -2677,6 +2705,16 @@ viewFilters model =
                   , list = boolDictExcluded model.filteredSourceCategories
                   , removeMsg = SourceCategoryFilterRemoved
                   }
+                , { class = Nothing
+                  , label = "Spoilers:"
+                  , list =
+                        if model.filterSpoilers then
+                            [ "Hide spoilers" ]
+
+                        else
+                            []
+                  , removeMsg = \_ -> FilterSpoilersChanged False
+                  }
                 ]
             )
 
@@ -2778,7 +2816,7 @@ viewQueryOptions model =
             (viewFilterSizes model)
         , viewFoldableOptionBox
             model
-            "Filter sources"
+            "Filter spoilers & sources"
             filterSourcesMeasureWrapperId
             (viewFilterSources model)
         , viewFoldableOptionBox
@@ -3352,6 +3390,14 @@ viewFilterSizes model =
 viewFilterSources : Model -> List (Html Msg)
 viewFilterSources model =
     [ Html.h4
+        []
+        [ Html.text "Filter spoilers" ]
+    , viewCheckbox
+        { checked = model.filterSpoilers
+        , onCheck = FilterSpoilersChanged
+        , text = "Hide results with spoilers"
+        }
+    , Html.h4
         []
         [ Html.text "Filter source categories" ]
     , Html.button
