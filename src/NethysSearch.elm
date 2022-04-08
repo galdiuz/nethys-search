@@ -119,7 +119,6 @@ type alias Document =
     , spellList : Maybe String
     , spoilers : Maybe String
     , strength : Maybe Int
-    , subCategory : Maybe String
     , targets : Maybe String
     , traditions : List String
     , traits : List String
@@ -148,6 +147,15 @@ defaultFlags =
     }
 
 
+type alias Aggregations =
+    { itemCategories : List String
+    , itemSubcategories : List { category : String, name : String }
+    , sources : List { category : String, name : String }
+    , traits : List String
+    , types : List String
+    }
+
+
 type QueryType
     = Standard
     | ElasticsearchQueryString
@@ -172,9 +180,9 @@ type Msg
     | ComponentFilterAdded String
     | ComponentFilterRemoved String
     | DebouncePassed Int
+    | GotAggregationsResult (Result Http.Error Aggregations)
     | GotElementHeight String Int
     | GotSearchResult (Result Http.Error SearchResult)
-    | GotSourcesResult (Result Http.Error (List Document))
     | FilterAbilityChanged String
     | FilterComponentsOperatorChanged Bool
     | FilterResistanceChanged String
@@ -185,6 +193,10 @@ type Msg
     | FilterWeaknessChanged String
     | FilteredFromValueChanged String String
     | FilteredToValueChanged String String
+    | ItemCategoryFilterAdded String
+    | ItemCategoryFilterRemoved String
+    | ItemSubcategoryFilterAdded String
+    | ItemSubcategoryFilterRemoved String
     | LoadMorePressed
     | LocalStorageValueReceived Decode.Value
     | MenuOpenDelayPassed
@@ -196,6 +208,8 @@ type Msg
     | RemoveAllSortsPressed
     | RemoveAllAlignmentFiltersPressed
     | RemoveAllComponentFiltersPressed
+    | RemoveAllItemCategoryFiltersPressed
+    | RemoveAllItemSubcategoryFiltersPressed
     | RemoveAllPfsFiltersPressed
     | RemoveAllSizeFiltersPressed
     | RemoveAllSourceBookFiltersPressed
@@ -250,11 +264,14 @@ port navigation_urlChanged : (String -> msg) -> Sub msg
 
 
 type alias Model =
-    { debounce : Int
+    { aggregations : Maybe (Result Http.Error Aggregations)
+    , debounce : Int
     , elasticUrl : String
     , elementHeights : Dict String Int
     , filteredAlignments : Dict String Bool
     , filteredComponents : Dict String Bool
+    , filteredItemCategories : Dict String Bool
+    , filteredItemSubcategories : Dict String Bool
     , filteredPfs : Dict String Bool
     , filteredSizes : Dict String Bool
     , filteredSourceBooks : Dict String Bool
@@ -290,7 +307,6 @@ type alias Model =
     , showResultSpoilers : Bool
     , showResultTraits : Bool
     , sort : List ( String, SortDir )
-    , sources : Maybe (List Document)
     , theme : Theme
     , tracker : Maybe Int
     , url : Url
@@ -319,12 +335,15 @@ init flagsValue =
         url =
             parseUrl flags.currentUrl
     in
-    ( { debounce = 0
+    ( { aggregations = Nothing
+      , debounce = 0
       , elasticUrl = flags.elasticUrl
       , elementHeights = Dict.empty
       , filteredAlignments = Dict.empty
       , filteredComponents = Dict.empty
       , filteredPfs = Dict.empty
+      , filteredItemCategories = Dict.empty
+      , filteredItemSubcategories = Dict.empty
       , filteredSourceBooks = Dict.empty
       , filteredSourceCategories = Dict.empty
       , filteredSizes = Dict.empty
@@ -359,7 +378,6 @@ init flagsValue =
       , showResultSpoilers = True
       , showResultTraits = True
       , sort = []
-      , sources = Nothing
       , theme = Dark
       , tracker = Nothing
       , url = url
@@ -374,7 +392,7 @@ init flagsValue =
     )
         |> searchWithCurrentQuery
         |> updateTitle
-        |> getSources
+        |> getAggregations
 
 
 subscriptions : Model -> Sub Msg
@@ -422,6 +440,16 @@ update msg model =
             else
                 ( model, Cmd.none )
 
+        GotAggregationsResult result ->
+            ( { model | aggregations = Just result }
+            , Cmd.none
+            )
+                |> (if not (Dict.isEmpty model.filteredSourceCategories) then
+                        searchWithCurrentQuery
+                    else
+                        identity
+                   )
+
         GotElementHeight id height ->
             ( { model | elementHeights = Dict.insert id height model.elementHeights }
             , Cmd.none
@@ -437,16 +465,6 @@ update msg model =
               }
             , Cmd.none
             )
-
-        GotSourcesResult result ->
-            ( { model | sources = Just (Result.withDefault [] result) }
-            , Cmd.none
-            )
-                |> (if not (Dict.isEmpty model.filteredSourceCategories) then
-                        searchWithCurrentQuery
-                    else
-                        identity
-                   )
 
         FilterAbilityChanged value ->
             ( { model | selectedFilterAbility = value }
@@ -518,6 +536,69 @@ update msg model =
             in
             ( updatedModel
             , updateUrl updatedModel
+            )
+
+        ItemCategoryFilterAdded category ->
+            let
+                newFilteredItemCategories : Dict String Bool
+                newFilteredItemCategories =
+                    toggleBoolDict category model.filteredItemCategories
+            in
+            ( model
+            , updateUrl
+                { model
+                    | filteredItemCategories = newFilteredItemCategories
+                    , filteredItemSubcategories =
+                        case Dict.get category newFilteredItemCategories of
+                            Just True ->
+                                Dict.filter
+                                    (\source _ ->
+                                        model.aggregations
+                                            |> Maybe.andThen Result.toMaybe
+                                            |> Maybe.map .itemSubcategories
+                                            |> Maybe.withDefault []
+                                            |> List.filter
+                                                (\sc ->
+                                                    List.member
+                                                        sc.category
+                                                        (boolDictIncluded newFilteredItemCategories)
+                                                )
+                                            |> List.map .name
+                                            |> List.member source
+                                    )
+                                    model.filteredItemSubcategories
+
+                            Just False ->
+                                Dict.filter
+                                    (\source _ ->
+                                        model.aggregations
+                                            |> Maybe.andThen Result.toMaybe
+                                            |> Maybe.map .itemSubcategories
+                                            |> Maybe.andThen (List.Extra.find (.name >> ((==) source)))
+                                            |> Maybe.map .category
+                                            |> Maybe.map String.toLower
+                                            |> (/=) (Just category)
+                                    )
+                                    model.filteredItemSubcategories
+
+                            Nothing ->
+                                model.filteredItemSubcategories
+                }
+            )
+
+        ItemCategoryFilterRemoved category ->
+            ( model
+            , updateUrl { model | filteredItemCategories = Dict.remove category model.filteredItemCategories }
+            )
+
+        ItemSubcategoryFilterAdded subcategory ->
+            ( model
+            , updateUrl { model | filteredItemSubcategories = toggleBoolDict subcategory model.filteredItemSubcategories }
+            )
+
+        ItemSubcategoryFilterRemoved subcategory ->
+            ( model
+            , updateUrl { model | filteredItemSubcategories = Dict.remove subcategory model.filteredItemSubcategories }
             )
 
         LoadMorePressed ->
@@ -642,6 +723,16 @@ update msg model =
         RemoveAllComponentFiltersPressed ->
             ( model
             , updateUrl { model | filteredComponents = Dict.empty }
+            )
+
+        RemoveAllItemCategoryFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredItemCategories = Dict.empty }
+            )
+
+        RemoveAllItemSubcategoryFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredItemSubcategories = Dict.empty }
             )
 
         RemoveAllPfsFiltersPressed ->
@@ -814,20 +905,50 @@ update msg model =
             )
 
         SourceCategoryFilterAdded category ->
+            let
+                newFilteredSourceCategories : Dict String Bool
+                newFilteredSourceCategories =
+                    toggleBoolDict category model.filteredSourceCategories
+            in
             ( model
             , updateUrl
                 { model
-                    | filteredSourceCategories = toggleBoolDict category model.filteredSourceCategories
+                    | filteredSourceCategories = newFilteredSourceCategories
                     , filteredSourceBooks =
-                        Dict.filter
-                            (\source _ ->
-                                model.sources
-                                    |> Maybe.andThen (List.Extra.find (.name >> ((==) source)))
-                                    |> Maybe.andThen .subCategory
-                                    |> Maybe.map String.toLower
-                                    |> (/=) (Just category)
-                            )
-                            model.filteredSourceBooks
+                        case Dict.get category newFilteredSourceCategories of
+                            Just True ->
+                                Dict.filter
+                                    (\source _ ->
+                                        model.aggregations
+                                            |> Maybe.andThen Result.toMaybe
+                                            |> Maybe.map .sources
+                                            |> Maybe.withDefault []
+                                            |> List.filter
+                                                (\s ->
+                                                    List.member
+                                                        s.category
+                                                        (boolDictIncluded newFilteredSourceCategories)
+                                                )
+                                            |> List.map .name
+                                            |> List.member source
+                                    )
+                                    model.filteredSourceBooks
+
+                            Just False ->
+                                Dict.filter
+                                    (\source _ ->
+                                        model.aggregations
+                                            |> Maybe.andThen Result.toMaybe
+                                            |> Maybe.map .sources
+                                            |> Maybe.andThen (List.Extra.find (.name >> ((==) source)))
+                                            |> Maybe.map .category
+                                            |> Maybe.map String.toLower
+                                            |> (/=) (Just category)
+                                    )
+                                    model.filteredSourceBooks
+
+                            Nothing ->
+                                model.filteredSourceBooks
                 }
             )
 
@@ -1066,6 +1187,34 @@ updateUrl ({ url } as model) =
 
                 else
                   "or"
+              )
+            , ( "include-item-categories"
+              , model.filteredItemCategories
+                    |> Dict.toList
+                    |> List.filter (Tuple.second)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "exclude-item-categories"
+              , model.filteredItemCategories
+                    |> Dict.toList
+                    |> List.filter (Tuple.second >> not)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "include-item-subcategories"
+              , model.filteredItemSubcategories
+                    |> Dict.toList
+                    |> List.filter (Tuple.second)
+                    |> List.map Tuple.first
+                    |> String.join ","
+              )
+            , ( "exclude-item-subcategories"
+              , model.filteredItemSubcategories
+                    |> Dict.toList
+                    |> List.filter (Tuple.second >> not)
+                    |> List.map Tuple.first
+                    |> String.join ","
               )
             , ( "include-pfs"
               , model.filteredPfs
@@ -1329,6 +1478,14 @@ sortDirFromString str =
             Nothing
 
 
+getAggregation : (Aggregations -> List a) -> Model -> List a
+getAggregation fun model =
+    model.aggregations
+        |> Maybe.andThen Result.toMaybe
+        |> Maybe.map fun
+        |> Maybe.withDefault []
+
+
 buildSearchFilterTerms : Model -> List (List ( String, Encode.Value ))
 buildSearchFilterTerms model =
     List.concat
@@ -1402,6 +1559,8 @@ buildSearchFilterTerms model =
             )
             [ ( "alignment", boolDictIncluded model.filteredAlignments, False )
             , ( "component", boolDictIncluded model.filteredComponents, model.filterComponentsOperator )
+            , ( "item_category", boolDictIncluded model.filteredItemCategories, False )
+            , ( "item_subcategory", boolDictIncluded model.filteredItemSubcategories, False )
             , ( "pfs", boolDictIncluded model.filteredPfs, False )
             , ( "size", boolDictIncluded model.filteredSizes, False )
             , ( "source", boolDictIncluded model.filteredSourceBooks, False )
@@ -1461,15 +1620,13 @@ buildSearchFilterTerms model =
                                               , Encode.list Encode.string
                                                     (List.filterMap
                                                         (\source ->
-                                                            if Maybe.map String.toLower source.subCategory
-                                                                == Just category
-                                                            then
+                                                            if String.toLower source.category == category then
                                                                 Just source.name
 
                                                             else
                                                                 Nothing
                                                         )
-                                                        (Maybe.withDefault [] model.sources)
+                                                        (getAggregation .sources model)
                                                     )
                                               )
                                             ]
@@ -1534,6 +1691,8 @@ buildSearchMustNotTerms model =
             )
             [ ( "alignment", boolDictExcluded model.filteredAlignments )
             , ( "component", boolDictExcluded model.filteredComponents )
+            , ( "item_category", boolDictExcluded model.filteredItemCategories )
+            , ( "item_subcategory", boolDictExcluded model.filteredItemSubcategories )
             , ( "pfs", boolDictExcluded model.filteredPfs )
             , ( "size", boolDictExcluded model.filteredSizes )
             , ( "source", boolDictExcluded model.filteredSourceBooks )
@@ -1551,16 +1710,13 @@ buildSearchMustNotTerms model =
                           , Encode.list Encode.string
                                 (List.filterMap
                                     (\source ->
-
-                                        if Maybe.map String.toLower source.subCategory
-                                            == Just category
-                                        then
+                                        if String.toLower source.category == category then
                                             Just source.name
 
                                         else
                                             Nothing
                                     )
-                                    (Maybe.withDefault [] model.sources)
+                                    (getAggregation .sources model)
                                 )
                           )
                         ]
@@ -1668,6 +1824,36 @@ updateModelFromQueryString url model =
                     |> List.map (\component -> ( component, True ))
                 )
                 (getQueryParam url "exclude-components"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\component -> ( component, False ))
+                )
+                |> Dict.fromList
+        , filteredItemCategories =
+            List.append
+                (getQueryParam url "include-item-categories"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\component -> ( component, True ))
+                )
+                (getQueryParam url "exclude-item-categories"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\component -> ( component, False ))
+                )
+                |> Dict.fromList
+        , filteredItemSubcategories =
+            List.append
+                (getQueryParam url "include-item-subcategories"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ",")
+                    |> Maybe.withDefault []
+                    |> List.map (\component -> ( component, True ))
+                )
+                (getQueryParam url "exclude-item-subcategories"
                     |> String.Extra.nonEmpty
                     |> Maybe.map (String.split ",")
                     |> Maybe.withDefault []
@@ -1849,6 +2035,8 @@ searchWithCurrentQuery ( model, cmd ) =
     if (String.isEmpty (String.trim model.query)
         && Dict.isEmpty model.filteredAlignments
         && Dict.isEmpty model.filteredComponents
+        && Dict.isEmpty model.filteredItemCategories
+        && Dict.isEmpty model.filteredItemSubcategories
         && Dict.isEmpty model.filteredPfs
         && Dict.isEmpty model.filteredSizes
         && Dict.isEmpty model.filteredSourceBooks
@@ -1860,7 +2048,7 @@ searchWithCurrentQuery ( model, cmd ) =
         && Dict.isEmpty model.filteredToValues
     )
     || (not (Dict.isEmpty model.filteredSourceCategories)
-        && Maybe.Extra.isNothing model.sources
+        && Maybe.Extra.isNothing model.aggregations
     )
     then
         ( { model | searchResults = [] }
@@ -1921,8 +2109,8 @@ updateTitle ( model, cmd ) =
     )
 
 
-getSources : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-getSources ( model, cmd ) =
+getAggregations : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+getAggregations ( model, cmd ) =
     ( model
     , Cmd.batch
         [ cmd
@@ -1930,8 +2118,8 @@ getSources ( model, cmd ) =
             { method = "POST"
             , url = model.elasticUrl ++ "/_search"
             , headers = []
-            , body = Http.jsonBody (buildSourcesBody)
-            , expect = Http.expectJson GotSourcesResult sourcesDecoder
+            , body = Http.jsonBody (buildAggregationsBody)
+            , expect = Http.expectJson GotAggregationsResult aggregationsDecoder
             , timeout = Just 10000
             , tracker = Nothing
             }
@@ -1939,24 +2127,78 @@ getSources ( model, cmd ) =
     )
 
 
-buildSourcesBody : Encode.Value
-buildSourcesBody =
+buildAggregationsBody : Encode.Value
+buildAggregationsBody =
     Encode.object
-        [ ( "query"
+        [ ( "aggs"
           , Encode.object
-                [ ( "term"
-                  , Encode.object
-                        [ ( "category", Encode.string "source" )
+                (List.append
+                    (List.map
+                        buildTermsAggregation
+                        [ "item_category"
+                        , "trait"
+                        , "type"
                         ]
-                  )
+                    )
+                    [ buildCompositeAggregation
+                        "item_subcategory"
+                        [ ( "category", "item_category" )
+                        , ( "name", "item_subcategory" )
+                        ]
+                    , buildCompositeAggregation
+                        "source"
+                        [ ( "category", "source_category" )
+                        , ( "name", "name.keyword" )
+                        ]
+                    ]
+                )
+          )
+        , ( "size", Encode.int 0 )
+        ]
+
+
+buildTermsAggregation : String -> ( String, Encode.Value )
+buildTermsAggregation field =
+    ( field
+    , Encode.object
+        [ ( "terms"
+          , Encode.object
+                [ ( "field", Encode.string field)
+                , ( "size", Encode.int 10000 )
                 ]
           )
-        , ( "_source"
-          , Encode.object
-            [ ( "excludes", Encode.list Encode.string [ "text" ] ) ]
-          )
-        , ( "size", Encode.int 500 )
         ]
+    )
+
+
+buildCompositeAggregation : String -> List ( String, String ) -> ( String, Encode.Value )
+buildCompositeAggregation name sources =
+    ( name
+    , Encode.object
+        [ ( "composite"
+          , Encode.object
+                [ ( "sources"
+                  , Encode.list Encode.object (List.map buildCompositeTermsSource sources)
+                  )
+                , ( "size", Encode.int 10000 )
+                ]
+          )
+        ]
+    )
+
+
+buildCompositeTermsSource : ( String, String ) -> List ( String, Encode.Value )
+buildCompositeTermsSource ( name, field ) =
+    [ ( name
+      , Encode.object
+            [ ( "terms"
+              , Encode.object
+                    [ ( "field", Encode.string field )
+                    ]
+              )
+            ]
+      )
+    ]
 
 
 flagsDecoder : Decode.Decoder Flags
@@ -1985,6 +2227,59 @@ esResultDecoder =
         { hits = hits
         , total = total
         }
+
+
+aggregationsDecoder : Decode.Decoder Aggregations
+aggregationsDecoder =
+    Field.requireAt
+        [ "aggregations", "item_category" ]
+        (aggregationBucketDecoder Decode.string)
+        <| \itemCategories ->
+    Field.requireAt
+        [ "aggregations", "item_subcategory" ]
+        (aggregationBucketDecoder
+            (Field.require "category" Decode.string <| \category ->
+             Field.require "name" Decode.string <| \name ->
+             Decode.succeed
+                { category = category
+                , name = name
+                }
+            )
+        )
+        <| \itemSubcategories ->
+    Field.requireAt
+        [ "aggregations", "source" ]
+        (aggregationBucketDecoder
+            (Field.require "category" Decode.string <| \category ->
+             Field.require "name" Decode.string <| \name ->
+             Decode.succeed
+                { category = category
+                , name = name
+                }
+            )
+        )
+        <| \sources ->
+    Field.requireAt
+        [ "aggregations", "trait" ]
+        (aggregationBucketDecoder Decode.string)
+        <| \traits ->
+    Field.requireAt
+        [ "aggregations", "type" ]
+        (aggregationBucketDecoder Decode.string)
+        <| \types ->
+    Decode.succeed
+        { itemCategories = itemCategories
+        , itemSubcategories = itemSubcategories
+        , sources = sources
+        , traits = traits
+        , types = types
+        }
+
+
+aggregationBucketDecoder : Decode.Decoder a -> Decode.Decoder (List a)
+aggregationBucketDecoder keyDecoder =
+    Decode.field "buckets" (Decode.list (Decode.field "key" keyDecoder))
+    -- Decode.field "buckets" (Decode.list (Decode.field "key" Decode.string))
 
 
 sourcesDecoder : Decode.Decoder (List Document)
@@ -2088,7 +2383,6 @@ documentDecoder =
     Field.attempt "spell_list" Decode.string <| \spellList ->
     Field.attempt "spoilers" Decode.string <| \spoilers ->
     Field.attempt "strength" Decode.int <| \strength ->
-    Field.attempt "sub_category" Decode.string <| \subCategory ->
     Field.attempt "target" Decode.string <| \targets ->
     Field.attempt "tradition" stringListDecoder <| \traditions ->
     Field.attempt "trait_raw" (Decode.list Decode.string) <| \maybeTraits ->
@@ -2171,7 +2465,6 @@ documentDecoder =
         , spellList = spellList
         , spoilers = spoilers
         , strength = strength
-        , subCategory = subCategory
         , targets = targets
         , traditions = Maybe.withDefault [] traditions
         , traits = Maybe.withDefault [] maybeTraits
@@ -2666,6 +2959,26 @@ viewFilters model =
                   , removeMsg = ComponentFilterRemoved
                   }
                 , { class = Nothing
+                  , label = "Include item categories:"
+                  , list = boolDictIncluded model.filteredItemCategories
+                  , removeMsg = ItemCategoryFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude item categories:"
+                  , list = boolDictExcluded model.filteredItemCategories
+                  , removeMsg = ItemCategoryFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Include item subcategories:"
+                  , list = boolDictIncluded model.filteredItemSubcategories
+                  , removeMsg = ItemSubcategoryFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude item subcategories:"
+                  , list = boolDictExcluded model.filteredItemSubcategories
+                  , removeMsg = ItemSubcategoryFilterRemoved
+                  }
+                , { class = Nothing
                   , label = "Include PFS:"
                   , list = boolDictIncluded model.filteredPfs
                   , removeMsg = PfsFilterRemoved
@@ -2781,29 +3094,19 @@ viewQueryOptions model =
             (viewQueryType model)
         , viewFoldableOptionBox
             model
-            "Filter types"
-            filterTypesMeasureWrapperId
-            (viewFilterTypes model)
-        , viewFoldableOptionBox
-            model
-            "Filter traits"
-            filterTraitsMeasureWrapperId
-            (viewFilterTraits model)
-        , viewFoldableOptionBox
-            model
             "Filter alignments"
             filterAlignmentsMeasureWrapperId
             (viewFilterAlignments model)
         , viewFoldableOptionBox
             model
-            "Filter traditions"
-            filterTraditionsMeasureWrapperId
-            (viewFilterTraditions model)
-        , viewFoldableOptionBox
-            model
-            "Filter spell components"
+            "Filter casting components"
             filterComponentsMeasureWrapperId
             (viewFilterComponents model)
+        , viewFoldableOptionBox
+            model
+            "Filter item categories"
+            filterItemCategoriesMeasureWrapperId
+            (viewFilterItemCategories model)
         , viewFoldableOptionBox
             model
             "Filter PFS status"
@@ -2819,6 +3122,21 @@ viewQueryOptions model =
             "Filter spoilers & sources"
             filterSourcesMeasureWrapperId
             (viewFilterSources model)
+        , viewFoldableOptionBox
+            model
+            "Filter traditions"
+            filterTraditionsMeasureWrapperId
+            (viewFilterTraditions model)
+        , viewFoldableOptionBox
+            model
+            "Filter traits"
+            filterTraitsMeasureWrapperId
+            (viewFilterTraits model)
+        , viewFoldableOptionBox
+            model
+            "Filter types"
+            filterTypesMeasureWrapperId
+            (viewFilterTypes model)
         , viewFoldableOptionBox
             model
             "Filter numeric values"
@@ -3087,23 +3405,31 @@ viewFilterTypes model =
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (List.map
-            (\type_ ->
-                Html.button
-                    [ HA.class "filter-type"
-                    , HA.class "row"
-                    , HA.class "align-center"
-                    , HA.class "gap-tiny"
-                    , HE.onClick (TypeFilterAdded type_)
-                    ]
-                    [ Html.text type_
-                    , viewFilterIcon (Dict.get type_ model.filteredTypes)
-                    ]
-            )
-            (List.filter
-                (String.toLower >> String.contains (String.toLower model.searchTypes))
-                Data.types
-            )
+        (case model.aggregations of
+            Just (Ok aggregations) ->
+                List.map
+                    (\type_ ->
+                        Html.button
+                            [ HA.class "filter-type"
+                            , HA.class "row"
+                            , HA.class "align-center"
+                            , HA.class "gap-tiny"
+                            , HE.onClick (TypeFilterAdded type_)
+                            ]
+                            [ Html.text (String.Extra.toTitleCase type_)
+                            , viewFilterIcon (Dict.get type_ model.filteredTypes)
+                            ]
+                    )
+                    (List.filter
+                        (String.toLower >> String.contains (String.toLower model.searchTypes))
+                        (List.sort aggregations.types)
+                    )
+
+            Just (Err _) ->
+                []
+
+            Nothing ->
+                [ viewScrollboxLoader ]
         )
     ]
 
@@ -3159,24 +3485,34 @@ viewFilterTraits model =
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (List.map
-            (\trait ->
-                Html.button
-                    [ HA.class "trait"
-                    , getTraitClass trait
-                    , HA.class "row"
-                    , HA.class "align-center"
-                    , HA.class "gap-tiny"
-                    , HE.onClick (TraitFilterAdded trait)
-                    ]
-                    [ Html.text trait
-                    , viewFilterIcon (Dict.get trait model.filteredTraits)
-                    ]
-            )
-            (List.filter
-                (String.toLower >> String.contains (String.toLower model.searchTraits))
-                Data.traits
-            )
+        (case model.aggregations of
+            Just (Ok aggregations) ->
+                List.map
+                    (\trait ->
+                        Html.button
+                            [ HA.class "trait"
+                            , getTraitClass trait
+                            , HA.class "row"
+                            , HA.class "align-center"
+                            , HA.class "gap-tiny"
+                            , HE.onClick (TraitFilterAdded trait)
+                            ]
+                            [ Html.text (String.Extra.toTitleCase trait)
+                            , viewFilterIcon (Dict.get trait model.filteredTraits)
+                            ]
+                    )
+                    (aggregations.traits
+                        |> List.filter (\trait -> not (List.member trait (List.map Tuple.first Data.alignments)))
+                        |> List.filter (\trait -> not (List.member trait Data.sizes))
+                        |> List.filter (String.toLower >> String.contains (String.toLower model.searchTraits))
+                        |> List.sort
+                    )
+
+            Just (Err _) ->
+                []
+
+            Nothing ->
+                [ viewScrollboxLoader ]
         )
     ]
 
@@ -3310,6 +3646,120 @@ viewFilterComponents model =
     ]
 
 
+viewFilterItemCategories : Model -> List (Html Msg)
+viewFilterItemCategories model =
+    [ Html.h4
+        []
+        [ Html.text "Filter item categories" ]
+    , Html.button
+        [ HA.style "align-self" "flex-start"
+        , HA.style "justify-self" "flex-start"
+        , HE.onClick RemoveAllItemCategoryFiltersPressed
+        ]
+        [ Html.text "Reset selection" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (case model.aggregations of
+            Just (Ok aggregations) ->
+                List.map
+                    (\category ->
+                        Html.button
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HA.class "nowrap"
+                            , HE.onClick (ItemCategoryFilterAdded category)
+                            ]
+                            [ Html.div
+                                []
+                                [ Html.text (String.Extra.toTitleCase category) ]
+                            , viewFilterIcon (Dict.get category model.filteredItemCategories)
+                            ]
+                    )
+                    (List.sort aggregations.itemCategories)
+
+            Just (Err _) ->
+                []
+
+            Nothing ->
+                [ viewScrollboxLoader ]
+        )
+    , Html.h4
+        []
+        [ Html.text "Filter item subcategories" ]
+    , Html.button
+        [ HA.style "align-self" "flex-start"
+        , HA.style "justify-self" "flex-start"
+        , HE.onClick RemoveAllItemSubcategoryFiltersPressed
+        ]
+        [ Html.text "Reset selection" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (case model.aggregations of
+            Just (Ok aggregations) ->
+                List.map
+                    (\subcategory ->
+                        let
+                            filteredCategory : Maybe Bool
+                            filteredCategory =
+                                Maybe.Extra.or
+                                    (case boolDictIncluded model.filteredItemCategories of
+                                        [] ->
+                                            Nothing
+
+                                        categories ->
+                                            if List.member subcategory.category categories then
+                                                Nothing
+
+                                            else
+                                                Just False
+                                    )
+                                    (case boolDictExcluded model.filteredItemCategories of
+                                        [] ->
+                                            Nothing
+
+                                        categories ->
+                                            if List.member subcategory.category categories then
+                                                Just False
+
+                                            else
+                                                Nothing
+                                    )
+                        in
+                        Html.button
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HA.class "nowrap"
+                            , HA.disabled (Maybe.Extra.isJust filteredCategory)
+                            , HAE.attributeIf (Maybe.Extra.isJust filteredCategory) (HA.class "excluded")
+                            , HE.onClick (ItemSubcategoryFilterAdded subcategory.name)
+                            ]
+                            [ Html.div
+                                []
+                                [ Html.text (String.Extra.toTitleCase subcategory.name) ]
+                            , viewFilterIcon
+                                (Maybe.Extra.or
+                                    (Dict.get subcategory.name model.filteredItemSubcategories)
+                                    filteredCategory
+                                )
+                            ]
+                    )
+                    (List.sortBy .name aggregations.itemSubcategories)
+
+            Just (Err _) ->
+                []
+
+            Nothing ->
+                [ viewScrollboxLoader ]
+        )
+    ]
+
+
 viewFilterPfs : Model -> List (Html Msg)
 viewFilterPfs model =
     [ Html.div
@@ -3376,13 +3826,7 @@ viewFilterSizes model =
                     , viewFilterIcon (Dict.get size model.filteredSizes)
                     ]
             )
-            [ "tiny"
-            , "small"
-            , "medium"
-            , "large"
-            , "huge"
-            , "gargantuan"
-            ]
+            Data.sizes
         )
     ]
 
@@ -3405,7 +3849,7 @@ viewFilterSources model =
         , HA.style "justify-self" "flex-start"
         , HE.onClick RemoveAllSourceCategoryFiltersPressed
         ]
-        [ Html.text "Reset all values" ]
+        [ Html.text "Reset selection" ]
     , Html.div
         [ HA.class "row"
         , HA.class "gap-tiny"
@@ -3432,7 +3876,7 @@ viewFilterSources model =
         , HA.style "justify-self" "flex-start"
         , HE.onClick RemoveAllSourceBookFiltersPressed
         ]
-        [ Html.text "Reset all values" ]
+        [ Html.text "Reset selection" ]
     , Html.div
         [ HA.class "row"
         , HA.class "input-container"
@@ -3459,18 +3903,36 @@ viewFilterSources model =
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (case model.sources of
-            Just sources ->
+        (case model.aggregations of
+            Just (Ok { sources })->
                 (List.map
                     (\source ->
                         let
                             filteredCategory : Maybe Bool
                             filteredCategory =
-                                Maybe.andThen
-                                    (\subCategory ->
-                                        Dict.get (String.toLower subCategory) model.filteredSourceCategories
+                                Maybe.Extra.or
+                                    (case boolDictIncluded model.filteredSourceCategories of
+                                        [] ->
+                                            Nothing
+
+                                        categories ->
+                                            if List.member source.category categories then
+                                                Nothing
+
+                                            else
+                                                Just False
                                     )
-                                    source.subCategory
+                                    (case boolDictExcluded model.filteredSourceCategories of
+                                        [] ->
+                                            Nothing
+
+                                        categories ->
+                                            if List.member source.category categories then
+                                                Just False
+
+                                            else
+                                                Nothing
+                                    )
                         in
                         Html.button
                             [ HA.class "row"
@@ -3478,10 +3940,9 @@ viewFilterSources model =
                             , HA.class "nowrap"
                             , HA.class "align-center"
                             , HA.style "text-align" "left"
-                            -- , HA.style "max-width" "95%"
-                            , HE.onClick (SourceBookFilterAdded source.name)
                             , HA.disabled (Maybe.Extra.isJust filteredCategory)
                             , HAE.attributeIf (Maybe.Extra.isJust filteredCategory) (HA.class "excluded")
+                            , HE.onClick (SourceBookFilterAdded source.name)
                             ]
                             [ Html.div
                                 []
@@ -3499,18 +3960,11 @@ viewFilterSources model =
                     )
                 )
 
+            Just (Err _) ->
+                []
+
             Nothing ->
-                [ Html.div
-                    [ HA.class "row"
-                    , HA.style "height" "72px"
-                    , HA.style "margin" "auto"
-                    ]
-                    [ Html.div
-                        [ HA.class "loader"
-                        ]
-                        []
-                    ]
-                ]
+                [ viewScrollboxLoader ]
         )
     ]
 
@@ -4971,62 +5425,62 @@ viewTrait trait =
 
 getTraitClass : String -> Html.Attribute msg
 getTraitClass trait =
-    case trait of
-        "Uncommon" ->
+    case String.toLower trait of
+        "uncommon" ->
             HA.class "trait-uncommon"
 
-        "Rare" ->
+        "rare" ->
             HA.class "trait-rare"
 
-        "Unique" ->
+        "unique" ->
             HA.class "trait-unique"
 
-        "Tiny" ->
+        "tiny" ->
             HA.class "trait-size"
 
-        "Small" ->
+        "small" ->
             HA.class "trait-size"
 
-        "Medium" ->
+        "medium" ->
             HA.class "trait-size"
 
-        "Large" ->
+        "large" ->
             HA.class "trait-size"
 
-        "Huge" ->
+        "huge" ->
             HA.class "trait-size"
 
-        "Gargantuan" ->
+        "gargantuan" ->
             HA.class "trait-size"
 
-        "No Alignment" ->
+        "no alignment" ->
             HA.class "trait-alignment"
 
-        "LG" ->
+        "lg" ->
             HA.class "trait-alignment"
 
-        "LN" ->
+        "ln" ->
             HA.class "trait-alignment"
 
-        "LE" ->
+        "le" ->
             HA.class "trait-alignment"
 
-        "NG" ->
+        "ng" ->
             HA.class "trait-alignment"
 
-        "N" ->
+        "n" ->
             HA.class "trait-alignment"
 
-        "NE" ->
+        "ne" ->
             HA.class "trait-alignment"
 
-        "CG" ->
+        "cg" ->
             HA.class "trait-alignment"
 
-        "CN" ->
+        "cn" ->
             HA.class "trait-alignment"
 
-        "CE" ->
+        "ce" ->
             HA.class "trait-alignment"
 
         _ ->
@@ -5146,6 +5600,20 @@ viewPfsRestricted =
         ]
 
 
+viewScrollboxLoader : Html msg
+viewScrollboxLoader =
+    Html.div
+        [ HA.class "row"
+        , HA.style "height" "72px"
+        , HA.style "margin" "auto"
+        ]
+        [ Html.div
+            [ HA.class "loader"
+            ]
+            []
+        ]
+
+
 stringContainsChar : String -> String -> Bool
 stringContainsChar str chars =
     String.any
@@ -5185,6 +5653,7 @@ measureWrapperIds =
     , queryTypeMeasureWrapperId
     , filterAlignmentsMeasureWrapperId
     , filterComponentsMeasureWrapperId
+    , filterItemCategoriesMeasureWrapperId
     , filterPfsMeasureWrapperId
     , filterSizesMeasureWrapperId
     , filterSourcesMeasureWrapperId
@@ -5219,6 +5688,11 @@ filterAlignmentsMeasureWrapperId =
 filterComponentsMeasureWrapperId : String
 filterComponentsMeasureWrapperId =
     "filter-components-measure-wrapper"
+
+
+filterItemCategoriesMeasureWrapperId : String
+filterItemCategoriesMeasureWrapperId =
+    "filter-item-categories-measure-wrapper"
 
 
 filterTraitsMeasureWrapperId : String

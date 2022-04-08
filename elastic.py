@@ -260,6 +260,8 @@ def parse_armor(id: str, soup: BeautifulSoup):
     doc.armor_group = get_label_text(soup, 'Group', ';—')
     doc.trait = normalize_traits(traits)
     doc.trait_raw = traits
+    doc.item_category = 'Armor'
+    doc.item_subcategory = 'Base Armor'
 
     doc.save()
 
@@ -445,6 +447,8 @@ def parse_equipment(id: str, soup: BeautifulSoup):
     title = soup.find('h1', class_='title')
     name, type, level, pfs = get_title_data(title)
     has_sub_items = level[-1] == '+'
+    item_category = get_category(soup.find(id='ctl00_RadDrawer1_Content_MainContent_Navigation'))
+    item_subcategory = get_category(soup.find(id='ctl00_RadDrawer1_Content_MainContent_SubNavigation'))
 
     if has_sub_items:
         for idx, sub_title in enumerate(soup.find_all('h2', class_='title')):
@@ -462,18 +466,21 @@ def parse_equipment(id: str, soup: BeautifulSoup):
             doc.name = name
             doc.type = type
             doc.level = level
-            doc.price = normalize_price(price)
-            doc.price_raw = price
-            doc.hands = get_label_text(sub_title, 'Hands')
+
+            doc.activate = get_actions(soup, 'Activate')
             doc.bulk = normalize_bulk(bulk)
             doc.bulk_raw = bulk
-            doc.usage = get_label_text(soup, 'Usage')
-            doc.activate = get_actions(soup, 'Activate')
-            doc.frequency = get_label_text(soup, 'Frequency')
-            doc.trigger = get_label_text(soup, 'Trigger')
             doc.effect = get_label_text(soup, 'Effect')
+            doc.frequency = get_label_text(soup, 'Frequency')
+            doc.hands = get_label_text(sub_title, 'Hands')
+            doc.item_category = item_category
+            doc.item_subcategory = item_subcategory
+            doc.price = normalize_price(price)
+            doc.price_raw = price
             doc.trait = normalize_traits(traits)
             doc.trait_raw = traits
+            doc.trigger = get_label_text(soup, 'Trigger')
+            doc.usage = get_label_text(soup, 'Usage')
 
             doc.save()
 
@@ -487,6 +494,8 @@ def parse_equipment(id: str, soup: BeautifulSoup):
         doc.bulk_raw = bulk
         doc.duration = get_label_text(soup, 'Maximum Duration')
         doc.hands = get_label_text(title, 'Hands')
+        doc.item_category = item_category
+        doc.item_subcategory = item_subcategory
         doc.onset = get_label_text(soup, 'Onset')
         doc.price = normalize_price(price)
         doc.price_raw = price
@@ -854,6 +863,8 @@ def parse_shield(id: str, soup: BeautifulSoup):
     doc.bulk_raw = bulk
     doc.hardness = get_label_text(soup, 'Hardness')
     doc.hp = get_label_text(soup, 'HP (BT)', ';(')
+    doc.item_category = 'Shields'
+    doc.item_subcategory = 'Base Shields'
     doc.price = normalize_price(price)
     doc.price_raw = price
     doc.speed_penalty = get_label_text(soup, 'Speed Penalty')
@@ -865,6 +876,7 @@ def parse_siege_weapon(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'siege-weapon', 'SiegeWeapons', 'Siege Weapon')
     traits = get_traits(soup)
 
+    doc.item_category = 'Siege Weapons'
     doc.trait = normalize_traits(traits)
     doc.trait_raw = traits
 
@@ -887,7 +899,7 @@ def parse_source(id: str, soup: BeautifulSoup):
 
     doc.source = [ doc.name ]
     doc.source_raw = [ doc.name ]
-    doc.sub_category = soup.find('u').text
+    doc.source_category = get_category(soup.find(id='ctl00_RadDrawer1_Content_MainContent_Navigation'))
 
     doc.save()
 
@@ -942,6 +954,7 @@ def parse_vehicle(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'vehicle', 'Vehicles', 'Vehicle')
     traits = get_traits(soup)
 
+    doc.item_category = 'Vehicles'
     doc.trait = normalize_traits(traits)
     doc.trait_raw = traits
 
@@ -975,6 +988,8 @@ def parse_weapon(id: str, soup: BeautifulSoup):
     doc.damage = get_label_text(soup, 'Damage')
     doc.deity = split_comma(get_label_text(soup, 'Favored Weapon'))
     doc.hands = get_label_text(soup, 'Hands')
+    doc.item_category = 'Weapons'
+    doc.item_subcategory = 'Base Weapons'
     doc.price = normalize_price(price)
     doc.price_raw = price
     doc.range = normalize_range(range)
@@ -1512,6 +1527,18 @@ def get_stages(soup: BeautifulSoup):
     return stages
 
 
+def get_category(soup: BeautifulSoup):
+    if not soup:
+        return None
+
+    node = soup.find('u')
+
+    if not node:
+        return None
+
+    return node.text
+
+
 def physical_types():
     return ['bludgeoning', 'physical', 'piercing', 'slashing']
 
@@ -1569,6 +1596,8 @@ class Doc(Document):
     id = Integer()
     int = Alias(path="intelligence")
     intelligence = Integer()
+    item_category = Keyword(normalizer="lowercase")
+    item_subcategory = Keyword(normalizer="lowercase")
     level = Integer()
     per = Alias(path="perception")
     perception = Integer()
@@ -1583,6 +1612,7 @@ class Doc(Document):
     secondary_casters = Integer()
     size = Keyword(normalizer="lowercase")
     source = Keyword(normalizer="lowercase")
+    source_category = Keyword(normalizer="lowercase")
     speed = Object(properties={
         'burrow': Integer(),
         'climb': Integer(),
@@ -1592,7 +1622,6 @@ class Doc(Document):
     })
     str = Alias(path="strength")
     strength = Integer()
-    sub_category = Keyword(normalizer="lowercase")
     text = Text()
     trait = Keyword(normalizer="lowercase")
     type = Keyword(normalizer="lowercase")
