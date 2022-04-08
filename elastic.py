@@ -645,6 +645,8 @@ def parse_monster_ability(id: str, soup: BeautifulSoup):
 def parse_monster_family(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'creature-family', 'MonsterFamilies', 'Creature Family')
 
+    doc.creature_family = doc.name
+
     doc.save()
 
 
@@ -1585,6 +1587,7 @@ class Doc(Document):
     check_penalty = Integer()
     con = Alias(path="constitution")
     constitution = Integer()
+    creature_family = Keyword(normalizer="lowercase")
     dex = Alias(path="dexterity")
     dex_cap = Integer()
     dexterity = Integer()

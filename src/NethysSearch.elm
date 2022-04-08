@@ -148,7 +148,8 @@ defaultFlags =
 
 
 type alias Aggregations =
-    { itemCategories : List String
+    { creatureFamilies : List String
+    , itemCategories : List String
     , itemSubcategories : List { category : String, name : String }
     , sources : List { category : String, name : String }
     , traits : List String
@@ -179,6 +180,8 @@ type Msg
     | AlignmentFilterRemoved String
     | ComponentFilterAdded String
     | ComponentFilterRemoved String
+    | CreatureFamilyFilterAdded String
+    | CreatureFamilyFilterRemoved String
     | DebouncePassed Int
     | GotAggregationsResult (Result Http.Error Aggregations)
     | GotElementHeight String Int
@@ -208,6 +211,7 @@ type Msg
     | RemoveAllSortsPressed
     | RemoveAllAlignmentFiltersPressed
     | RemoveAllComponentFiltersPressed
+    | RemoveAllCreatureFamilyFiltersPressed
     | RemoveAllItemCategoryFiltersPressed
     | RemoveAllItemSubcategoryFiltersPressed
     | RemoveAllPfsFiltersPressed
@@ -218,6 +222,9 @@ type Msg
     | RemoveAllTraitFiltersPressed
     | RemoveAllTypeFiltersPressed
     | RemoveAllValueFiltersPressed
+    | SearchCreatureFamiliesChanged String
+    | SearchItemCategoriesChanged String
+    | SearchItemSubcategoriesChanged String
     | SearchSourceBooksChanged String
     | SearchTraitsChanged String
     | SearchTypesChanged String
@@ -270,6 +277,7 @@ type alias Model =
     , elementHeights : Dict String Int
     , filteredAlignments : Dict String Bool
     , filteredComponents : Dict String Bool
+    , filteredCreatureFamilies : Dict String Bool
     , filteredItemCategories : Dict String Bool
     , filteredItemSubcategories : Dict String Bool
     , filteredPfs : Dict String Bool
@@ -290,6 +298,9 @@ type alias Model =
     , query : String
     , queryOptionsOpen : Bool
     , queryType : QueryType
+    , searchCreatureFamilies : String
+    , searchItemCategories : String
+    , searchItemSubcategories : String
     , searchSourceBooks : String
     , searchResults : List (Result Http.Error SearchResult)
     , searchTraits : String
@@ -341,6 +352,7 @@ init flagsValue =
       , elementHeights = Dict.empty
       , filteredAlignments = Dict.empty
       , filteredComponents = Dict.empty
+      , filteredCreatureFamilies = Dict.empty
       , filteredPfs = Dict.empty
       , filteredItemCategories = Dict.empty
       , filteredItemSubcategories = Dict.empty
@@ -361,6 +373,9 @@ init flagsValue =
       , query = ""
       , queryOptionsOpen = False
       , queryType = Standard
+      , searchCreatureFamilies = ""
+      , searchItemCategories = ""
+      , searchItemSubcategories = ""
       , searchSourceBooks = ""
       , searchResults = []
       , searchTraits = ""
@@ -429,6 +444,16 @@ update msg model =
         ComponentFilterRemoved component ->
             ( model
             , updateUrl { model | filteredComponents = Dict.remove component model.filteredComponents }
+            )
+
+        CreatureFamilyFilterAdded creatureFamily ->
+            ( model
+            , updateUrl { model | filteredCreatureFamilies = toggleBoolDict creatureFamily model.filteredCreatureFamilies }
+            )
+
+        CreatureFamilyFilterRemoved creatureFamily ->
+            ( model
+            , updateUrl { model | filteredCreatureFamilies = Dict.remove creatureFamily model.filteredCreatureFamilies }
             )
 
         DebouncePassed debounce ->
@@ -725,6 +750,11 @@ update msg model =
             , updateUrl { model | filteredComponents = Dict.empty }
             )
 
+        RemoveAllCreatureFamilyFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredCreatureFamilies = Dict.empty }
+            )
+
         RemoveAllItemCategoryFiltersPressed ->
             ( model
             , updateUrl { model | filteredItemCategories = Dict.empty }
@@ -777,6 +807,21 @@ update msg model =
                     | filteredFromValues = Dict.empty
                     , filteredToValues = Dict.empty
                 }
+            )
+
+        SearchCreatureFamiliesChanged value ->
+            ( { model | searchCreatureFamilies = value }
+            , getElementHeight filterCreatureFamiliesMeasureWrapperId
+            )
+
+        SearchItemCategoriesChanged value ->
+            ( { model | searchItemCategories = value }
+            , getElementHeight filterItemCategoriesMeasureWrapperId
+            )
+
+        SearchItemSubcategoriesChanged value ->
+            ( { model | searchItemSubcategories = value }
+            , getElementHeight filterItemCategoriesMeasureWrapperId
             )
 
         SearchSourceBooksChanged value ->
@@ -1181,6 +1226,20 @@ updateUrl ({ url } as model) =
                     |> List.map Tuple.first
                     |> String.join ","
               )
+            , ( "include-creature-families"
+              , model.filteredCreatureFamilies
+                    |> Dict.toList
+                    |> List.filter (Tuple.second)
+                    |> List.map Tuple.first
+                    |> String.join ";"
+              )
+            , ( "exclude-creature-families"
+              , model.filteredCreatureFamilies
+                    |> Dict.toList
+                    |> List.filter (Tuple.second >> not)
+                    |> List.map Tuple.first
+                    |> String.join ";"
+              )
             , ( "components-operator"
               , if model.filterComponentsOperator then
                   ""
@@ -1559,6 +1618,7 @@ buildSearchFilterTerms model =
             )
             [ ( "alignment", boolDictIncluded model.filteredAlignments, False )
             , ( "component", boolDictIncluded model.filteredComponents, model.filterComponentsOperator )
+            , ( "creature_family", boolDictIncluded model.filteredCreatureFamilies, False )
             , ( "item_category", boolDictIncluded model.filteredItemCategories, False )
             , ( "item_subcategory", boolDictIncluded model.filteredItemSubcategories, False )
             , ( "pfs", boolDictIncluded model.filteredPfs, False )
@@ -1691,6 +1751,7 @@ buildSearchMustNotTerms model =
             )
             [ ( "alignment", boolDictExcluded model.filteredAlignments )
             , ( "component", boolDictExcluded model.filteredComponents )
+            , ( "creature_family", boolDictExcluded model.filteredCreatureFamilies )
             , ( "item_category", boolDictExcluded model.filteredItemCategories )
             , ( "item_subcategory", boolDictExcluded model.filteredItemSubcategories )
             , ( "pfs", boolDictExcluded model.filteredPfs )
@@ -1828,6 +1889,21 @@ updateModelFromQueryString url model =
                     |> Maybe.map (String.split ",")
                     |> Maybe.withDefault []
                     |> List.map (\component -> ( component, False ))
+                )
+                |> Dict.fromList
+        , filteredCreatureFamilies =
+            List.append
+                (getQueryParam url "include-creature-families"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ";")
+                    |> Maybe.withDefault []
+                    |> List.map (\creatureFamily -> ( creatureFamily, True ))
+                )
+                (getQueryParam url "exclude-creature-families"
+                    |> String.Extra.nonEmpty
+                    |> Maybe.map (String.split ";")
+                    |> Maybe.withDefault []
+                    |> List.map (\creatureFamily -> ( creatureFamily, False ))
                 )
                 |> Dict.fromList
         , filteredItemCategories =
@@ -2035,6 +2111,7 @@ searchWithCurrentQuery ( model, cmd ) =
     if (String.isEmpty (String.trim model.query)
         && Dict.isEmpty model.filteredAlignments
         && Dict.isEmpty model.filteredComponents
+        && Dict.isEmpty model.filteredCreatureFamilies
         && Dict.isEmpty model.filteredItemCategories
         && Dict.isEmpty model.filteredItemSubcategories
         && Dict.isEmpty model.filteredPfs
@@ -2135,7 +2212,8 @@ buildAggregationsBody =
                 (List.append
                     (List.map
                         buildTermsAggregation
-                        [ "item_category"
+                        [ "creature_family"
+                        , "item_category"
                         , "trait"
                         , "type"
                         ]
@@ -2232,6 +2310,10 @@ esResultDecoder =
 aggregationsDecoder : Decode.Decoder Aggregations
 aggregationsDecoder =
     Field.requireAt
+        [ "aggregations", "creature_family" ]
+        (aggregationBucketDecoder Decode.string)
+        <| \creatureFamilies ->
+    Field.requireAt
         [ "aggregations", "item_category" ]
         (aggregationBucketDecoder Decode.string)
         <| \itemCategories ->
@@ -2268,7 +2350,8 @@ aggregationsDecoder =
         (aggregationBucketDecoder Decode.string)
         <| \types ->
     Decode.succeed
-        { itemCategories = itemCategories
+        { creatureFamilies = creatureFamilies
+        , itemCategories = itemCategories
         , itemSubcategories = itemSubcategories
         , sources = sources
         , traits = traits
@@ -2279,7 +2362,6 @@ aggregationsDecoder =
 aggregationBucketDecoder : Decode.Decoder a -> Decode.Decoder (List a)
 aggregationBucketDecoder keyDecoder =
     Decode.field "buckets" (Decode.list (Decode.field "key" keyDecoder))
-    -- Decode.field "buckets" (Decode.list (Decode.field "key" Decode.string))
 
 
 sourcesDecoder : Decode.Decoder (List Document)
@@ -2886,7 +2968,7 @@ viewFilters model =
                                             , HE.onClick (removeMsg value)
                                             ]
                                             [ viewPfsIcon value
-                                            , Html.text (String.Extra.toSentenceCase value)
+                                            , Html.text (String.Extra.toTitleCase value)
                                             ]
                                     )
                                     list
@@ -2957,6 +3039,16 @@ viewFilters model =
                   , label = "Exclude components:"
                   , list = boolDictExcluded model.filteredComponents
                   , removeMsg = ComponentFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Include creature families:"
+                  , list = boolDictIncluded model.filteredCreatureFamilies
+                  , removeMsg = CreatureFamilyFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude creature families:"
+                  , list = boolDictExcluded model.filteredCreatureFamilies
+                  , removeMsg = CreatureFamilyFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include item categories:"
@@ -3102,6 +3194,11 @@ viewQueryOptions model =
             "Filter casting components"
             filterComponentsMeasureWrapperId
             (viewFilterComponents model)
+        , viewFoldableOptionBox
+            model
+            "Filter creature families"
+            filterCreatureFamiliesMeasureWrapperId
+            (viewFilterCreatureFamilies model)
         , viewFoldableOptionBox
             model
             "Filter item categories"
@@ -3646,6 +3743,69 @@ viewFilterComponents model =
     ]
 
 
+viewFilterCreatureFamilies : Model -> List (Html Msg)
+viewFilterCreatureFamilies model =
+    [ Html.button
+        [ HA.style "align-self" "flex-start"
+        , HE.onClick RemoveAllCreatureFamilyFiltersPressed
+        ]
+        [ Html.text "Reset selection" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "input-container"
+        ]
+        [ Html.input
+            [ HA.placeholder "Search among creature families"
+            , HA.value model.searchCreatureFamilies
+            , HA.type_ "text"
+            , HE.onInput SearchCreatureFamiliesChanged
+            ]
+            []
+        , if String.isEmpty model.searchCreatureFamilies then
+            Html.text ""
+
+          else
+            Html.button
+                [ HA.class "input-button"
+                , HE.onClick (SearchCreatureFamiliesChanged "")
+                ]
+                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+        ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (case model.aggregations of
+            Just (Ok aggregations) ->
+                List.map
+                    (\creatureFamily ->
+                        Html.button
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HA.class "nowrap"
+                            , HA.class "align-center"
+                            , HA.style "text-align" "left"
+                            , HE.onClick (CreatureFamilyFilterAdded (String.toLower creatureFamily))
+                            ]
+                            [ Html.text (String.Extra.toTitleCase creatureFamily)
+                            , viewFilterIcon (Dict.get (String.toLower creatureFamily) model.filteredCreatureFamilies)
+                            ]
+                    )
+                    (aggregations.creatureFamilies
+                        |> List.filter (String.toLower >> String.contains (String.toLower model.searchCreatureFamilies))
+                        |> List.sort
+                    )
+
+            Just (Err _) ->
+                []
+
+            Nothing ->
+                [ viewScrollboxLoader ]
+        )
+    ]
+
+
 viewFilterItemCategories : Model -> List (Html Msg)
 viewFilterItemCategories model =
     [ Html.h4
@@ -3653,10 +3813,30 @@ viewFilterItemCategories model =
         [ Html.text "Filter item categories" ]
     , Html.button
         [ HA.style "align-self" "flex-start"
-        , HA.style "justify-self" "flex-start"
         , HE.onClick RemoveAllItemCategoryFiltersPressed
         ]
         [ Html.text "Reset selection" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "input-container"
+        ]
+        [ Html.input
+            [ HA.placeholder "Search among item categories"
+            , HA.value model.searchItemCategories
+            , HA.type_ "text"
+            , HE.onInput SearchItemCategoriesChanged
+            ]
+            []
+        , if String.isEmpty model.searchItemCategories then
+            Html.text ""
+
+          else
+            Html.button
+                [ HA.class "input-button"
+                , HE.onClick (SearchItemCategoriesChanged "")
+                ]
+                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+        ]
     , Html.div
         [ HA.class "row"
         , HA.class "gap-tiny"
@@ -3678,7 +3858,10 @@ viewFilterItemCategories model =
                             , viewFilterIcon (Dict.get category model.filteredItemCategories)
                             ]
                     )
-                    (List.sort aggregations.itemCategories)
+                    (aggregations.itemCategories
+                        |> List.filter (String.toLower >> String.contains (String.toLower model.searchItemCategories))
+                        |> List.sort
+                    )
 
             Just (Err _) ->
                 []
@@ -3691,10 +3874,30 @@ viewFilterItemCategories model =
         [ Html.text "Filter item subcategories" ]
     , Html.button
         [ HA.style "align-self" "flex-start"
-        , HA.style "justify-self" "flex-start"
         , HE.onClick RemoveAllItemSubcategoryFiltersPressed
         ]
         [ Html.text "Reset selection" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "input-container"
+        ]
+        [ Html.input
+            [ HA.placeholder "Search among item subcategories"
+            , HA.value model.searchItemSubcategories
+            , HA.type_ "text"
+            , HE.onInput SearchItemSubcategoriesChanged
+            ]
+            []
+        , if String.isEmpty model.searchItemSubcategories then
+            Html.text ""
+
+          else
+            Html.button
+                [ HA.class "input-button"
+                , HE.onClick (SearchItemSubcategoriesChanged "")
+                ]
+                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+        ]
     , Html.div
         [ HA.class "row"
         , HA.class "gap-tiny"
@@ -3749,7 +3952,14 @@ viewFilterItemCategories model =
                                 )
                             ]
                     )
-                    (List.sortBy .name aggregations.itemSubcategories)
+                    (aggregations.itemSubcategories
+                        |> List.filter
+                            (.name
+                                >> String.toLower
+                                >> String.contains (String.toLower model.searchItemSubcategories)
+                            )
+                        |> List.sortBy .name
+                    )
 
             Just (Err _) ->
                 []
@@ -5653,6 +5863,7 @@ measureWrapperIds =
     , queryTypeMeasureWrapperId
     , filterAlignmentsMeasureWrapperId
     , filterComponentsMeasureWrapperId
+    , filterCreatureFamiliesMeasureWrapperId
     , filterItemCategoriesMeasureWrapperId
     , filterPfsMeasureWrapperId
     , filterSizesMeasureWrapperId
@@ -5688,6 +5899,11 @@ filterAlignmentsMeasureWrapperId =
 filterComponentsMeasureWrapperId : String
 filterComponentsMeasureWrapperId =
     "filter-components-measure-wrapper"
+
+
+filterCreatureFamiliesMeasureWrapperId : String
+filterCreatureFamiliesMeasureWrapperId =
+    "filter-creature-families-measure-wrapper"
 
 
 filterItemCategoriesMeasureWrapperId : String
