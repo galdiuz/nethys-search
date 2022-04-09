@@ -216,8 +216,8 @@ type Msg
     | RemoveAllItemSubcategoryFiltersPressed
     | RemoveAllPfsFiltersPressed
     | RemoveAllSizeFiltersPressed
-    | RemoveAllSourceBookFiltersPressed
     | RemoveAllSourceCategoryFiltersPressed
+    | RemoveAllSourceFiltersPressed
     | RemoveAllTraditionFiltersPressed
     | RemoveAllTraitFiltersPressed
     | RemoveAllTypeFiltersPressed
@@ -225,7 +225,7 @@ type Msg
     | SearchCreatureFamiliesChanged String
     | SearchItemCategoriesChanged String
     | SearchItemSubcategoriesChanged String
-    | SearchSourceBooksChanged String
+    | SearchSourcesChanged String
     | SearchTraitsChanged String
     | SearchTypesChanged String
     | ScrollToTopPressed
@@ -243,10 +243,10 @@ type Msg
     | SortResistanceChanged String
     | SortSpeedChanged String
     | SortWeaknessChanged String
-    | SourceBookFilterAdded String
-    | SourceBookFilterRemoved String
     | SourceCategoryFilterAdded String
     | SourceCategoryFilterRemoved String
+    | SourceFilterAdded String
+    | SourceFilterRemoved String
     | ThemeSelected Theme
     | TraditionFilterAdded String
     | TraditionFilterRemoved String
@@ -282,7 +282,7 @@ type alias Model =
     , filteredItemSubcategories : Dict String Bool
     , filteredPfs : Dict String Bool
     , filteredSizes : Dict String Bool
-    , filteredSourceBooks : Dict String Bool
+    , filteredSources : Dict String Bool
     , filteredSourceCategories : Dict String Bool
     , filteredTraditions : Dict String Bool
     , filteredTraits : Dict String Bool
@@ -301,7 +301,7 @@ type alias Model =
     , searchCreatureFamilies : String
     , searchItemCategories : String
     , searchItemSubcategories : String
-    , searchSourceBooks : String
+    , searchSources : String
     , searchResults : List (Result Http.Error SearchResult)
     , searchTraits : String
     , searchTypes : String
@@ -356,7 +356,7 @@ init flagsValue =
       , filteredPfs = Dict.empty
       , filteredItemCategories = Dict.empty
       , filteredItemSubcategories = Dict.empty
-      , filteredSourceBooks = Dict.empty
+      , filteredSources = Dict.empty
       , filteredSourceCategories = Dict.empty
       , filteredSizes = Dict.empty
       , filteredTraditions = Dict.empty
@@ -376,7 +376,7 @@ init flagsValue =
       , searchCreatureFamilies = ""
       , searchItemCategories = ""
       , searchItemSubcategories = ""
-      , searchSourceBooks = ""
+      , searchSources = ""
       , searchResults = []
       , searchTraits = ""
       , searchTypes = ""
@@ -775,14 +775,14 @@ update msg model =
             , updateUrl { model | filteredSizes = Dict.empty }
             )
 
-        RemoveAllSourceBookFiltersPressed ->
-            ( model
-            , updateUrl { model | filteredSourceBooks = Dict.empty }
-            )
-
         RemoveAllSourceCategoryFiltersPressed ->
             ( model
             , updateUrl { model | filteredSourceCategories = Dict.empty }
+            )
+
+        RemoveAllSourceFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredSources = Dict.empty }
             )
 
         RemoveAllTraditionFiltersPressed ->
@@ -824,8 +824,8 @@ update msg model =
             , getElementHeight filterItemCategoriesMeasureWrapperId
             )
 
-        SearchSourceBooksChanged value ->
-            ( { model | searchSourceBooks = value }
+        SearchSourcesChanged value ->
+            ( { model | searchSources = value }
             , getElementHeight filterSourcesMeasureWrapperId
             )
 
@@ -939,16 +939,6 @@ update msg model =
             , Cmd.none
             )
 
-        SourceBookFilterAdded book ->
-            ( model
-            , updateUrl { model | filteredSourceBooks = toggleBoolDict book model.filteredSourceBooks }
-            )
-
-        SourceBookFilterRemoved book ->
-            ( model
-            , updateUrl { model | filteredSourceBooks = Dict.remove book model.filteredSourceBooks }
-            )
-
         SourceCategoryFilterAdded category ->
             let
                 newFilteredSourceCategories : Dict String Bool
@@ -959,7 +949,7 @@ update msg model =
             , updateUrl
                 { model
                     | filteredSourceCategories = newFilteredSourceCategories
-                    , filteredSourceBooks =
+                    , filteredSources =
                         case Dict.get category newFilteredSourceCategories of
                             Just True ->
                                 Dict.filter
@@ -977,7 +967,7 @@ update msg model =
                                             |> List.map .name
                                             |> List.member source
                                     )
-                                    model.filteredSourceBooks
+                                    model.filteredSources
 
                             Just False ->
                                 Dict.filter
@@ -990,16 +980,26 @@ update msg model =
                                             |> Maybe.map String.toLower
                                             |> (/=) (Just category)
                                     )
-                                    model.filteredSourceBooks
+                                    model.filteredSources
 
                             Nothing ->
-                                model.filteredSourceBooks
+                                model.filteredSources
                 }
             )
 
         SourceCategoryFilterRemoved category ->
             ( model
             , updateUrl { model | filteredSourceCategories = Dict.remove category model.filteredSourceCategories }
+            )
+
+        SourceFilterAdded book ->
+            ( model
+            , updateUrl { model | filteredSources = toggleBoolDict book model.filteredSources }
+            )
+
+        SourceFilterRemoved book ->
+            ( model
+            , updateUrl { model | filteredSources = Dict.remove book model.filteredSources }
             )
 
         ThemeSelected theme ->
@@ -1303,15 +1303,15 @@ updateUrl ({ url } as model) =
                     |> List.map Tuple.first
                     |> String.join ","
               )
-            , ( "include-source-books"
-              , model.filteredSourceBooks
+            , ( "include-sources"
+              , model.filteredSources
                     |> Dict.toList
                     |> List.filter (Tuple.second)
                     |> List.map Tuple.first
                     |> String.join ";"
               )
-            , ( "exclude-source-books"
-              , model.filteredSourceBooks
+            , ( "exclude-sources"
+              , model.filteredSources
                     |> Dict.toList
                     |> List.filter (Tuple.second >> not)
                     |> List.map Tuple.first
@@ -1623,7 +1623,7 @@ buildSearchFilterTerms model =
             , ( "item_subcategory", boolDictIncluded model.filteredItemSubcategories, False )
             , ( "pfs", boolDictIncluded model.filteredPfs, False )
             , ( "size", boolDictIncluded model.filteredSizes, False )
-            , ( "source", boolDictIncluded model.filteredSourceBooks, False )
+            , ( "source", boolDictIncluded model.filteredSources, False )
             , ( "tradition", boolDictIncluded model.filteredTraditions, model.filterTraditionsOperator )
             , ( "trait", boolDictIncluded model.filteredTraits, model.filterTraitsOperator )
             , ( "type", boolDictIncluded model.filteredTypes, False )
@@ -1756,7 +1756,7 @@ buildSearchMustNotTerms model =
             , ( "item_subcategory", boolDictExcluded model.filteredItemSubcategories )
             , ( "pfs", boolDictExcluded model.filteredPfs )
             , ( "size", boolDictExcluded model.filteredSizes )
-            , ( "source", boolDictExcluded model.filteredSourceBooks )
+            , ( "source", boolDictExcluded model.filteredSources )
             , ( "tradition", boolDictExcluded model.filteredTraditions )
             , ( "trait", boolDictExcluded model.filteredTraits )
             , ( "type", boolDictExcluded model.filteredTypes )
@@ -1966,15 +1966,15 @@ updateModelFromQueryString url model =
                     |> List.map (\size -> ( size, False ))
                 )
                 |> Dict.fromList
-        , filteredSourceBooks =
+        , filteredSources =
             List.append
-                (getQueryParam url "include-source-books"
+                (getQueryParam url "include-sources"
                     |> String.Extra.nonEmpty
                     |> Maybe.map (String.split ";")
                     |> Maybe.withDefault []
                     |> List.map (\size -> ( size, True ))
                 )
-                (getQueryParam url "exclude-source-books"
+                (getQueryParam url "exclude-sources"
                     |> String.Extra.nonEmpty
                     |> Maybe.map (String.split ";")
                     |> Maybe.withDefault []
@@ -2116,7 +2116,7 @@ searchWithCurrentQuery ( model, cmd ) =
         && Dict.isEmpty model.filteredItemSubcategories
         && Dict.isEmpty model.filteredPfs
         && Dict.isEmpty model.filteredSizes
-        && Dict.isEmpty model.filteredSourceBooks
+        && Dict.isEmpty model.filteredSources
         && Dict.isEmpty model.filteredSourceCategories
         && Dict.isEmpty model.filteredTraditions
         && Dict.isEmpty model.filteredTraits
@@ -3091,14 +3091,14 @@ viewFilters model =
                   , removeMsg = SizeFilterRemoved
                   }
                 , { class = Nothing
-                  , label = "Include source books:"
-                  , list = boolDictIncluded model.filteredSourceBooks
-                  , removeMsg = SourceBookFilterRemoved
+                  , label = "Include sources:"
+                  , list = boolDictIncluded model.filteredSources
+                  , removeMsg = SourceFilterRemoved
                   }
                 , { class = Nothing
-                  , label = "Exclude source books:"
-                  , list = boolDictExcluded model.filteredSourceBooks
-                  , removeMsg = SourceBookFilterRemoved
+                  , label = "Exclude sources:"
+                  , list = boolDictExcluded model.filteredSources
+                  , removeMsg = SourceFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include source categories:"
@@ -3216,7 +3216,7 @@ viewQueryOptions model =
             (viewFilterSizes model)
         , viewFoldableOptionBox
             model
-            "Filter spoilers & sources"
+            "Filter sources & spoilers"
             filterSourcesMeasureWrapperId
             (viewFilterSources model)
         , viewFoldableOptionBox
@@ -4080,11 +4080,11 @@ viewFilterSources model =
         )
     , Html.h4
         []
-        [ Html.text "Filter source books" ]
+        [ Html.text "Filter sources" ]
     , Html.button
         [ HA.style "align-self" "flex-start"
         , HA.style "justify-self" "flex-start"
-        , HE.onClick RemoveAllSourceBookFiltersPressed
+        , HE.onClick RemoveAllSourceFiltersPressed
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -4092,19 +4092,19 @@ viewFilterSources model =
         , HA.class "input-container"
         ]
         [ Html.input
-            [ HA.placeholder "Search among source books"
-            , HA.value model.searchSourceBooks
+            [ HA.placeholder "Search among sources"
+            , HA.value model.searchSources
             , HA.type_ "text"
-            , HE.onInput SearchSourceBooksChanged
+            , HE.onInput SearchSourcesChanged
             ]
             []
-        , if String.isEmpty model.searchSourceBooks then
+        , if String.isEmpty model.searchSources then
             Html.text ""
 
           else
             Html.button
                 [ HA.class "input-button"
-                , HE.onClick (SearchSourceBooksChanged "")
+                , HE.onClick (SearchSourcesChanged "")
                 ]
                 [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
         ]
@@ -4152,20 +4152,20 @@ viewFilterSources model =
                             , HA.style "text-align" "left"
                             , HA.disabled (Maybe.Extra.isJust filteredCategory)
                             , HAE.attributeIf (Maybe.Extra.isJust filteredCategory) (HA.class "excluded")
-                            , HE.onClick (SourceBookFilterAdded source.name)
+                            , HE.onClick (SourceFilterAdded source.name)
                             ]
                             [ Html.div
                                 []
                                 [ Html.text source.name ]
                             , viewFilterIcon
                                 (Maybe.Extra.or
-                                    (Dict.get source.name model.filteredSourceBooks)
+                                    (Dict.get source.name model.filteredSources)
                                     filteredCategory
                                 )
                             ]
                     )
                     (List.filter
-                        (.name >> String.toLower >> String.contains (String.toLower model.searchSourceBooks))
+                        (.name >> String.toLower >> String.contains (String.toLower model.searchSources))
                         (List.sortBy .name sources)
                     )
                 )
