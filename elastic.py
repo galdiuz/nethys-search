@@ -44,6 +44,7 @@ def main():
                 'conditions': parse_condition,
                 'curses': parse_curse,
                 'deities': parse_deity,
+                'deity-categories': parse_deity_category,
                 'diseases': parse_disease,
                 'doctrines': parse_doctrine,
                 'domains': parse_domain,
@@ -378,6 +379,7 @@ def parse_deity(id: str, soup: BeautifulSoup):
     doc.area_of_concern = get_label_text(soup, 'Areas of Concern')
     doc.cleric_spell = get_label_text(soup, 'Cleric Spells')
     doc.divine_font = get_label_text(soup, 'Divine Font')
+    doc.deity_category = get_label_text(soup, 'Category')
     doc.skill = split_on(get_label_text(soup, 'Divine Skill'), ' or ')
     doc.domain = split_comma(get_label_text(soup, 'Domains')) + split_comma(get_label_text(soup, 'Alternate Domains'))
     doc.edict = get_label_text(soup, 'Edicts')
@@ -385,6 +387,14 @@ def parse_deity(id: str, soup: BeautifulSoup):
     doc.follower_alignment = split_comma(get_label_text(soup, 'Follower Alignments'))
     doc.trait = normalize_traits([alignment])
     doc.trait_raw = [alignment]
+
+    doc.save()
+
+
+def parse_deity_category(id: str, soup: BeautifulSoup):
+    doc = parse_generic(id, soup, 'deity-category', 'DeityCategories', 'Deity Category')
+
+    doc.deity_category = doc.name
 
     doc.save()
 
@@ -1588,6 +1598,7 @@ class Doc(Document):
     con = Alias(path="constitution")
     constitution = Integer()
     creature_family = Keyword(normalizer="lowercase")
+    deity_category = Keyword(normalizer="lowercase")
     dex = Alias(path="dexterity")
     dex_cap = Integer()
     dexterity = Integer()

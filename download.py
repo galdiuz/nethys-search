@@ -28,6 +28,7 @@ def main():
     download_category('Conditions')
     download_category('Curses')
     download_category('Deities')
+    download_category('DeityCategories')
     download_category('Diseases')
     download_category('Doctrines', 1)
     download_category('Domains')
