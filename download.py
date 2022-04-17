@@ -19,6 +19,7 @@ def main():
     download_category('Archetypes')
     download_category('Armor')
     download_category('ArmorGroups', 1)
+    download_category('Articles')
     download_category('Backgrounds')
     download_category('Bloodlines', 1)
     download_category('Causes', 1)
