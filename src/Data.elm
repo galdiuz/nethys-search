@@ -212,7 +212,7 @@ predefinedColumnConfigurations =
     , { columns = [ "ability", "hp", "attack_proficiency", "defense_proficiency", "saving_throw_proficiency", "perception_proficiency", "skill_proficiency", "rarity", "pfs" ]
       , label = "Classes"
       }
-    , { columns = [ "level", "hp", "ac", "fortitude", "reflex", "will", "strongest_save", "weakest_save", "perception", "sense", "size", "alignment", "rarity", "speed", "immunity", "resistance", "weakness", "trait", "creature_family", "language", "strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma" ]
+    , { columns = [ "level", "hp", "ac", "fortitude", "reflex", "will", "strongest_save", "weakest_save", "perception", "sense", "size", "alignment", "rarity", "speed", "immunity", "resistance", "weakness", "trait", "creature_family", "language" ]
       , label = "Creatures"
       }
     , { columns = [ "alignment", "ability", "divine_font", "skill", "favored_weapon", "domain", "cleric_spell", "deity_category", "edict", "anathema", "area_of_concern", "follower_alignment", "pfs" ]
