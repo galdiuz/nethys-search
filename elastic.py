@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from typing import List, Optional
 from bs4 import BeautifulSoup
 from elasticsearch_dsl import Document, Field, Float, Integer, Keyword, Object, Text
 from elasticsearch_dsl.connections import connections
@@ -96,11 +97,11 @@ def main():
                 parse_functions[dir_name](id, soup)
 
 
-def build_url(category: str, id: int, params: [str] = []) -> str:
+def build_url(category: str, id: int, params: List[str] = []) -> str:
     return f'{category}.aspx?' + '&'.join([f"ID={id}"] + params)
 
 
-def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type: str, url_params: [str] = []):
+def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type: str, url_params: List[str] = []):
     title = soup.find('h1', class_='title')
 
     name, title_type, level, pfs = get_title_data(title)
@@ -173,7 +174,8 @@ def parse_ancestry(id: str, soup: BeautifulSoup):
 
     doc.ability_boost = ability_boosts
     doc.ability_flaw = get_values_under_title(soup, 'Ability Flaw(s)')
-    doc.hp = hp[0] if hp else None
+    doc.hp = extract_first_number(hp[0]) if hp else None
+    doc.hp_raw = "\n".join(hp)
     doc.language = cleaned_languages
     doc.size = size[0].split(' or ') if size else None
     doc.speed = [ normalize_speed(s) for s in speed ] if speed else None
@@ -387,6 +389,7 @@ def parse_class(id: str, soup: BeautifulSoup):
 
     node = soup.find('b', string=re.compile(r'Hit Points: .*'))
     hp = ''.join([ c for c in node.text if c.isdigit() ])
+    hp_raw = ''.join([ c for c in node.text ])
 
     node = soup.find('b', string=re.compile(r'Key Ability: .*'))
     ability = node.text.replace('Key Ability: ', '').split(' OR ')
@@ -396,6 +399,7 @@ def parse_class(id: str, soup: BeautifulSoup):
     doc.attack_proficiency = attacks
     doc.defense_proficiency = defenses
     doc.hp = hp
+    doc.hp_raw = hp_raw
     doc.perception_proficiency = perception[0] if perception else None
     doc.rarity = get_rarity(traits)
     doc.saving_throw_proficiency = saving_throws
@@ -659,8 +663,15 @@ def parse_hazard(id: str, soup: BeautifulSoup):
     doc.complexity = get_label_text(soup, 'Complexity')
     doc.disable = get_label_text(soup, 'Disable', '')
     doc.fortitude_save = get_label_text(soup, 'Fort', ';,')
-    doc.hardness = get_label_text(soup, 'Hardness', ';,')
-    doc.hp = get_label_text(soup, 'HP', ';(')
+
+    hardness_raw = get_label_text(soup, 'Hardness', ';,')
+    doc.hardness = extract_first_number(hardness_raw)
+    doc.hardness_raw = hardness_raw
+
+    hp_raw = get_label_text(soup, 'HP', ';(')
+    doc.hp = extract_first_number(hp_raw)
+    doc.hp_raw = hp_raw
+
     doc.immunity = split_comma(get_label_text(soup, 'Immunities'))
     doc.reflex_save = get_label_text(soup, 'Ref', ';,')
     doc.reset = get_label_text(soup, 'Reset')
@@ -820,7 +831,9 @@ def parse_creature(id: str, soup: BeautifulSoup, url: str):
     doc.fortitude_save = fort_save
     doc.reflex_save = reflex_save
     doc.will_save = will_save
-    doc.hp = get_label_text(soup, 'HP', ';,(')
+    hp_raw = get_label_text(soup, 'HP', ';,(')
+    doc.hp = extract_first_number(hp_raw)
+    doc.hp_raw = hp_raw
     doc.immunity = split_comma(get_label_text(soup, 'Immunities'))
     doc.resistance = normalize_resistance(resistances)
     doc.resistance_raw = resistances
@@ -981,8 +994,12 @@ def parse_shield(id: str, soup: BeautifulSoup):
     doc.ac = get_label_text(soup, 'AC Bonus', ';(')
     doc.bulk = normalize_bulk(bulk)
     doc.bulk_raw = bulk
-    doc.hardness = get_label_text(soup, 'Hardness')
-    doc.hp = get_label_text(soup, 'HP (BT)', ';(')
+    hardness_raw = get_label_text(soup, 'Hardness')
+    doc.hardness = extract_first_number(hardness_raw)
+    doc.hardness_raw = hardness_raw
+    hp_raw = get_label_text(soup, 'HP (BT)', ';(')
+    doc.hp = extract_first_number(hp_raw)
+    doc.hp_raw = hp_raw
     doc.item_category = 'Shields'
     doc.item_subcategory = 'Base Shields'
     doc.price = normalize_price(price)
@@ -1174,7 +1191,7 @@ def get_title_data(title: BeautifulSoup):
     return name, type, level, pfs
 
 
-def get_traits(soup: BeautifulSoup):
+def get_traits(soup: BeautifulSoup) -> List[str]:
     traits = []
     node = soup
     while node := node.next_element:
@@ -1199,7 +1216,7 @@ def normalize_source(source: str) -> str:
     return source
 
 
-def normalize_traits(traits: [str]) -> [str]:
+def normalize_traits(traits: List[str]) -> List[str]:
     return list(map(normalize_trait, traits))
 
 
@@ -1229,7 +1246,7 @@ def normalize_trait(trait: str) -> str:
     return trait
 
 
-def get_description(title: BeautifulSoup):
+def get_description(title: BeautifulSoup) -> str:
     desc = []
     skip_hr = False
 
@@ -1264,11 +1281,11 @@ def get_description(title: BeautifulSoup):
     return ' '.join([row.strip() for row in desc if row])
 
 
-def join_and_strip(array: [str]) -> str:
+def join_and_strip(array: List[str]) -> str:
     return ' '.join([s.strip() for s in array if s])
 
 
-def get_sub_item_description(title: BeautifulSoup):
+def get_sub_item_description(title: BeautifulSoup) -> str:
     breaks = []
     desc = []
     node = title
@@ -1288,6 +1305,15 @@ def get_sub_item_description(title: BeautifulSoup):
             desc.append(node.get_text(' ', strip=True))
 
     return ' '.join([row.strip() for row in desc if row])
+
+
+def extract_first_number(value: Optional[str]) -> Optional[float]:
+    if not value:
+        return None
+    list = re.findall(r"\d+(?:\.\d+)?", value)
+    if len(list) > 0:
+        return float(list[0])
+    return None
 
 
 def normalize_bulk(value: str) -> float:
@@ -1454,7 +1480,7 @@ def normalize_speed(value: str):
     return speed
 
 
-def translate_damage_types(value: str, exceptions: str):
+def translate_damage_types(value: str, exceptions: str) -> List[str]:
     if value == 'physical':
         types = physical_types()
 
@@ -1484,11 +1510,11 @@ def translate_damage_types(value: str, exceptions: str):
     return types
 
 
-def split_comma(string):
+def split_comma(string: str) -> List[str]:
     return split_on(string, ',')
 
 
-def split_comma_special(value: str):
+def split_comma_special(value: str) -> Optional[List[str]]:
     if not value:
         return None
 
@@ -1520,7 +1546,7 @@ def split_comma_special(value: str):
     return values
 
 
-def split_on(string, split):
+def split_on(string: str, split: str) -> List[str]:
     if string:
         return [ s.strip() for s in string.split(split) ]
 
@@ -1528,7 +1554,7 @@ def split_on(string, split):
         return []
 
 
-def get_label_text(soup, label, stop_at=';', strip=None):
+def get_label_text(soup: BeautifulSoup, label: str, stop_at=';', strip=None) -> Optional[str]:
     parts = []
 
     if node := soup.find_next('b', text=label):
@@ -1565,7 +1591,7 @@ def get_label_text(soup, label, stop_at=';', strip=None):
         return None
 
 
-def get_label_links(soup, label):
+def get_label_links(soup: BeautifulSoup, label: str) -> List[str]:
     parts = []
 
     if node := soup.find_next('b', text=label):
@@ -1586,7 +1612,7 @@ def get_label_links(soup, label):
         return []
 
 
-def get_values_under_title(soup: BeautifulSoup, title: str):
+def get_values_under_title(soup: BeautifulSoup, title: str) -> List[str]:
     node = soup.find('h2', text=title)
 
     if not node:
@@ -1609,7 +1635,7 @@ def get_values_under_title(soup: BeautifulSoup, title: str):
     return [ v.strip() for v in values ]
 
 
-def get_actions(soup, label):
+def get_actions(soup: BeautifulSoup, label: str) -> str:
     parts = []
 
     if node := soup.find_next('b', text=label):
@@ -1640,7 +1666,7 @@ def get_actions(soup, label):
         return ' '.join([ s.strip() for s in parts if s.strip() ])
 
     else:
-        return []
+        return ''
 
 
 def get_actions_from_title(title: BeautifulSoup):
@@ -1743,7 +1769,7 @@ def get_stages(soup: BeautifulSoup):
     return stages
 
 
-def get_category(soup: BeautifulSoup):
+def get_category(soup: BeautifulSoup) -> Optional[str]:
     if not soup:
         return None
 
@@ -1755,27 +1781,27 @@ def get_category(soup: BeautifulSoup):
     return node.text
 
 
-def physical_types():
+def physical_types() -> List[str]:
     return ['bludgeoning', 'physical', 'piercing', 'slashing']
 
 
-def energy_types():
+def energy_types() -> List[str]:
     return ['acid', 'cold', 'electricity', 'fire', 'sonic', 'positive', 'negative', 'force']
 
 
-def alignment_types():
+def alignment_types() -> List[str]:
     return['chaotic', 'evil', 'good', 'lawful']
 
 
-def material_types():
+def material_types() -> List[str]:
     return ['cold_iron', 'orichalcum', 'silver']
 
 
-def other_types():
+def other_types() -> List[str]:
     return ['area', 'bleed', 'mental', 'poison', 'precision', 'splash']
 
 
-def all_types():
+def all_types() -> List[str]:
     return ['all'] + physical_types() + energy_types() + alignment_types() + material_types() + other_types()
 
 
@@ -1827,8 +1853,10 @@ class Doc(Document):
     fortitude = Alias(path="fortitude_save")
     fortitude_save = Integer()
     hardness = Integer()
+    hardness_raw = Text()
     heighten = Keyword(normalizer="lowercase")
     hp = Integer()
+    hp_raw = Text()
     id = Integer()
     int = Alias(path="intelligence")
     intelligence = Integer()
