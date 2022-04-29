@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-from typing import List, Optional
-from bs4 import BeautifulSoup
+from typing import List, Optional, Union
+from bs4 import BeautifulSoup, NavigableString, Tag
 from elasticsearch_dsl import Document, Field, Float, Integer, Keyword, Object, Text
 from elasticsearch_dsl.connections import connections
 import re
@@ -11,7 +11,83 @@ def main():
     connections.create_connection(hosts=['localhost'])
     Doc.init()
 
+    parse_functions = {
+        'actions': parse_action,
+        'ancestries': parse_ancestry,
+        'animal-companions': parse_animal_companion,
+        'animal-companions-advanced': parse_animal_companion_advanced,
+        'animal-companions-specialized': parse_animal_companion_specialized,
+        'animal-companions-unique': parse_animal_companion_unique,
+        'arcane-schools': parse_arcane_school,
+        'archetypes': parse_archetype,
+        'armor': parse_armor,
+        'armor-groups': parse_armor_group,
+        'articles': parse_article,
+        'backgrounds': parse_background,
+        'bloodlines': parse_bloodline,
+        'causes': parse_cause,
+        'class-kits': parse_class_kit,
+        'class-samples': parse_class_sample,
+        'classes': parse_class,
+        'conditions': parse_condition,
+        'curses': parse_curse,
+        'deities': parse_deity,
+        'deity-categories': parse_deity_category,
+        'diseases': parse_disease,
+        'doctrines': parse_doctrine,
+        'domains': parse_domain,
+        'druidic-orders': parse_druidic_order,
+        'eidolons': parse_eidolon,
+        'equipment': parse_equipment,
+        'familiars': parse_familiar,
+        'familiars-specific': parse_familiar_specific,
+        'feats': parse_feat,
+        'hazards': parse_hazard,
+        'heritages': parse_heritage,
+        'hunters-edge': parse_hunters_edge,
+        'hybrid-studies': parse_hybrid_study,
+        'innovations': parse_innovation,
+        'instincts': parse_instinct,
+        'languages': parse_language,
+        'lessons': parse_lesson,
+        'methodologies': parse_methodology,
+        'monster-abilities': parse_monster_ability,
+        'monster-families': parse_monster_family,
+        'monsters': parse_monster,
+        'muses': parse_muse,
+        'mysteries': parse_mystery,
+        'npc-theme-templates': parse_npc_theme_template,
+        'npcs': parse_npc,
+        'patrons': parse_patron,
+        'planes': parse_plane,
+        'rackets': parse_racket,
+        'relics': parse_relic,
+        'research-fields': parse_research_field,
+        'rituals': parse_ritual,
+        'rules': parse_rules,
+        'shields': parse_shield,
+        'siege-weapons': parse_siege_weapon,
+        'skills': parse_skill,
+        'sources': parse_source,
+        'spells': parse_spell,
+        'styles': parse_style,
+        'tenets': parse_tenet,
+        'traits': parse_trait,
+        'vehicles': parse_vehicle,
+        'ways': parse_way,
+        'weapon-groups': parse_weapon_group,
+        'weapons': parse_weapon,
+    }
+
+    valid_dirs = []
     for dir_name in sorted(os.listdir('data')):
+        if dir_name in parse_functions:
+            valid_dirs.append(dir_name)
+        else:
+            print("[WARNING] no parsing function for " + dir_name + ", skipping.")
+
+    for dir_name in valid_dirs:
+        parse_fn = parse_functions[dir_name]
         for file_name in sorted(os.listdir(f'data/{dir_name}/')):
             file_path = f'data/{dir_name}/{file_name}'
 
@@ -25,76 +101,7 @@ def main():
             with open(file_path, 'r') as fp:
                 soup = BeautifulSoup(fp, 'html5lib')
 
-            parse_functions = {
-                'actions': parse_action,
-                'ancestries': parse_ancestry,
-                'animal-companions': parse_animal_companion,
-                'animal-companions-advanced': parse_animal_companion_advanced,
-                'animal-companions-specialized': parse_animal_companion_specialized,
-                'animal-companions-unique': parse_animal_companion_unique,
-                'arcane-schools': parse_arcane_school,
-                'archetypes': parse_archetype,
-                'armor': parse_armor,
-                'armor-groups': parse_armor_group,
-                'articles': parse_article,
-                'backgrounds': parse_background,
-                'bloodlines': parse_bloodline,
-                'causes': parse_cause,
-                'class-kits': parse_class_kit,
-                'class-samples': parse_class_sample,
-                'classes': parse_class,
-                'conditions': parse_condition,
-                'curses': parse_curse,
-                'deities': parse_deity,
-                'deity-categories': parse_deity_category,
-                'diseases': parse_disease,
-                'doctrines': parse_doctrine,
-                'domains': parse_domain,
-                'druidic-orders': parse_druidic_order,
-                'eidolons': parse_eidolon,
-                'equipment': parse_equipment,
-                'familiars': parse_familiar,
-                'familiars-specific': parse_familiar_specific,
-                'feats': parse_feat,
-                'hazards': parse_hazard,
-                'heritages': parse_heritage,
-                'hunters-edge': parse_hunters_edge,
-                'hybrid-studies': parse_hybrid_study,
-                'innovations': parse_innovation,
-                'instincts': parse_instinct,
-                'languages': parse_language,
-                'lessons': parse_lesson,
-                'methodologies': parse_methodology,
-                'monster-abilities': parse_monster_ability,
-                'monster-families': parse_monster_family,
-                'monsters': parse_monster,
-                'muses': parse_muse,
-                'mysteries': parse_mystery,
-                'npc-theme-templates': parse_npc_theme_template,
-                'npcs': parse_npc,
-                'patrons': parse_patron,
-                'planes': parse_plane,
-                'rackets': parse_racket,
-                'relics': parse_relic,
-                'research-fields': parse_research_field,
-                'rituals': parse_ritual,
-                'rules': parse_rules,
-                'shields': parse_shield,
-                'siege-weapons': parse_siege_weapon,
-                'skills': parse_skill,
-                'sources': parse_source,
-                'spells': parse_spell,
-                'styles': parse_style,
-                'tenets': parse_tenet,
-                'traits': parse_trait,
-                'vehicles': parse_vehicle,
-                'ways': parse_way,
-                'weapon-groups': parse_weapon_group,
-                'weapons': parse_weapon,
-            }
-
-            if dir_name in parse_functions:
-                parse_functions[dir_name](id, soup)
+            parse_fn(id, soup)
 
 
 def build_url(category: str, id: int, params: List[str] = []) -> str:
@@ -952,7 +959,11 @@ def parse_ritual(id: str, soup: BeautifulSoup):
     doc.cost = get_label_text(soup, 'Cost')
     doc.duration = normalize_time(duration)
     doc.duration_raw = duration
-    doc.heighten = get_heighten(soup)
+
+    [heighten, heighten_text] = get_heighten(soup)
+    doc.heighten = heighten
+    doc.heighten_text = heighten_text
+
     doc.primary_check = get_label_text(soup, 'Primary Check', '', ';')
     doc.range = normalize_range(range)
     doc.range_raw = range
@@ -1056,7 +1067,11 @@ def parse_spell(id: str, soup: BeautifulSoup):
     doc.domain = get_label_text(soup, 'Domain')
     doc.duration = normalize_time(duration)
     doc.duration_raw = duration
-    doc.heighten = get_heighten(soup)
+
+    [heighten, heighten_text] = get_heighten(soup)
+    doc.heighten = heighten
+    doc.heighten_text = heighten_text
+
     doc.mystery = get_label_text(soup, 'Mystery')
     doc.patron_theme = get_label_text(soup, 'Patron Theme')
     doc.range = normalize_range(range)
@@ -1555,26 +1570,34 @@ def split_on(string: str, split: str) -> List[str]:
 
 
 def get_label_text(soup: BeautifulSoup, label: str, stop_at=';', strip=None) -> Optional[str]:
+    node = soup.find_next('b', text=label)
+    if node:
+        return extract_label_text_from_node(node=node, stop_at=stop_at, strip=strip)
+    else:
+        return None
+
+
+def extract_label_text_from_node(node: Union[Tag, NavigableString], stop_at=None, strip=None) -> Optional[str]:
     parts = []
 
-    if node := soup.find_next('b', text=label):
-        while node := node.next_sibling:
-            if node.name in ['b', 'br', 'hr', 'h2']:
-                break
+    while node := node.next_sibling:
+        if node.name in ['b', 'br', 'hr', 'h2']:
+            break
 
-            elif node.text:
-                found_stop = False
+        elif node.text:
+            found_stop = False
+            if stop_at:
                 for c in node.text.lstrip():
                     if c in stop_at:
                         parts.append(node.text.lstrip().split(c)[0])
                         found_stop = True
                         break
 
-                if found_stop:
-                    break
+            if found_stop:
+                break
 
-                else:
-                    parts.append(node.text.strip())
+            else:
+                parts.append(node.text.strip())
 
     parts = [s.strip() for s in parts if s]
 
@@ -1694,11 +1717,16 @@ def get_actions_from_title(title: BeautifulSoup):
 
 def get_heighten(soup: BeautifulSoup):
     heighten = []
+    heighten_text = []
 
     for node in soup.find_all('b', string=re.compile('Heightened (.*)')):
-        heighten.append(node.text.replace('Heightened (', '').replace(')', ''))
+        h = node.text.replace('Heightened (', '').replace(')', '')
+        value_text = extract_label_text_from_node(node) or ''
+        text = (node.text + ' ' + value_text).strip()
+        heighten.append(h)
+        heighten_text.append(text)
 
-    return heighten
+    return [heighten, heighten_text]
 
 
 def get_rarity(traits) -> str:
@@ -1855,6 +1883,7 @@ class Doc(Document):
     hardness = Integer()
     hardness_raw = Text()
     heighten = Keyword(normalizer="lowercase")
+    heighten_text = Text()
     hp = Integer()
     hp_raw = Text()
     id = Integer()
