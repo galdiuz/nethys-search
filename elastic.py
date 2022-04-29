@@ -666,16 +666,17 @@ def parse_feat(id: str, soup):
 def parse_hazard(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'hazard', 'Hazards', 'Hazard')
 
+    hardness_raw = get_label_text(soup, 'Hardness', ';,')
+    hp_raw = get_label_text(soup, 'HP', ';(')
+
     doc.ac = get_label_text(soup, 'AC', ';,')
     doc.complexity = get_label_text(soup, 'Complexity')
     doc.disable = get_label_text(soup, 'Disable', '')
     doc.fortitude_save = get_label_text(soup, 'Fort', ';,')
 
-    hardness_raw = get_label_text(soup, 'Hardness', ';,')
     doc.hardness = extract_first_number(hardness_raw)
     doc.hardness_raw = hardness_raw
 
-    hp_raw = get_label_text(soup, 'HP', ';(')
     doc.hp = extract_first_number(hp_raw)
     doc.hp_raw = hp_raw
 
@@ -807,6 +808,7 @@ def parse_creature(id: str, soup: BeautifulSoup, url: str):
     fort_save = int(get_label_text(soup, 'Fort', ';,('))
     reflex_save = int(get_label_text(soup, 'Ref', ';,('))
     will_save = int(get_label_text(soup, 'Will', ';,('))
+    hp_raw = get_label_text(soup, 'HP', ';,(')
 
     doc.name = name
     doc.type = type
@@ -838,7 +840,6 @@ def parse_creature(id: str, soup: BeautifulSoup, url: str):
     doc.fortitude_save = fort_save
     doc.reflex_save = reflex_save
     doc.will_save = will_save
-    hp_raw = get_label_text(soup, 'HP', ';,(')
     doc.hp = extract_first_number(hp_raw)
     doc.hp_raw = hp_raw
     doc.immunity = split_comma(get_label_text(soup, 'Immunities'))
@@ -960,9 +961,8 @@ def parse_ritual(id: str, soup: BeautifulSoup):
     doc.duration = normalize_time(duration)
     doc.duration_raw = duration
 
-    [heighten, heighten_text] = get_heighten(soup)
-    doc.heighten = heighten
-    doc.heighten_text = heighten_text
+    doc.heighten = get_heighten(soup)
+    doc.heighten_text = get_heighten_text(soup)
 
     doc.primary_check = get_label_text(soup, 'Primary Check', '', ';')
     doc.range = normalize_range(range)
@@ -1001,14 +1001,14 @@ def parse_shield(id: str, soup: BeautifulSoup):
 
     bulk = get_label_text(soup, 'Bulk')
     price = get_label_text(soup, 'Price')
+    hardness_raw = get_label_text(soup, 'Hardness')
+    hp_raw = get_label_text(soup, 'HP (BT)', ';(')
 
     doc.ac = get_label_text(soup, 'AC Bonus', ';(')
     doc.bulk = normalize_bulk(bulk)
     doc.bulk_raw = bulk
-    hardness_raw = get_label_text(soup, 'Hardness')
     doc.hardness = extract_first_number(hardness_raw)
     doc.hardness_raw = hardness_raw
-    hp_raw = get_label_text(soup, 'HP (BT)', ';(')
     doc.hp = extract_first_number(hp_raw)
     doc.hp_raw = hp_raw
     doc.item_category = 'Shields'
@@ -1068,9 +1068,8 @@ def parse_spell(id: str, soup: BeautifulSoup):
     doc.duration = normalize_time(duration)
     doc.duration_raw = duration
 
-    [heighten, heighten_text] = get_heighten(soup)
-    doc.heighten = heighten
-    doc.heighten_text = heighten_text
+    doc.heighten = get_heighten(soup)
+    doc.heighten_text = get_heighten_text(soup)
 
     doc.mystery = get_label_text(soup, 'Mystery')
     doc.patron_theme = get_label_text(soup, 'Patron Theme')
@@ -1716,17 +1715,27 @@ def get_actions_from_title(title: BeautifulSoup):
 
 
 def get_heighten(soup: BeautifulSoup):
-    heighten = []
-    heighten_text = []
+    lines = []
 
-    for node in soup.find_all('b', string=re.compile('Heightened (.*)')):
-        h = node.text.replace('Heightened (', '').replace(')', '')
+    for node in find_heighten_nodes(soup):
+        lines.append(node.text.replace('Heightened (', '').replace(')', ''))
+
+    return lines
+
+
+def get_heighten_text(soup: BeautifulSoup):
+    lines = []
+
+    for node in find_heighten_nodes(soup):
         value_text = extract_label_text_from_node(node) or ''
         text = (node.text + ' ' + value_text).strip()
-        heighten.append(h)
-        heighten_text.append(text)
+        lines.append(text)
 
-    return [heighten, heighten_text]
+    return lines
+
+
+def find_heighten_nodes(soup: BeautifulSoup):
+    return soup.find_all('b', string=re.compile('Heightened (.*)'))
 
 
 def get_rarity(traits) -> str:
