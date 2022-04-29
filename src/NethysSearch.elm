@@ -99,9 +99,9 @@ type alias Document =
     , fort : Maybe Int
     , frequency : Maybe String
     , hands : Maybe String
-    , hardness : Maybe Int
+    , hardness : Maybe String
     , heighten : List String
-    , hp : Maybe Int
+    , hp : Maybe String
     , immunities : List String
     , intelligence : Maybe Int
     , itemCategory : Maybe String
@@ -2766,9 +2766,9 @@ documentDecoder =
     Field.attempt "follower_alignment" stringListDecoder <| \followerAlignments ->
     Field.attempt "frequency" Decode.string <| \frequency ->
     Field.attempt "hands" Decode.string <| \hands ->
-    Field.attempt "hardness" Decode.int <| \hardness ->
+    Field.attempt "hardness_raw" Decode.string <| \hardness ->
     Field.attempt "heighten" (Decode.list Decode.string) <| \heighten ->
-    Field.attempt "hp" Decode.int <| \hp ->
+    Field.attempt "hp_raw" Decode.string <| \hp ->
     Field.attempt "immunity" (Decode.list Decode.string) <| \immunities ->
     Field.attempt "intelligence" Decode.int <| \intelligence ->
     Field.attempt "item_category" Decode.string <| \itemCategory ->
@@ -6192,7 +6192,6 @@ viewSearchResultAdditionalInfo hit =
                         ]
                         (Maybe.Extra.values
                             [ hit.source.hp
-                                |> Maybe.map String.fromInt
                                 |> Maybe.map (viewLabelAndText "HP")
                             , hit.source.sizes
                                 |> nonEmptyList
@@ -6283,7 +6282,6 @@ viewSearchResultAdditionalInfo hit =
                             ]
                             (Maybe.Extra.values
                                 [ hit.source.hp
-                                    |> Maybe.map String.fromInt
                                     |> Maybe.map (viewLabelAndText "HP")
                                 , hit.source.ac
                                     |> Maybe.map String.fromInt
@@ -6974,7 +6972,6 @@ viewSearchResultGridCell model hit column =
 
             [ "hardness" ] ->
                 hit.source.hardness
-                    |> Maybe.map String.fromInt
                     |> Maybe.withDefault ""
                     |> Html.text
 
@@ -6985,7 +6982,6 @@ viewSearchResultGridCell model hit column =
 
             [ "hp" ] ->
                 hit.source.hp
-                    |> Maybe.map String.fromInt
                     |> Maybe.withDefault ""
                     |> Html.text
 

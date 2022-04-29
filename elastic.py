@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-from typing import List, Optional, Union
 from bs4 import BeautifulSoup, NavigableString, Tag
 from elasticsearch_dsl import Document, Field, Float, Integer, Keyword, Object, Text
 from elasticsearch_dsl.connections import connections
+from typing import List, Optional, Union
 import re
 import os
 
@@ -79,15 +79,14 @@ def main():
         'weapons': parse_weapon,
     }
 
-    valid_dirs = []
     for dir_name in sorted(os.listdir('data')):
-        if dir_name in parse_functions:
-            valid_dirs.append(dir_name)
-        else:
-            print("[WARNING] no parsing function for " + dir_name + ", skipping.")
+        if not dir_name in parse_functions:
+            print(f'No parsing function for {dir_name}, skipping.')
 
-    for dir_name in valid_dirs:
+            continue
+
         parse_fn = parse_functions[dir_name]
+
         for file_name in sorted(os.listdir(f'data/{dir_name}/')):
             file_path = f'data/{dir_name}/{file_name}'
 
@@ -182,7 +181,7 @@ def parse_ancestry(id: str, soup: BeautifulSoup):
     doc.ability_boost = ability_boosts
     doc.ability_flaw = get_values_under_title(soup, 'Ability Flaw(s)')
     doc.hp = extract_first_number(hp[0]) if hp else None
-    doc.hp_raw = "\n".join(hp)
+    doc.hp_raw = hp[0] if hp else None
     doc.language = cleaned_languages
     doc.size = size[0].split(' or ') if size else None
     doc.speed = [ normalize_speed(s) for s in speed ] if speed else None
@@ -396,7 +395,7 @@ def parse_class(id: str, soup: BeautifulSoup):
 
     node = soup.find('b', string=re.compile(r'Hit Points: .*'))
     hp = ''.join([ c for c in node.text if c.isdigit() ])
-    hp_raw = ''.join([ c for c in node.text ])
+    hp_raw = ''.join([ c for c in node.text ]).replace('Hit Points: ', '')
 
     node = soup.find('b', string=re.compile(r'Key Ability: .*'))
     ability = node.text.replace('Key Ability: ', '').split(' OR ')
@@ -673,13 +672,10 @@ def parse_hazard(id: str, soup: BeautifulSoup):
     doc.complexity = get_label_text(soup, 'Complexity')
     doc.disable = get_label_text(soup, 'Disable', '')
     doc.fortitude_save = get_label_text(soup, 'Fort', ';,')
-
     doc.hardness = extract_first_number(hardness_raw)
     doc.hardness_raw = hardness_raw
-
     doc.hp = extract_first_number(hp_raw)
     doc.hp_raw = hp_raw
-
     doc.immunity = split_comma(get_label_text(soup, 'Immunities'))
     doc.reflex_save = get_label_text(soup, 'Ref', ';,')
     doc.reset = get_label_text(soup, 'Reset')
@@ -960,10 +956,8 @@ def parse_ritual(id: str, soup: BeautifulSoup):
     doc.cost = get_label_text(soup, 'Cost')
     doc.duration = normalize_time(duration)
     doc.duration_raw = duration
-
     doc.heighten = get_heighten(soup)
     doc.heighten_structured = get_heighten_structured(soup)
-
     doc.primary_check = get_label_text(soup, 'Primary Check', '', ';')
     doc.range = normalize_range(range)
     doc.range_raw = range
@@ -1067,10 +1061,8 @@ def parse_spell(id: str, soup: BeautifulSoup):
     doc.domain = get_label_text(soup, 'Domain')
     doc.duration = normalize_time(duration)
     doc.duration_raw = duration
-
     doc.heighten = get_heighten(soup)
     doc.heighten_structured = get_heighten_structured(soup)
-
     doc.mystery = get_label_text(soup, 'Mystery')
     doc.patron_theme = get_label_text(soup, 'Patron Theme')
     doc.range = normalize_range(range)
@@ -1324,9 +1316,12 @@ def get_sub_item_description(title: BeautifulSoup) -> str:
 def extract_first_number(value: Optional[str]) -> Optional[float]:
     if not value:
         return None
+
     list = re.findall(r"\d+(?:\.\d+)?", value)
+
     if len(list) > 0:
         return float(list[0])
+
     return None
 
 
@@ -1727,9 +1722,10 @@ def get_heighten_structured(soup: BeautifulSoup):
     lines = []
 
     for node in find_heighten_nodes(soup):
-        key = extract_heighten_key(node)
-        value_text = extract_label_text_from_node(node) or ''
-        structured = { "key": key, "effect": value_text }
+        structured = {
+            'key': extract_heighten_key(node),
+            'effect': extract_label_text_from_node(node) or ''
+        }
         lines.append(structured)
 
     return lines
@@ -1895,11 +1891,12 @@ class Doc(Document):
     fortitude = Alias(path="fortitude_save")
     fortitude_save = Integer()
     hardness = Integer()
-    hardness_raw = Text()
     heighten = Keyword(normalizer="lowercase")
-    heighten_text = Text()
+    heighten_structured = Object(properties={
+        'key': Keyword(),
+        'effect': Text(),
+    }),
     hp = Integer()
-    hp_raw = Text()
     id = Integer()
     int = Alias(path="intelligence")
     intelligence = Integer()
