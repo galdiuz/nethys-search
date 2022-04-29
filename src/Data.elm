@@ -542,6 +542,15 @@ tableColumns =
     ]
 
 
+traditions : List String
+traditions =
+    [ "arcane"
+    , "divine"
+    , "occult"
+    , "primal"
+    ]
+
+
 weaponCategories : List String
 weaponCategories =
     [ "simple"

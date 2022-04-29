@@ -19,6 +19,7 @@ def main():
         'animal-companions-specialized': parse_animal_companion_specialized,
         'animal-companions-unique': parse_animal_companion_unique,
         'arcane-schools': parse_arcane_school,
+        'arcane-thesis': parse_arcane_thesis,
         'archetypes': parse_archetype,
         'armor': parse_armor,
         'armor-groups': parse_armor_group,
@@ -43,6 +44,7 @@ def main():
         'familiars-specific': parse_familiar_specific,
         'feats': parse_feat,
         'hazards': parse_hazard,
+        'hellknight-orders': parse_hellknight_order,
         'heritages': parse_heritage,
         'hunters-edge': parse_hunters_edge,
         'hybrid-studies': parse_hybrid_study,
@@ -118,14 +120,14 @@ def parse_generic(id: str, soup: BeautifulSoup, category: str, url: str, type: s
     doc.id = id
     doc.url = build_url(url, id, url_params)
     doc.category = category
+    doc.level = level
     doc.name = name.strip()
-    doc.type = title_type or type
     doc.pfs = pfs
-    doc.text = title.parent.get_text(' ', strip=True)
     doc.source = [ normalize_source(source) for source in sources ]
     doc.source_raw = sources
     doc.spoilers = get_spoilers(soup)
-    doc.level = level
+    doc.text = title.parent.get_text(' ', strip=True)
+    doc.type = title_type or type
 
     return doc
 
@@ -685,6 +687,12 @@ def parse_hazard(id: str, soup: BeautifulSoup):
     doc.save()
 
 
+def parse_hellknight_order(id: str, soup: BeautifulSoup):
+    doc = parse_generic(id, soup, 'hellknight-order', 'HellknightOrders', 'Hellknight Order')
+
+    doc.save()
+
+
 def parse_heritage(id: str, soup: BeautifulSoup):
     doc = parse_generic(id, soup, 'heritage', 'Heritages', 'Heritage')
     traits = get_traits(soup)
@@ -962,6 +970,7 @@ def parse_ritual(id: str, soup: BeautifulSoup):
     doc.range = normalize_range(range)
     doc.range_raw = range
     doc.rarity = get_rarity(traits)
+    doc.requirement = get_label_text(soup, 'Requirements')
     doc.school = get_school(traits)
     doc.secondary_casters = [c for c in secondary_casters if c.isdigit()] if secondary_casters else None
     doc.secondary_casters_raw = secondary_casters

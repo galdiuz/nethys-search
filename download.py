@@ -41,6 +41,7 @@ def main():
     download_category('Feats', 25)
     download_category('Hazards')
     download_category('Heritages')
+    download_category('HellknightOrders')
     download_category('HuntersEdge', 1)
     download_category('HybridStudies', 1)
     download_category('Innovations', 1)

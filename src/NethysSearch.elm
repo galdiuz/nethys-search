@@ -4316,11 +4316,7 @@ viewFilterSpells model =
                     , viewFilterIcon (Dict.get tradition model.filteredTraditions)
                     ]
             )
-            [ "arcane"
-            , "divine"
-            , "occult"
-            , "primal"
-            ]
+            Data.traditions
         )
     ]
 
@@ -6495,6 +6491,15 @@ viewSearchResultAdditionalInfo hit =
                                 |> Maybe.map (viewLabelAndText "Primary Check")
                             , hit.source.secondaryChecks
                                 |> Maybe.map (viewLabelAndText "Secondary Checks")
+                            ]
+                        )
+                    , Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-medium"
+                        ]
+                        (Maybe.Extra.values
+                            [ hit.source.requirements
+                                |> Maybe.map (viewLabelAndText "Requirements")
                             ]
                         )
                     , Html.div
