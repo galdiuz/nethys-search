@@ -962,7 +962,7 @@ def parse_ritual(id: str, soup: BeautifulSoup):
     doc.duration_raw = duration
 
     doc.heighten = get_heighten(soup)
-    doc.heighten_text = get_heighten_text(soup)
+    doc.heighten_structured = get_heighten_structured(soup)
 
     doc.primary_check = get_label_text(soup, 'Primary Check', '', ';')
     doc.range = normalize_range(range)
@@ -1069,7 +1069,7 @@ def parse_spell(id: str, soup: BeautifulSoup):
     doc.duration_raw = duration
 
     doc.heighten = get_heighten(soup)
-    doc.heighten_text = get_heighten_text(soup)
+    doc.heighten_structured = get_heighten_structured(soup)
 
     doc.mystery = get_label_text(soup, 'Mystery')
     doc.patron_theme = get_label_text(soup, 'Patron Theme')
@@ -1718,20 +1718,25 @@ def get_heighten(soup: BeautifulSoup):
     lines = []
 
     for node in find_heighten_nodes(soup):
-        lines.append(node.text.replace('Heightened (', '').replace(')', ''))
+        lines.append(extract_heighten_key(node))
 
     return lines
 
 
-def get_heighten_text(soup: BeautifulSoup):
+def get_heighten_structured(soup: BeautifulSoup):
     lines = []
 
     for node in find_heighten_nodes(soup):
+        key = extract_heighten_key(node)
         value_text = extract_label_text_from_node(node) or ''
-        text = (node.text + ' ' + value_text).strip()
-        lines.append(text)
+        structured = { "key": key, "effect": value_text }
+        lines.append(structured)
 
     return lines
+
+
+def extract_heighten_key(node: Union[Tag, NavigableString]) -> str:
+    return node.text.replace('Heightened (', '').replace(')', '')
 
 
 def find_heighten_nodes(soup: BeautifulSoup):
