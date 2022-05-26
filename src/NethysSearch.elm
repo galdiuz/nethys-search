@@ -166,6 +166,7 @@ type alias Document =
 type alias Flags =
     { currentUrl : String
     , elasticUrl : String
+    , resultBaseUrl : String
     , showHeader : Bool
     }
 
@@ -174,6 +175,7 @@ defaultFlags : Flags
 defaultFlags =
     { currentUrl = "/"
     , elasticUrl = ""
+    , resultBaseUrl = "https://2e.aonprd.com/"
     , showHeader = True
     }
 
@@ -421,6 +423,7 @@ type alias Model =
     , query : String
     , queryOptionsOpen : Bool
     , queryType : QueryType
+    , resultBaseUrl : String
     , resultDisplay : ResultDisplay
     , searchCreatureFamilies : String
     , searchItemCategories : String
@@ -511,6 +514,7 @@ init flagsValue =
       , query = ""
       , queryOptionsOpen = False
       , queryType = Standard
+      , resultBaseUrl = flags.resultBaseUrl
       , resultDisplay = List
       , searchCreatureFamilies = ""
       , searchItemCategories = ""
@@ -2595,10 +2599,12 @@ flagsDecoder : Decode.Decoder Flags
 flagsDecoder =
     Field.require "currentUrl" Decode.string <| \currentUrl ->
     Field.require "elasticUrl" Decode.string <| \elasticUrl ->
+    Field.attempt "resultBaseUrl" Decode.string <| \resultBaseUrl ->
     Field.attempt "showHeader" Decode.bool <| \showHeader ->
     Decode.succeed
         { currentUrl = currentUrl
         , elasticUrl = elasticUrl
+        , resultBaseUrl = Maybe.withDefault defaultFlags.resultBaseUrl resultBaseUrl
         , showHeader = Maybe.withDefault defaultFlags.showHeader showHeader
         }
 
@@ -3017,9 +3023,9 @@ speedTypeValuesDecoder =
         }
 
 
-getUrl : Document -> String
-getUrl doc =
-    "https://2e.aonprd.com/" ++ doc.url
+getUrl : Model -> Document -> String
+getUrl model doc =
+    model.resultBaseUrl ++ doc.url
 
 
 view : Model -> Html Msg
@@ -6100,7 +6106,7 @@ viewSingleSearchResult model hit =
                 ]
                 [ viewPfsIcon (Maybe.withDefault "" hit.source.pfs)
                 , Html.a
-                    [ HA.href (getUrl hit.source)
+                    [ HA.href (getUrl model hit.source)
                     , HA.target "_blank"
                     ]
                     [ Html.text hit.source.name
@@ -7030,7 +7036,7 @@ viewSearchResultGridCell model hit column =
 
             [ "name" ] ->
                 Html.a
-                    [ HA.href (getUrl hit.source)
+                    [ HA.href (getUrl model hit.source)
                     , HA.target "_blank"
                     ]
                     [ Html.text hit.source.name
