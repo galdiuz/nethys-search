@@ -7877,6 +7877,7 @@ css =
     }
 
     button {
+        border-color: var(--color-inactive-text);
         border-width: 1px;
         border-style: solid;
         border-radius: 4px;
