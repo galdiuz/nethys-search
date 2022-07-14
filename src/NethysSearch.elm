@@ -4285,7 +4285,7 @@ viewFilterSpells model =
 
     , Html.h4
         []
-        [ Html.text "Filter traditions" ]
+        [ Html.text "Filter traditions / spell lists" ]
     , Html.div
         [ HA.class "row"
         , HA.class "align-baseline"
@@ -4323,7 +4323,7 @@ viewFilterSpells model =
                     , viewFilterIcon (Dict.get tradition model.filteredTraditions)
                     ]
             )
-            Data.traditions
+            Data.traditionsAndSpellLists
         )
     ]
 
@@ -6516,8 +6516,14 @@ viewSearchResultAdditionalInfo hit =
                 "spell" ->
                     Maybe.Extra.values
                         [ hit.source.traditions
+                            |> List.filter (\tradition -> List.member (String.toLower tradition) Data.traditions)
                             |> nonEmptyList
                             |> Maybe.map (viewLabelAndPluralizedText "Tradition" "Traditions")
+
+                        , hit.source.traditions
+                            |> List.filter (\tradition -> not (List.member (String.toLower tradition) Data.traditions))
+                            |> nonEmptyList
+                            |> Maybe.map (viewLabelAndPluralizedText "Spell List" "Spell Lists")
 
                         , Html.div
                             [ HA.class "row"

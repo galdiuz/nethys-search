@@ -551,6 +551,16 @@ traditions =
     ]
 
 
+traditionsAndSpellLists : List String
+traditionsAndSpellLists =
+    [ "arcane"
+    , "divine"
+    , "elemental"
+    , "occult"
+    , "primal"
+    ]
+
+
 weaponCategories : List String
 weaponCategories =
     [ "simple"
