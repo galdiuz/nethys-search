@@ -3943,7 +3943,7 @@ viewQueryType model =
         []
         [ Html.div
             []
-            [ Html.text "Non-consumable items between 500 and 1000 gp:" ]
+            [ Html.text "Non-consumable items between 500 and 1000 gp (note that price is in copper):" ]
         , Html.div
             [ HA.class "monospace" ]
             [ Html.text "price:[50000 TO 100000] NOT trait:consumable" ]
@@ -6150,7 +6150,23 @@ viewSingleSearchResult model hit =
                 ]
                 (List.map
                     viewTrait
-                    hit.source.traits
+                    (List.concat
+                        [ hit.source.traits
+                            |> List.filter (\trait -> List.member (String.toLower trait) [ "uncommon", "rare", "unique" ])
+
+                        , if hit.source.category == "creature" then
+                            hit.source.alignment
+                                |> Maybe.map List.singleton
+                                |> Maybe.withDefault []
+                                |> \l -> List.append l hit.source.sizes
+
+                          else
+                            []
+
+                        , hit.source.traits
+                            |> List.filter (\trait -> not (List.member (String.toLower trait) [ "uncommon", "rare", "unique" ]))
+                        ]
+                    )
                 )
 
           else
@@ -6304,51 +6320,6 @@ viewSearchResultAdditionalInfo hit =
                                 ]
                             )
                                 |> Just
-                        , Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            (Maybe.Extra.values
-                                [ hit.source.strength
-                                    |> Maybe.map numberWithSign
-                                    |> Maybe.map (viewLabelAndText "Str")
-                                , hit.source.dexterity
-                                    |> Maybe.map numberWithSign
-                                    |> Maybe.map (viewLabelAndText "Dex")
-                                , hit.source.constitution
-                                    |> Maybe.map numberWithSign
-                                    |> Maybe.map (viewLabelAndText "Con")
-                                , hit.source.intelligence
-                                    |> Maybe.map numberWithSign
-                                    |> Maybe.map (viewLabelAndText "Int")
-                                , hit.source.wisdom
-                                    |> Maybe.map numberWithSign
-                                    |> Maybe.map (viewLabelAndText "Wis")
-                                , hit.source.charisma
-                                    |> Maybe.map numberWithSign
-                                    |> Maybe.map (viewLabelAndText "Cha")
-                                ]
-                            )
-                                |> Just
-                        , Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            (Maybe.Extra.values
-                                [ hit.source.immunities
-                                    |> nonEmptyList
-                                    |> Maybe.map (viewLabelAndPluralizedText "Immunity" "Immunities")
-                                , hit.source.resistances
-                                    |> nonEmptyList
-                                    |> Maybe.map (viewLabelAndPluralizedText "Resistance" "Resistances")
-                                , hit.source.weaknesses
-                                    |> nonEmptyList
-                                    |> Maybe.map (viewLabelAndPluralizedText "Weakness" "Weaknesses")
-                                ]
-                            )
-                                |> Just
-                        , hit.source.speed
-                            |> Maybe.map (viewLabelAndText "Speed")
                         ]
 
                 "deity" ->
