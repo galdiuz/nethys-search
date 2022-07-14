@@ -3253,6 +3253,7 @@ viewQuery model =
                 , HA.placeholder "Enter search query"
                 , HA.type_ "text"
                 , HA.value model.query
+                , HA.attribute "autocapitalize" "off"
                 , HE.onInput QueryChanged
                 ]
                 [ Html.text model.query ]
