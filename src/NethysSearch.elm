@@ -3405,7 +3405,7 @@ viewFilters model =
                                             , getTraitClass value
                                             , HE.onClick (removeMsg value)
                                             ]
-                                            [ viewPfsIcon value
+                                            [ viewPfsIcon 16 value
                                             , viewTextWithActionIcons (String.Extra.toTitleCase value)
                                             -- , Html.text (String.Extra.toTitleCase value)
                                             ]
@@ -4675,7 +4675,7 @@ viewFilterPfs model =
                     , HA.class "gap-tiny"
                     , HE.onClick (PfsFilterAdded pfs)
                     ]
-                    [ viewPfsIcon pfs
+                    [ viewPfsIcon 16 pfs
                     , Html.text (String.Extra.toTitleCase pfs)
                     , viewFilterIcon (Dict.get pfs model.filteredPfs)
                     ]
@@ -6105,7 +6105,7 @@ viewSingleSearchResult model hit =
                 , HA.class "gap-small"
                 , HA.class "align-center"
                 ]
-                [ viewPfsIcon (Maybe.withDefault "" hit.source.pfs)
+                [ viewPfsIconWithLink 25 (Maybe.withDefault "" hit.source.pfs)
                 , Html.a
                     [ HA.href (getUrl model hit.source)
                     , HA.target "_blank"
@@ -7045,7 +7045,7 @@ viewSearchResultGridCell model hit column =
             [ "pfs" ] ->
                 hit.source.pfs
                     |> Maybe.withDefault ""
-                    |> viewPfsIcon
+                    |> viewPfsIconWithLink 20
 
             [ "plane_category" ] ->
                 hit.source.planeCategory
@@ -7602,99 +7602,53 @@ getSortIcon field dir =
             Html.text ""
 
 
-viewPfsIcon : String -> Html msg
-viewPfsIcon pfs =
-    case String.toLower pfs of
-        "standard" ->
-            viewPfsStandard
+viewPfsIcon : Int -> String -> Html msg
+viewPfsIcon height pfs =
+    case getPfsIconUrl pfs of
+        Just url ->
+            Html.img
+                [ HA.src url
+                , HA.style "height" (String.fromInt height ++ "px")
+                ]
+                []
 
-        "limited" ->
-            viewPfsLimited
-
-        "restricted" ->
-            viewPfsRestricted
-
-        _ ->
+        Nothing ->
             Html.text ""
 
 
-viewPfsStandard : Html msg
-viewPfsStandard =
-    Svg.svg
-        [ SA.viewBox "0 0 100 100"
-        , SA.height "1em"
-        ]
-        [ Svg.circle
-            [ SA.cx "50"
-            , SA.cy "50"
-            , SA.r "50"
-            , SA.fill "#4ab5f1"
-            ]
-            []
-        , Svg.circle
-            [ SA.cx "50"
-            , SA.cy "50"
-            , SA.r "40"
-            , SA.fill "#94805d"
-            ]
-            []
-        ]
+viewPfsIconWithLink : Int -> String -> Html msg
+viewPfsIconWithLink height pfs =
+    case getPfsIconUrl pfs of
+        Just url ->
+            Html.a
+                [ HA.href "/PFS.aspx"
+                , HA.target "_blank"
+                ]
+                [ Html.img
+                    [ HA.src url
+                    , HA.style "height" (String.fromInt height ++ "px")
+                    ]
+                    []
+                ]
+
+        Nothing ->
+            Html.text ""
 
 
-viewPfsLimited : Html msg
-viewPfsLimited =
-    Svg.svg
-        [ SA.viewBox "0 0 100 100"
-        , SA.height "1em"
-        ]
-        [ Svg.rect
-            [ SA.height "80"
-            , SA.width "90"
-            , SA.fill "#ecef23"
-            , SA.x "5"
-            , SA.y "15"
-            ]
-            []
-        , Svg.polygon
-            [ SA.points "15,100 25,50 50,0 75,50 85,100"
-            , SA.fill "#476468"
-            ]
-            []
-        ]
+getPfsIconUrl : String -> Maybe String
+getPfsIconUrl pfs =
+    case String.toLower pfs of
+        "standard" ->
+            Just "/Images/Icons/PFS_Standard.png"
 
+        "limited" ->
+            Just "/Images/Icons/PFS_Limited.png"
 
-viewPfsRestricted : Html msg
-viewPfsRestricted =
-    Svg.svg
-        [ SA.viewBox "0 0 100 100"
-        , SA.height "1em"
-        ]
-        [ Svg.line
-            [ SA.x1 "10"
-            , SA.x2 "90"
-            , SA.y1 "10"
-            , SA.y2 "90"
-            , SA.strokeWidth "30"
-            , SA.stroke "#e81d1d"
-            ]
-            []
-        , Svg.line
-            [ SA.x1 "10"
-            , SA.x2 "90"
-            , SA.y1 "90"
-            , SA.y2 "10"
-            , SA.strokeWidth "30"
-            , SA.stroke "#e81d1d"
-            ]
-            []
-        , Svg.circle
-            [ SA.cx "50"
-            , SA.cy "50"
-            , SA.r "35"
-            , SA.fill "#dddddd"
-            ]
-            []
-        ]
+        "restricted" ->
+            Just "/Images/Icons/PFS_Restricted.png"
+
+        _ ->
+            Nothing
 
 
 viewScrollboxLoader : Html msg
