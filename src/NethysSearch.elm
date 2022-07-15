@@ -654,6 +654,22 @@ update msg model =
             )
 
         GotSearchResult result ->
+            let
+                containsTeleport : Bool
+                containsTeleport =
+                    model.url.query
+                        |> Maybe.map (\q -> String.contains "teleport=true" q)
+                        |> Maybe.withDefault False
+
+                firstResultUrl : Maybe String
+                firstResultUrl =
+                    result
+                        |> Result.toMaybe
+                        |> Maybe.map .hits
+                        |> Maybe.andThen List.head
+                        |> Maybe.map .source
+                        |> Maybe.map (getUrl model)
+            in
             ( { model
                 | searchResults =
                     List.append
@@ -661,7 +677,12 @@ update msg model =
                         [ result ]
                 , tracker = Nothing
               }
-            , Cmd.none
+            , case ( containsTeleport, firstResultUrl ) of
+                ( True, Just url ) ->
+                    navigation_loadUrl url
+
+                _ ->
+                    Cmd.none
             )
 
         FilterAbilityChanged value ->
