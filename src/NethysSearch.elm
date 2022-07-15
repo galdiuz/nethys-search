@@ -248,6 +248,7 @@ type SortDir
 
 type Theme
     = Dark
+    | Dead
     | ExtraContrast
     | Lavender
     | Light
@@ -855,6 +856,9 @@ update msg model =
                         Ok "contrast-dark" ->
                             { model | theme = ExtraContrast }
 
+                        Ok "dead" ->
+                            { model | theme = Dead }
+
                         Ok "lavender" ->
                             { model | theme = Lavender }
 
@@ -1354,6 +1358,9 @@ update msg model =
                 (case theme of
                     Dark ->
                         "dark"
+
+                    Dead ->
+                        "dead"
 
                     Light ->
                         "light"
@@ -3060,6 +3067,9 @@ view model =
                 Dark ->
                     Html.text cssDark
 
+                Dead ->
+                    Html.text cssDead
+
                 Light ->
                     Html.text cssLight
 
@@ -3172,6 +3182,12 @@ viewMenu model =
                             , name = "theme-type"
                             , onInput = ThemeSelected ExtraContrast
                             , text = "Extra Contrast"
+                            }
+                        , viewRadioButton
+                            { checked = model.theme == Dead
+                            , name = "theme-type"
+                            , onInput = ThemeSelected Dead
+                            , text = "Theme of the Dead"
                             }
                         , viewRadioButton
                             { checked = model.theme == Lavender
@@ -8321,6 +8337,33 @@ cssDark =
         --color-table-odd: #342c19;
         --color-table-text: #eeeeee;
         --color-text: #eeeeee;
+    }
+    """
+
+
+cssDead : String
+cssDead =
+    """
+    .body-container {
+        --color-bg: #ffffff;
+        --color-bg-secondary: #c8c8c8;
+        --color-container-bg: #dddddd;
+        --color-container-border: #eeeeee;
+        --color-element-bg: #482d5a;
+        --color-element-border: #d8c483;
+        --color-element-icon: #cccccc;
+        --color-element-inactive-bg: #291716;
+        --color-element-inactive-border: #6c6242;
+        --color-element-inactive-text: #656148;
+        --color-element-text: #e6d8ad;
+        --color-subelement-bg: #709cab;
+        --color-subelement-text: #0f0f0f;
+        --color-icon: #0f0f0f;
+        --color-inactive-text: #999999;
+        --color-table-even: #c3cdce;
+        --color-table-odd: #74919b;
+        --color-table-text: #000000;
+        --color-text: #0f0f0f;
     }
     """
 
