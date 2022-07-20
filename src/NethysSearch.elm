@@ -8239,14 +8239,9 @@ css =
     }
 
     .icon-font {
-        color: var(--color-icon);
         font-family: "Pathfinder-Icons";
         font-variant-caps: normal;
         font-weight: normal;
-    }
-
-    table .icon-font {
-        color: var(--color-table-text);
     }
 
     .input-button {
@@ -8378,10 +8373,6 @@ css =
         gap: var(--gap-small);
         justify-content: space-between;
         padding: 4px 9px;
-    }
-
-    .title .icon-font {
-        color: var(--color-element-icon);
     }
 
     .title a {
