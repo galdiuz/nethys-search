@@ -165,7 +165,10 @@ type alias Document =
 
 type alias Flags =
     { currentUrl : String
+    , defaultQuery : String
     , elasticUrl : String
+    , fixedQueryString : String
+    , hideFilters : List String
     , resultBaseUrl : String
     , showHeader : Bool
     }
@@ -174,7 +177,10 @@ type alias Flags =
 defaultFlags : Flags
 defaultFlags =
     { currentUrl = "/"
+    , defaultQuery = ""
     , elasticUrl = ""
+    , fixedQueryString = ""
+    , hideFilters = []
     , resultBaseUrl = "https://2e.aonprd.com/"
     , showHeader = True
     }
@@ -185,7 +191,7 @@ type alias Aggregations =
     , creatureFamilies : List String
     , itemCategories : List String
     , itemSubcategories : List { category : String, name : String }
-    , sources : List { category : String, name : String }
+    , sources : List String
     , traits : List String
     , types : List String
     , weaponGroups : List String
@@ -271,6 +277,7 @@ type Msg
     | GotAggregationsResult (Result Http.Error Aggregations)
     | GotElementHeight String Int
     | GotSearchResult (Result Http.Error SearchResult)
+    | GotSourcesAggregationResult (Result Http.Error (List Source))
     | FilterAbilityChanged String
     | FilterComponentsOperatorChanged Bool
     | FilterResistanceChanged String
@@ -389,6 +396,7 @@ port navigation_urlChanged : (String -> msg) -> Sub msg
 type alias Model =
     { aggregations : Maybe (Result Http.Error Aggregations)
     , debounce : Int
+    , defaultQuery : String
     , elasticUrl : String
     , elementHeights : Dict String Int
     , filteredActions : Dict String Bool
@@ -417,7 +425,9 @@ type alias Model =
     , filterSpoilers : Bool
     , filterTraditionsOperator : Bool
     , filterTraitsOperator : Bool
-    , lastSearchKey : String
+    , fixedQueryString : String
+    , hideFilters : List String
+    , lastSearchKey : Maybe String
     , limitTableWidth : Bool
     , menuOpen : Bool
     , overlayActive : Bool
@@ -449,10 +459,17 @@ type alias Model =
     , showResultSpoilers : Bool
     , showResultTraits : Bool
     , sort : List ( String, SortDir )
+    , sourcesAggregation : Maybe (Result Http.Error (List Source))
     , tableColumns : List String
     , theme : Theme
     , tracker : Maybe Int
     , url : Url
+    }
+
+
+type alias Source =
+    { category : String
+    , name : String
     }
 
 
@@ -480,6 +497,7 @@ init flagsValue =
     in
     ( { aggregations = Nothing
       , debounce = 0
+      , defaultQuery = flags.defaultQuery
       , elasticUrl = flags.elasticUrl
       , elementHeights = Dict.empty
       , filteredActions = Dict.empty
@@ -508,7 +526,9 @@ init flagsValue =
       , filterSpoilers = False
       , filterTraditionsOperator = True
       , filterTraitsOperator = True
-      , lastSearchKey = ""
+      , fixedQueryString = flags.fixedQueryString
+      , hideFilters = flags.hideFilters
+      , lastSearchKey = Nothing
       , limitTableWidth = False
       , menuOpen = False
       , overlayActive = False
@@ -540,12 +560,17 @@ init flagsValue =
       , showResultSpoilers = True
       , showResultTraits = True
       , sort = []
+      , sourcesAggregation = Nothing
       , tableColumns = []
       , theme = Dark
       , tracker = Nothing
       , url = url
       }
-        |> updateModelFromUrl url
+        |> updateModelFromParams
+            (url.query
+                |> Maybe.withDefault flags.defaultQuery
+                |> queryToParamsDict
+            )
     , Cmd.batch
         [ localStorage_get "limit-table-width"
         , localStorage_get "show-additional-info"
@@ -557,6 +582,7 @@ init flagsValue =
         |> searchWithCurrentQuery False
         |> updateTitle
         |> getAggregations
+        |> getSourcesAggregation
 
 
 subscriptions : Model -> Sub Msg
@@ -684,6 +710,11 @@ update msg model =
 
                 _ ->
                     Cmd.none
+            )
+
+        GotSourcesAggregationResult result ->
+            ( { model | sourcesAggregation = Just result }
+            , Cmd.none
             )
 
         FilterAbilityChanged value ->
@@ -1273,9 +1304,8 @@ update msg model =
                             Just True ->
                                 Dict.filter
                                     (\source _ ->
-                                        model.aggregations
+                                        model.sourcesAggregation
                                             |> Maybe.andThen Result.toMaybe
-                                            |> Maybe.map .sources
                                             |> Maybe.withDefault []
                                             |> List.filter
                                                 (\s ->
@@ -1291,9 +1321,8 @@ update msg model =
                             Just False ->
                                 Dict.filter
                                     (\source _ ->
-                                        model.aggregations
+                                        model.sourcesAggregation
                                             |> Maybe.andThen Result.toMaybe
-                                            |> Maybe.map .sources
                                             |> Maybe.andThen (List.Extra.find (.name >> ((==) source)))
                                             |> Maybe.map .category
                                             |> Maybe.map String.toLower
@@ -1406,8 +1435,18 @@ update msg model =
             , updateUrl { model | filteredTypes = Dict.remove type_ model.filteredTypes }
             )
 
-        UrlChanged url ->
-            ( updateModelFromUrl (parseUrl url) model
+        UrlChanged urlString ->
+            let
+                url : Url
+                url =
+                    parseUrl urlString
+            in
+            ( { model | url = url }
+                |> updateModelFromParams
+                    (url.query
+                        |> Maybe.withDefault ""
+                        |> queryToParamsDict
+                    )
             , Cmd.none
             )
                 |> searchWithCurrentQuery False
@@ -1799,6 +1838,15 @@ searchFields =
 
 buildSearchBody : Model -> Encode.Value
 buildSearchBody model =
+    let
+        filters : List (List ( String, Encode.Value ))
+        filters =
+            buildSearchFilterTerms model
+
+        mustNots : List (List ( String, Encode.Value ))
+        mustNots =
+            buildSearchMustNotTerms model
+    in
     encodeObjectMaybe
         [ ( "query"
           , Encode.object
@@ -1816,26 +1864,26 @@ buildSearchBody model =
                                             buildStandardQueryBody model.query
 
                                         ElasticsearchQueryString ->
-                                            buildElasticsearchQueryStringQueryBody model.query
+                                            [ buildElasticsearchQueryStringQueryBody model.query ]
                                     )
                                 )
 
-                        , if List.isEmpty (buildSearchFilterTerms model) then
+                        , if List.isEmpty filters then
                             Nothing
 
                           else
                             Just
                                 ( "filter"
-                                , Encode.list Encode.object (buildSearchFilterTerms model)
+                                , Encode.list Encode.object filters
                                 )
 
-                        , if List.isEmpty (buildSearchMustNotTerms model) then
+                        , if List.isEmpty mustNots then
                             Nothing
 
                           else
                             Just
                                 ( "must_not"
-                                , Encode.list Encode.object (buildSearchMustNotTerms model)
+                                , Encode.list Encode.object mustNots
                                 )
 
                         , if String.isEmpty model.query then
@@ -1870,7 +1918,7 @@ buildSearchBody model =
                             )
                             (getValidSortFields model.sort)
                         )
-                        [ Encode.string "id" ]
+                        [ Encode.string "_doc" ]
                 )
           )
             |> Just
@@ -2100,7 +2148,10 @@ buildSearchFilterTerms model =
                                                             else
                                                                 Nothing
                                                         )
-                                                        (getAggregation .sources model)
+                                                        (model.sourcesAggregation
+                                                            |> Maybe.andThen Result.toMaybe
+                                                            |> Maybe.withDefault []
+                                                        )
                                                     )
                                               )
                                             ]
@@ -2114,6 +2165,12 @@ buildSearchFilterTerms model =
               )
             ]
                 |> List.singleton
+
+        , if String.isEmpty model.fixedQueryString then
+            []
+
+          else
+            [ buildElasticsearchQueryStringQueryBody model.fixedQueryString ]
         ]
 
 
@@ -2199,7 +2256,10 @@ buildSearchMustNotTerms model =
                                         else
                                             Nothing
                                     )
-                                    (getAggregation .sources model)
+                                    (model.sourcesAggregation
+                                        |> Maybe.andThen Result.toMaybe
+                                        |> Maybe.withDefault []
+                                    )
                                 )
                           )
                         ]
@@ -2259,58 +2319,72 @@ buildStandardQueryBody queryString =
     ]
 
 
-buildElasticsearchQueryStringQueryBody : String -> List (List ( String, Encode.Value ))
+buildElasticsearchQueryStringQueryBody : String -> List ( String, Encode.Value )
 buildElasticsearchQueryStringQueryBody queryString =
-    [ [ ( "query_string"
-        , Encode.object
+    [ ( "query_string"
+      , Encode.object
             [ ( "query", Encode.string queryString )
             , ( "default_operator", Encode.string "AND" )
             , ( "fields", Encode.list Encode.string searchFields )
             ]
-        )
-      ]
+      )
     ]
 
 
-updateModelFromUrl : Url -> Model -> Model
-updateModelFromUrl url model =
+queryToParamsDict : String -> Dict String String
+queryToParamsDict query =
+    query
+        |> String.split "&"
+        |> List.filterMap
+            (\part ->
+                case String.split "=" part of
+                    [ key, value ] ->
+                        Just ( key, Maybe.withDefault value (Url.percentDecode value) )
+
+                    _ ->
+                        Nothing
+            )
+        |> Dict.fromList
+
+
+updateModelFromParams : Dict String String -> Model -> Model
+updateModelFromParams params model =
     { model
-        | query = getQueryParam url "q"
+        | query = Maybe.withDefault "" (Dict.get "q" params)
         , queryType =
-            case getQueryParam url "type" of
-                "eqs" ->
+            case Dict.get "type" params of
+                Just "eqs" ->
                     ElasticsearchQueryString
 
                 _ ->
                     Standard
-        , filteredActions = getBoolDictFromParams url "," "actions"
-        , filteredAlignments = getBoolDictFromParams url "," "alignments"
-        , filteredComponents = getBoolDictFromParams url "," "components"
-        , filteredCreatureFamilies = getBoolDictFromParams url ";" "creature-families"
-        , filteredStrongestSaves = getBoolDictFromParams url "," "strongest-saves"
-        , filteredItemCategories = getBoolDictFromParams url "," "item-categories"
-        , filteredItemSubcategories = getBoolDictFromParams url "," "item-subcategories"
-        , filteredWeakestSaves = getBoolDictFromParams url "," "weakest-saves"
-        , filteredPfs = getBoolDictFromParams url "," "pfs"
-        , filteredSavingThrows = getBoolDictFromParams url "," "saving-throws"
-        , filteredSchools = getBoolDictFromParams url "," "schools"
-        , filteredSizes = getBoolDictFromParams url "," "sizes"
-        , filteredSources = getBoolDictFromParams url ";" "sources"
-        , filteredSourceCategories = getBoolDictFromParams url "," "source-categories"
-        , filteredTraditions = getBoolDictFromParams url "," "traditions"
-        , filteredTraits = getBoolDictFromParams url "," "traits"
-        , filteredTypes = getBoolDictFromParams url "," "types"
-        , filteredWeaponCategories = getBoolDictFromParams url "," "weapon-categories"
-        , filteredWeaponGroups = getBoolDictFromParams url "," "weapon-groups"
-        , filteredWeaponTypes = getBoolDictFromParams url "," "weapon-types"
-        , filterSpoilers = getQueryParam url "spoilers" == "hide"
-        , filterComponentsOperator = getQueryParam url "components-operator" /= "or"
-        , filterTraditionsOperator = getQueryParam url "traditions-operator" /= "or"
-        , filterTraitsOperator = getQueryParam url "traits-operator" /= "or"
+        , filteredActions = getBoolDictFromParams params ";" "actions"
+        , filteredAlignments = getBoolDictFromParams params ";" "alignments"
+        , filteredComponents = getBoolDictFromParams params ";" "components"
+        , filteredCreatureFamilies = getBoolDictFromParams params ";" "creature-families"
+        , filteredStrongestSaves = getBoolDictFromParams params ";" "strongest-saves"
+        , filteredItemCategories = getBoolDictFromParams params ";" "item-categories"
+        , filteredItemSubcategories = getBoolDictFromParams params ";" "item-subcategories"
+        , filteredWeakestSaves = getBoolDictFromParams params ";" "weakest-saves"
+        , filteredPfs = getBoolDictFromParams params ";" "pfs"
+        , filteredSavingThrows = getBoolDictFromParams params ";" "saving-throws"
+        , filteredSchools = getBoolDictFromParams params ";" "schools"
+        , filteredSizes = getBoolDictFromParams params ";" "sizes"
+        , filteredSources = getBoolDictFromParams params ";" "sources"
+        , filteredSourceCategories = getBoolDictFromParams params ";" "source-categories"
+        , filteredTraditions = getBoolDictFromParams params ";" "traditions"
+        , filteredTraits = getBoolDictFromParams params ";" "traits"
+        , filteredTypes = getBoolDictFromParams params ";" "types"
+        , filteredWeaponCategories = getBoolDictFromParams params ";" "weapon-categories"
+        , filteredWeaponGroups = getBoolDictFromParams params ";" "weapon-groups"
+        , filteredWeaponTypes = getBoolDictFromParams params ";" "weapon-types"
+        , filterSpoilers = Dict.get "spoilers" params == Just "hide"
+        , filterComponentsOperator = Dict.get "components-operator" params /= Just "or"
+        , filterTraditionsOperator = Dict.get "traditions-operator" params /= Just "or"
+        , filterTraitsOperator = Dict.get "traits-operator" params /= Just "or"
         , filteredFromValues =
-            getQueryParam url "values-from"
-                |> String.Extra.nonEmpty
-                |> Maybe.map (String.split ",")
+            Dict.get "values-from" params
+                |> Maybe.map (String.split ";")
                 |> Maybe.withDefault []
                 |> List.filterMap
                     (\string ->
@@ -2323,9 +2397,8 @@ updateModelFromUrl url model =
                     )
                 |> Dict.fromList
         , filteredToValues =
-            getQueryParam url "values-to"
-                |> String.Extra.nonEmpty
-                |> Maybe.map (String.split ",")
+            Dict.get "values-to" params
+                |> Maybe.map (String.split ";")
                 |> Maybe.withDefault []
                 |> List.filterMap
                     (\string ->
@@ -2338,14 +2411,13 @@ updateModelFromUrl url model =
                     )
                 |> Dict.fromList
         , resultDisplay =
-            if getQueryParam url "display" == "table" then
+            if Dict.get "display" params == Just "table" then
                 Table
 
             else
                 List
         , sort =
-            getQueryParam url "sort"
-                |> String.Extra.nonEmpty
+            Dict.get "sort" params
                 |> Maybe.map (String.split ",")
                 |> Maybe.map
                     (List.filterMap
@@ -2354,10 +2426,7 @@ updateModelFromUrl url model =
                                 [ field, dir ] ->
                                     Maybe.map
                                         (\dir_ ->
-
-                                            ( List.Extra.find (Tuple.second >> (==) field) Data.sortFieldOld
-                                                |> Maybe.map Tuple.first
-                                                |> Maybe.withDefault field
+                                            ( field
                                             , dir_
                                             )
                                         )
@@ -2369,29 +2438,25 @@ updateModelFromUrl url model =
                     )
                 |> Maybe.withDefault []
         , tableColumns =
-            if getQueryParam url "display" == "table" then
-                getQueryParam url "columns"
-                    |> String.Extra.nonEmpty
+            if Dict.get "display" params == Just "table" then
+                Dict.get "columns" params
                     |> Maybe.map (String.split ",")
                     |> Maybe.withDefault []
 
             else
                 model.tableColumns
-        , url = url
     }
 
 
-getBoolDictFromParams : Url -> String -> String -> Dict String Bool
-getBoolDictFromParams url splitOn param =
+getBoolDictFromParams : Dict String String -> String -> String -> Dict String Bool
+getBoolDictFromParams params splitOn param =
     List.append
-        (getQueryParam url ("include-" ++ param)
-            |> String.Extra.nonEmpty
+        (Dict.get ("include-" ++ param) params
             |> Maybe.map (String.split splitOn)
             |> Maybe.withDefault []
             |> List.map (\value -> ( value, True ))
         )
-        (getQueryParam url ("exclude-" ++ param)
-            |> String.Extra.nonEmpty
+        (Dict.get ("exclude-" ++ param) params
             |> Maybe.map (String.split splitOn)
             |> Maybe.withDefault []
             |> List.map (\value -> ( value, False ))
@@ -2409,27 +2474,13 @@ getQueryParam url param =
 
 searchWithCurrentQuery : Bool -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 searchWithCurrentQuery loadMore ( model, cmd ) =
-    if (String.isEmpty (getSearchKey False model.url))
-    || (not (Dict.isEmpty model.filteredSourceCategories)
-        && Maybe.Extra.isNothing model.aggregations
-    )
-    then
-        ( { model
-            | lastSearchKey = ""
-            , searchResults = []
-          }
-        , Cmd.batch
-            [ cmd
-            , case model.tracker of
-                Just tracker ->
-                    Http.cancel ("search-" ++ String.fromInt tracker)
-
-                Nothing ->
-                    Cmd.none
-            ]
+    if ((Just (getSearchKey model.url) /= model.lastSearchKey)
+        || loadMore
         )
-
-    else if (getSearchKey True model.url /= model.lastSearchKey) || loadMore then
+        && (Dict.isEmpty model.filteredSourceCategories
+            || Maybe.Extra.isJust model.sourcesAggregation
+        )
+    then
         let
             newTracker : Int
             newTracker =
@@ -2443,7 +2494,7 @@ searchWithCurrentQuery loadMore ( model, cmd ) =
             newModel : Model
             newModel =
                 { model
-                    | lastSearchKey = getSearchKey True model.url
+                    | lastSearchKey = Just (getSearchKey model.url)
                     , searchResults =
                         if loadMore then
                             model.searchResults
@@ -2482,8 +2533,8 @@ searchWithCurrentQuery loadMore ( model, cmd ) =
         )
 
 
-getSearchKey : Bool -> Url -> String
-getSearchKey includeSort url =
+getSearchKey : Url -> String
+getSearchKey url =
     url.query
         |> Maybe.withDefault ""
         |> String.split "&"
@@ -2496,9 +2547,6 @@ getSearchKey includeSort url =
                     [ "display", _ ] ->
                         False
 
-                    [ "sort", _ ] ->
-                        includeSort
-
                     [ "q", q ] ->
                         q
                             |> Url.percentDecode
@@ -2506,9 +2554,6 @@ getSearchKey includeSort url =
                             |> String.trim
                             |> String.isEmpty
                             |> not
-
-                    [ "type", _ ] ->
-                        includeSort
 
                     _ ->
                         True
@@ -2535,7 +2580,7 @@ getAggregations ( model, cmd ) =
             { method = "POST"
             , url = model.elasticUrl ++ "/_search"
             , headers = []
-            , body = Http.jsonBody (buildAggregationsBody)
+            , body = Http.jsonBody (buildAggregationsBody model)
             , expect = Http.expectJson GotAggregationsResult aggregationsDecoder
             , timeout = Just 10000
             , tracker = Nothing
@@ -2544,10 +2589,18 @@ getAggregations ( model, cmd ) =
     )
 
 
-buildAggregationsBody : Encode.Value
-buildAggregationsBody =
-    Encode.object
-        [ ( "aggs"
+buildAggregationsBody : Model -> Encode.Value
+buildAggregationsBody model =
+    encodeObjectMaybe
+        [ if String.isEmpty model.fixedQueryString then
+            Nothing
+
+          else
+            ( "query"
+            , Encode.object (buildElasticsearchQueryStringQueryBody model.fixedQueryString)
+            )
+                |> Just
+        , ( "aggs"
           , Encode.object
                 (List.append
                     (List.map
@@ -2557,6 +2610,7 @@ buildAggregationsBody =
                         , "item_category"
                         , "hands.keyword"
                         , "reload_raw.keyword"
+                        , "source"
                         , "trait"
                         , "type"
                         , "weapon_group"
@@ -2567,15 +2621,12 @@ buildAggregationsBody =
                         [ ( "category", "item_category" )
                         , ( "name", "item_subcategory" )
                         ]
-                    , buildCompositeAggregation
-                        "source"
-                        [ ( "category", "source_category" )
-                        , ( "name", "name.keyword" )
-                        ]
                     ]
                 )
           )
+            |> Just
         , ( "size", Encode.int 0 )
+            |> Just
         ]
 
 
@@ -2623,15 +2674,55 @@ buildCompositeTermsSource ( name, field ) =
     ]
 
 
+getSourcesAggregation : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+getSourcesAggregation ( model, cmd ) =
+    ( model
+    , Cmd.batch
+        [ cmd
+        , Http.request
+            { method = "POST"
+            , url = model.elasticUrl ++ "/_search"
+            , headers = []
+            , body = Http.jsonBody buildSourcesAggregationBody
+            , expect = Http.expectJson (GotSourcesAggregationResult) sourcesAggregationDecoder
+            , timeout = Just 10000
+            , tracker = Nothing
+            }
+        ]
+    )
+
+
+buildSourcesAggregationBody : Encode.Value
+buildSourcesAggregationBody =
+    Encode.object
+        [ ( "aggs"
+          , Encode.object
+                [ buildCompositeAggregation
+                    "source"
+                    [ ( "category", "source_category" )
+                    , ( "name", "name.keyword" )
+                    ]
+                ]
+          )
+        , ( "size", Encode.int 0 )
+        ]
+
+
 flagsDecoder : Decode.Decoder Flags
 flagsDecoder =
     Field.require "currentUrl" Decode.string <| \currentUrl ->
     Field.require "elasticUrl" Decode.string <| \elasticUrl ->
     Field.attempt "resultBaseUrl" Decode.string <| \resultBaseUrl ->
     Field.attempt "showHeader" Decode.bool <| \showHeader ->
+    Field.attempt "defaultQuery" Decode.string <| \defaultQuery ->
+    Field.attempt "fixedQueryString" Decode.string <| \fixedQueryString ->
+    Field.attempt "hideFilters" (Decode.list Decode.string) <| \hideFilters ->
     Decode.succeed
         { currentUrl = currentUrl
+        , defaultQuery = Maybe.withDefault defaultFlags.defaultQuery defaultQuery
         , elasticUrl = elasticUrl
+        , fixedQueryString = Maybe.withDefault defaultFlags.fixedQueryString fixedQueryString
+        , hideFilters = Maybe.withDefault defaultFlags.hideFilters hideFilters
         , resultBaseUrl = Maybe.withDefault defaultFlags.resultBaseUrl resultBaseUrl
         , showHeader = Maybe.withDefault defaultFlags.showHeader showHeader
         }
@@ -2681,15 +2772,7 @@ aggregationsDecoder =
         <| \itemSubcategories ->
     Field.requireAt
         [ "aggregations", "source" ]
-        (aggregationBucketDecoder
-            (Field.require "category" Decode.string <| \category ->
-             Field.require "name" Decode.string <| \name ->
-             Decode.succeed
-                { category = category
-                , name = name
-                }
-            )
-        )
+        (aggregationBucketDecoder Decode.string)
         <| \sources ->
     Field.requireAt
         [ "aggregations", "trait" ]
@@ -2718,6 +2801,21 @@ aggregationsDecoder =
 aggregationBucketDecoder : Decode.Decoder a -> Decode.Decoder (List a)
 aggregationBucketDecoder keyDecoder =
     Decode.field "buckets" (Decode.list (Decode.field "key" keyDecoder))
+
+
+sourcesAggregationDecoder : Decode.Decoder (List Source)
+sourcesAggregationDecoder =
+    Decode.at
+        [ "aggregations", "source" ]
+        (aggregationBucketDecoder
+            (Field.require "category" Decode.string <| \category ->
+             Field.require "name" Decode.string <| \name ->
+             Decode.succeed
+                { category = category
+                , name = name
+                }
+            )
+        )
 
 
 sourcesDecoder : Decode.Decoder (List Document)
@@ -3735,77 +3833,114 @@ viewQueryOptions model =
         [ HA.class "column"
         , HA.class "gap-small"
         ]
-        [ viewFoldableOptionBox
-            model
-            "Query type"
-            queryTypeMeasureWrapperId
-            (viewQueryType model)
-        , viewFoldableOptionBox
-            model
-            "Filter alignments"
-            filterAlignmentsMeasureWrapperId
-            (viewFilterAlignments model)
-        , viewFoldableOptionBox
-            model
-            "Filter creatures"
-            filterCreaturesMeasureWrapperId
-            (viewFilterCreatures model)
-        , viewFoldableOptionBox
-            model
-            "Filter item categories"
-            filterItemCategoriesMeasureWrapperId
-            (viewFilterItemCategories model)
-        , viewFoldableOptionBox
-            model
-            "Filter PFS status"
-            filterPfsMeasureWrapperId
-            (viewFilterPfs model)
-        , viewFoldableOptionBox
-            model
-            "Filter sizes"
-            filterSizesMeasureWrapperId
-            (viewFilterSizes model)
-        , viewFoldableOptionBox
-            model
-            "Filter sources & spoilers"
-            filterSourcesMeasureWrapperId
-            (viewFilterSources model)
-        , viewFoldableOptionBox
-            model
-            "Filter spells"
-            filterSpellsMeasureWrapperId
-            (viewFilterSpells model)
-        , viewFoldableOptionBox
-            model
-            "Filter traits"
-            filterTraitsMeasureWrapperId
-            (viewFilterTraits model)
-        , viewFoldableOptionBox
-            model
-            "Filter types"
-            filterTypesMeasureWrapperId
-            (viewFilterTypes model)
-        , viewFoldableOptionBox
-            model
-            "Filter weapons"
-            filterWeaponsMeasureWrapperId
-            (viewFilterWeapons model)
-        , viewFoldableOptionBox
-            model
-            "Filter numeric values"
-            filterValuesMeasureWrapperId
-            (viewFilterValues model)
-        , viewFoldableOptionBox
-            model
-            "Result display"
-            resultDisplayMeasureWrapperId
-            (viewResultDisplay model)
-        , viewFoldableOptionBox
-            model
-            "Sort results"
-            sortResultsMeasureWrapperId
-            (viewSortResults model)
-        ]
+        (List.filterMap
+            (\( type_, filterView ) ->
+                if List.member type_ model.hideFilters then
+                    Nothing
+
+                else
+                    Just filterView
+            )
+            [ ( "type"
+              , viewFoldableOptionBox
+                    model
+                    "Query type"
+                    queryTypeMeasureWrapperId
+                    (viewQueryType model)
+              )
+            , ( "alignments"
+              , viewFoldableOptionBox
+                    model
+                    "Filter alignments"
+                    filterAlignmentsMeasureWrapperId
+                    (viewFilterAlignments model)
+              )
+            , ( "creatures"
+              , viewFoldableOptionBox
+                    model
+                    "Filter creatures"
+                    filterCreaturesMeasureWrapperId
+                    (viewFilterCreatures model)
+              )
+            , ( "items"
+              , viewFoldableOptionBox
+                    model
+                    "Filter item categories"
+                    filterItemCategoriesMeasureWrapperId
+                    (viewFilterItemCategories model)
+              )
+            , ( "pfs"
+              , viewFoldableOptionBox
+                    model
+                    "Filter PFS status"
+                    filterPfsMeasureWrapperId
+                    (viewFilterPfs model)
+              )
+            , ( "sizes"
+              , viewFoldableOptionBox
+                    model
+                    "Filter sizes"
+                    filterSizesMeasureWrapperId
+                    (viewFilterSizes model)
+              )
+            , ( "sources"
+              , viewFoldableOptionBox
+                    model
+                    "Filter sources & spoilers"
+                    filterSourcesMeasureWrapperId
+                    (viewFilterSources model)
+              )
+            , ( "spells"
+              , viewFoldableOptionBox
+                    model
+                    "Filter spells"
+                    filterSpellsMeasureWrapperId
+                    (viewFilterSpells model)
+              )
+            , ( "traits"
+              , viewFoldableOptionBox
+                    model
+                    "Filter traits"
+                    filterTraitsMeasureWrapperId
+                    (viewFilterTraits model)
+              )
+            , ( "types"
+              , viewFoldableOptionBox
+                    model
+                    "Filter types"
+                    filterTypesMeasureWrapperId
+                    (viewFilterTypes model)
+              )
+            , ( "weapons"
+              , viewFoldableOptionBox
+                    model
+                    "Filter weapons"
+                    filterWeaponsMeasureWrapperId
+                    (viewFilterWeapons model)
+              )
+            , ( "values"
+              , viewFoldableOptionBox
+                    model
+                    "Filter numeric values"
+                    filterValuesMeasureWrapperId
+                    (viewFilterValues model)
+              )
+            , ( "display"
+              , viewFoldableOptionBox
+                    model
+                    "Result display"
+                    resultDisplayMeasureWrapperId
+                    (viewResultDisplay model)
+              )
+            , ( "sort"
+              , viewFoldableOptionBox
+                    model
+                    "Sort results"
+                    sortResultsMeasureWrapperId
+                    (viewSortResults model)
+              )
+            ]
+        )
 
 
 viewFoldableOptionBox : Model -> String -> String -> List (Html Msg) -> Html Msg
@@ -4832,8 +4967,8 @@ viewFilterSources model =
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (case model.aggregations of
-            Just (Ok { sources })->
+        (case ( model.sourcesAggregation, model.aggregations ) of
+            ( Just (Ok allSources), Just (Ok { sources }) ) ->
                 (List.map
                     (\source ->
                         let
@@ -4883,16 +5018,24 @@ viewFilterSources model =
                                 )
                             ]
                     )
-                    (List.filter
-                        (.name >> String.toLower >> String.contains (String.toLower model.searchSources))
-                        (List.sortBy .name sources)
+                    (allSources
+                        |> List.filter
+                            (.name
+                                >> String.toLower
+                                >> String.contains (String.toLower model.searchSources)
+                            )
+                        |> List.filter (\source -> List.member (String.toLower source.name) sources)
+                        |> List.sortBy .name
                     )
                 )
 
-            Just (Err _) ->
+            ( Just (Err _), _ ) ->
                 []
 
-            Nothing ->
+            ( _, Just (Err _) ) ->
+                []
+
+            _ ->
                 [ viewScrollboxLoader ]
         )
     ]
