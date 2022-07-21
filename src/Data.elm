@@ -264,56 +264,6 @@ sizes =
     ]
 
 
-sortFieldOld : List ( String, String )
-sortFieldOld =
-    [ ( "ac", "AC" )
-    , ( "bulk", "Bulk" )
-    , ( "charisma", "Charisma" )
-    , ( "constitution", "Constitution" )
-    , ( "dexterity", "Dexterity" )
-    , ( "fortitude", "Fortitude" )
-    , ( "hp", "HP" )
-    , ( "intelligence", "Intelligence" )
-    , ( "level", "Level" )
-    , ( "name", "Name" )
-    , ( "perception", "Perception" )
-    , ( "price", "Price" )
-    , ( "range", "Range" )
-    , ( "reflex", "Reflex" )
-    , ( "strength", "Strength" )
-    , ( "type", "Type" )
-    , ( "will", "Will" )
-    , ( "wisdom", "Wisdom" )
-    ]
-        |> List.append
-            (List.map
-                (\type_ ->
-                    ( "resistance." ++ type_
-                    , (String.Extra.humanize type_) ++ " resistance"
-                    )
-                )
-                damageTypes
-            )
-        |> List.append
-            (List.map
-                (\type_ ->
-                    ( "weakness." ++ type_
-                    , (String.Extra.humanize type_) ++ " weakness"
-                    )
-                )
-                damageTypes
-            )
-        |> List.append
-            (List.map
-                (\speed ->
-                    ( "speed." ++ speed
-                    , (String.Extra.humanize speed) ++ " speed"
-                    )
-                )
-                speedTypes
-            )
-
-
 sortFields : List ( String, String, Bool )
 sortFields =
     [ ( "ability", "ability", False )

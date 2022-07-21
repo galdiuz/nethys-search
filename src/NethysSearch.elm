@@ -1596,11 +1596,11 @@ updateUrl ({ url } as model) =
               )
             , ( "include-traits"
               , boolDictIncluded model.filteredTraits
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-traits"
               , boolDictExcluded model.filteredTraits
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "traits-operator"
               , if model.filterTraitsOperator then
@@ -1611,35 +1611,35 @@ updateUrl ({ url } as model) =
               )
             , ( "include-types"
               , boolDictIncluded model.filteredTypes
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-types"
               , boolDictExcluded model.filteredTypes
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "include-actions"
               , boolDictIncluded model.filteredActions
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-actions"
               , boolDictExcluded model.filteredActions
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "include-alignments"
               , boolDictIncluded model.filteredAlignments
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-alignments"
               , boolDictExcluded model.filteredAlignments
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "include-components"
               , boolDictIncluded model.filteredComponents
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-components"
               , boolDictExcluded model.filteredComponents
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "components-operator"
               , if model.filterComponentsOperator then
@@ -1658,51 +1658,51 @@ updateUrl ({ url } as model) =
               )
             , ( "include-item-categories"
               , boolDictIncluded model.filteredItemCategories
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-item-categories"
               , boolDictExcluded model.filteredItemCategories
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "include-item-subcategories"
               , boolDictIncluded model.filteredItemSubcategories
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-item-subcategories"
               , boolDictExcluded model.filteredItemSubcategories
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "include-pfs"
               , boolDictIncluded model.filteredPfs
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-pfs"
               , boolDictExcluded model.filteredPfs
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "include-saving-throws"
               , boolDictIncluded model.filteredSavingThrows
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-saving-throws"
               , boolDictExcluded model.filteredSavingThrows
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "include-schools"
               , boolDictIncluded model.filteredSchools
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-schools"
               , boolDictExcluded model.filteredSchools
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "include-sizes"
               , boolDictIncluded model.filteredSizes
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-sizes"
               , boolDictExcluded model.filteredSizes
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "include-sources"
               , boolDictIncluded model.filteredSources
@@ -1714,27 +1714,27 @@ updateUrl ({ url } as model) =
               )
             , ( "include-source-categories"
               , boolDictIncluded model.filteredSourceCategories
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-source-categories"
               , boolDictExcluded model.filteredSourceCategories
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "include-strongest-saves"
               , boolDictIncluded model.filteredStrongestSaves
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-strongest-saves"
               , boolDictExcluded model.filteredStrongestSaves
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "include-traditions"
               , boolDictIncluded model.filteredTraditions
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-traditions"
               , boolDictExcluded model.filteredTraditions
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "traditions-operator"
               , if model.filterTraditionsOperator then
@@ -1745,47 +1745,47 @@ updateUrl ({ url } as model) =
               )
             , ( "include-weakest-saves"
               , boolDictIncluded model.filteredWeakestSaves
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-weakest-saves"
               , boolDictExcluded model.filteredWeakestSaves
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "include-weapon-categories"
               , boolDictIncluded model.filteredWeaponCategories
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-weapon-categories"
               , boolDictExcluded model.filteredWeaponCategories
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "include-weapon-groups"
               , boolDictIncluded model.filteredWeaponGroups
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-weapon-groups"
               , boolDictExcluded model.filteredWeaponGroups
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "include-weapon-types"
               , boolDictIncluded model.filteredWeaponTypes
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "exclude-weapon-types"
               , boolDictExcluded model.filteredWeaponTypes
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "values-from"
               , model.filteredFromValues
                     |> Dict.toList
                     |> List.map (\( field, value ) -> field ++ ":" ++ value)
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "values-to"
               , model.filteredToValues
                     |> Dict.toList
                     |> List.map (\( field, value ) -> field ++ ":" ++ value)
-                    |> String.join ","
+                    |> String.join ";"
               )
             , ( "spoilers"
               , if model.filterSpoilers then
