@@ -4022,7 +4022,7 @@ viewQueryType model =
             [ Html.text "field:value" ]
         , Html.text ". For full documentation on how the query syntax works see "
         , Html.a
-            [ HA.href "https://www.elastic.co/guide/en/elasticsearch/reference/7.15/query-dsl-query-string-query.html#query-string-syntax"
+            [ HA.href "https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#query-string-syntax"
             , HA.target "_blank"
             ]
             [ Html.text "Elasticsearch's documentation" ]
