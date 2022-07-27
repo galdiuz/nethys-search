@@ -377,6 +377,7 @@ speedTypes =
     , "climb"
     , "fly"
     , "land"
+    , "max"
     , "swim"
     ]
 

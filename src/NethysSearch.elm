@@ -233,6 +233,7 @@ type alias SpeedTypeValues =
     , climb : Maybe Int
     , fly : Maybe Int
     , land : Maybe Int
+    , max : Maybe Int
     , swim : Maybe Int
     }
 
@@ -3139,12 +3140,14 @@ speedTypeValuesDecoder =
     Field.attempt "climb" Decode.int <| \climb ->
     Field.attempt "fly" Decode.int <| \fly ->
     Field.attempt "land" Decode.int <| \land ->
+    Field.attempt "max" Decode.int <| \max ->
     Field.attempt "swim" Decode.int <| \swim ->
     Decode.succeed
         { burrow = burrow
         , climb = climb
         , fly = fly
         , land = land
+        , max = max
         , swim = swim
         }
 
@@ -7590,6 +7593,9 @@ getSpeedTypeValue type_ values =
 
         "land" ->
             values.land
+
+        "max" ->
+            values.max
 
         "swim" ->
             values.swim
