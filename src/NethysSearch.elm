@@ -4388,7 +4388,8 @@ viewFilterSpells model =
                     , viewFilterIcon (Dict.get component model.filteredComponents)
                     ]
             )
-            [ "material"
+            [ "focus"
+            , "material"
             , "somatic"
             , "verbal"
             ]
