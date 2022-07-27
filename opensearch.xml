@@ -1,0 +1,10 @@
+<OpenSearchDescription
+    xmlns="http://a9.com/-/spec/opensearch/1.1/"
+    xmlns:moz="http://www.mozilla.org/2006/browser/search/"
+>
+    <ShortName>Nethys Search</ShortName>
+    <Description>Use Nethys Search to search 2e.aonprd.com</Description>
+    <InputEncoding>UTF-8</InputEncoding>
+    <Url type="text/html" method="get" template="http://localhost:8000/?q={searchTerms}" />
+    <Url type="application/opensearchdescription+xml" rel="self" template="http://localhost:8000/opensearch.xml" />
+</OpenSearchDescription>

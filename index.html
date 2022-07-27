@@ -1,0 +1,68 @@
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Nethys Search</title>
+    <script src="app-f3dd70a10bd36cd2483403f1e76ce1a3db13d6b6.js"></script>
+    <link rel="preload" as="font" href="Pathfinder-Icons.ttf" type="font/ttf" crossorigin="anonymous">
+    <link rel="search" type="application/opensearchdescription+xml" title="Nethys Search" href="opensearch.xml">
+</head>
+<body>
+    <script>
+        let container = document.createElement('div');
+        document.body.appendChild(container);
+        let app = Elm.NethysSearch.init({
+            node: container,
+            flags: {
+                currentUrl: location.href,
+                elasticUrl: "https://elasticsearch.galdiuz.com/aon",
+                showHeader: true,
+            }
+        });
+
+        app.ports.document_setTitle.subscribe(title => {
+            if (title) {
+                document.title = title + ' - Nethys Search';
+            } else {
+                document.title = 'Nethys Search';
+            }
+        });
+
+        app.ports.document_getElementHeight.subscribe(id => {
+            window.requestAnimationFrame(() => {
+                let element = document.getElementById(id);
+                let height = element.scrollHeight;
+                let foldableChildren = element.getElementsByClassName('foldable-container');
+                let childrenHeights = Array.from(foldableChildren, c => c.clientHeight);
+                height -= childrenHeights.reduce((a, b) => a + b, 0);
+                app.ports.document_receiveElementHeight.send({
+                    'id': id,
+                    'height': height,
+                });
+            });
+        });
+
+        app.ports.localStorage_get.subscribe(key => {
+            let value = localStorage.getItem(key);
+            app.ports.localStorage_receive.send({key: key, value: value});
+        });
+
+        app.ports.localStorage_set.subscribe(data => {
+            localStorage.setItem(data.key, data.value);
+        });
+
+        window.addEventListener('popstate', () => {
+            app.ports.navigation_urlChanged.send(location.href);
+        });
+
+        app.ports.navigation_pushUrl.subscribe(url => {
+            history.pushState([], '', url);
+            app.ports.navigation_urlChanged.send(location.href);
+        });
+
+        app.ports.navigation_loadUrl.subscribe(url => {
+            location.href = url;
+        });
+    </script>
+</body>
+</html>
