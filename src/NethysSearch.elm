@@ -254,7 +254,8 @@ type SortDir
 
 
 type Theme
-    = Dark
+    = Blackbird
+    | Dark
     | Dead
     | ExtraContrast
     | Lavender
@@ -897,6 +898,12 @@ update msg model =
                         Ok "lavander" ->
                             { model | theme = Lavender }
 
+                        Ok "blackbird" ->
+                            { model | theme = Blackbird }
+
+                        Ok "jonny" ->
+                            { model | theme = Blackbird }
+
                         _ ->
                             model
 
@@ -1386,6 +1393,9 @@ update msg model =
             , saveToLocalStorage
                 "theme"
                 (case theme of
+                    Blackbird ->
+                        "jonny"
+
                     Dark ->
                         "dark"
 
@@ -3165,6 +3175,9 @@ view model =
             []
             [ Html.text css
             , case model.theme of
+                Blackbird ->
+                    Html.text cssBlackbird
+
                 Dark ->
                     Html.text cssDark
 
@@ -3295,6 +3308,12 @@ viewMenu model =
                             , name = "theme-type"
                             , onInput = ThemeSelected Lavender
                             , text = "Lavender"
+                            }
+                        , viewRadioButton
+                            { checked = model.theme == Blackbird
+                            , name = "theme-type"
+                            , onInput = ThemeSelected Blackbird
+                            , text = "Blackbird"
                             }
                         ]
                     ]
@@ -8353,7 +8372,7 @@ css =
         border-radius: 4px;
         background-color: var(--color-subelement-bg);
         color: var(--color-subelement-text);
-        font-variant: small-caps;
+        font-variant: var(--element-font-variant);
         line-height: 1rem;
         padding: 4px 9px;
     }
@@ -8375,7 +8394,7 @@ css =
         display: flex;
         flex-direction: row;
         font-size: var(--font-very-large);
-        font-variant: small-caps;
+        font-variant: var(--element-font-variant);
         font-weight: 700;
         gap: var(--gap-small);
         justify-content: space-between;
@@ -8402,7 +8421,7 @@ css =
         color: #eeeeee;
         padding: 3px 5px;
         font-size: 16px;
-        font-variant: small-caps;
+        font-variant: var(--element-font-variant);
         font-weight: 700;
     }
 
@@ -8455,6 +8474,34 @@ css =
     """
 
 
+cssBlackbird : String
+cssBlackbird =
+    """
+    .body-container {
+        --color-bg: #21252b;
+        --color-bg-secondary: #21252b;
+        --color-container-bg: #404859;
+        --color-container-border: #ededed;
+        --color-element-bg: #404859;
+        --color-element-border: #cbc5c3;
+        --color-element-icon: #cccccc;
+        --color-element-inactive-bg: #291716;
+        --color-element-inactive-border: #6c6242;
+        --color-element-inactive-text: #656148;
+        --color-element-text: #ededed;
+        --color-external-link: #a2a4a3;
+        --color-subelement-bg: #404859;
+        --color-subelement-text: #ededed;
+        --color-inactive-text: #999999;
+        --color-table-even: #404859;
+        --color-table-odd: #21252b;
+        --color-table-text: #cbc5c3;
+        --color-text: #ededed;
+        --element-font-variant: normal;
+    }
+    """
+
+
 cssDark : String
 cssDark =
     """
@@ -8472,12 +8519,12 @@ cssDark =
         --color-element-text: #cbc18f;
         --color-subelement-bg: #806e45;
         --color-subelement-text: #111111;
-        --color-icon: #cccccc;
         --color-inactive-text: #999999;
         --color-table-even: #64542f;
         --color-table-odd: #342c19;
         --color-table-text: #eeeeee;
         --color-text: #eeeeee;
+        --element-font-variant: small-caps;
     }
     """
 
@@ -8499,12 +8546,12 @@ cssDead =
         --color-element-text: #e6d8ad;
         --color-subelement-bg: #709cab;
         --color-subelement-text: #0f0f0f;
-        --color-icon: #0f0f0f;
         --color-inactive-text: #999999;
         --color-table-even: #c3cdce;
         --color-table-odd: #74919b;
         --color-table-text: #000000;
         --color-text: #0f0f0f;
+        --element-font-variant: small-caps;
     }
     """
 
@@ -8526,12 +8573,12 @@ cssLight =
         --color-element-text: #cbc18f;
         --color-subelement-bg: #cbc18f;
         --color-subelement-text: #111111;
-        --color-icon: #111111;
         --color-inactive-text: #999999;
         --color-table-even: #cbc18f;
         --color-table-odd: #ded7bb;
         --color-table-text: #0f0f0f;
         --color-text: #111111;
+        --element-font-variant: small-caps;
     }
     """
 
@@ -8553,12 +8600,12 @@ cssPaper =
         --color-element-text: #cbc18f;
         --color-subelement-bg: #dbd0bc;
         --color-subelement-text: #111111;
-        --color-icon: #111111;
         --color-inactive-text: #999999;
         --color-table-even: #ede3c7;
         --color-table-odd: #f4eee0;
         --color-table-text: #0f0f0f;
         --color-text: #111111;
+        --element-font-variant: small-caps;
     }
     """
 
@@ -8580,12 +8627,12 @@ cssExtraContrast =
         --color-element-text: #cbc18f;
         --color-subelement-bg: #769477;
         --color-subelement-text: #111111;
-        --color-icon: #cccccc;
         --color-inactive-text: #999999;
         --color-table-even: #ffffff;
         --color-table-odd: #cccccc;
         --color-table-text: #0f0f0f;
         --color-text: #eeeeee;
+        --element-font-variant: small-caps;
     }
     """
 
@@ -8607,11 +8654,11 @@ cssLavender =
         --color-element-text: #cbc18f;
         --color-subelement-bg: #f0e6ff;
         --color-subelement-text: #111111;
-        --color-icon: #000000;
         --color-inactive-text: #999999;
         --color-table-even: #8471a7;
         --color-table-odd: #6f5f98;
         --color-table-text: #ffffff;
         --color-text: #000000;
+        --element-font-variant: small-caps;
     }
     """
