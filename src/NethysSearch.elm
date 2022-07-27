@@ -3074,7 +3074,7 @@ view model =
                     []
                 )
                 [ if model.showHeader then
-                    viewTitle
+                    viewTitle model
 
                   else
                     Html.text ""
@@ -3202,8 +3202,8 @@ viewFaq question answer =
         ]
 
 
-viewTitle : Html Msg
-viewTitle =
+viewTitle : Model -> Html Msg
+viewTitle model =
     Html.header
         [ HA.class "column"
         , HA.class "align-center"
@@ -3224,6 +3224,25 @@ viewTitle =
                 , HA.target "_blank"
                 ]
                 [ Html.text "2e.aonprd.com" ]
+            ]
+        , Html.div
+            [ HA.class "option-container"
+            , HA.style "margin-top" "16px"
+            , HA.class "column"
+            , HA.class "gap-small"
+            ]
+            [ Html.h2
+                [ HA.style "align-self" "center" ]
+                [ Html.text "Nethys Search has now been integrated to the Archives of Nethys" ]
+            , Html.div
+                []
+                [ Html.text "This page will not receive updates in the future, use the "
+                , Html.a
+                    [ HA.href ("https://2e.aonprd.com/Search.aspx?" ++ Maybe.withDefault "" model.url.query)
+                    ]
+                    [ Html.text "search page on AoN" ]
+                , Html.text " instead. Thank you for your continued support!"
+                ]
             ]
         ]
 
