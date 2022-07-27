@@ -232,7 +232,7 @@ predefinedColumnConfigurations =
     , { columns = [ "level", "saving_throw", "onset", "stage", "trait", "rarity" ]
       , label = "Diseases"
       }
-    , { columns = [ "level", "trait", "prerequisite", "actions", "trigger", "requirement", "frequency", "archetype", "rarity", "pfs" ]
+    , { columns = [ "level", "trait", "prerequisite", "summary", "rarity", "pfs", "source" ]
       , label = "Feats"
       }
     , { columns = [ "item_category", "item_subcategory", "level", "price", "bulk", "trait", "rarity", "pfs" ]
@@ -486,6 +486,7 @@ tableColumns =
     , "item_category"
     , "item_subcategory"
     , "language"
+    , "lesson"
     , "level"
     , "mystery"
     , "onset"
@@ -519,6 +520,7 @@ tableColumns =
     , "stage"
     , "strength"
     , "strongest_save"
+    , "summary"
     , "target"
     , "tradition"
     , "trait"

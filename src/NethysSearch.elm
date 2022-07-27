@@ -19,6 +19,10 @@ import Json.Decode as Decode
 import Json.Decode.Field as Field
 import Json.Encode as Encode
 import List.Extra
+import Markdown.Block
+import Markdown.Html
+import Markdown.Parser
+import Markdown.Renderer
 import Maybe.Extra
 import Process
 import Regex
@@ -54,7 +58,6 @@ type alias Document =
     , type_ : String
     , url : String
     , abilities : List String
-    , abilityBoosts : List String
     , abilityFlaws : List String
     , abilityType : Maybe String
     , ac : Maybe Int
@@ -71,7 +74,7 @@ type alias Document =
     , armorGroup : Maybe String
     , attackProficiencies : List String
     , aspect : Maybe String
-    , bloodlines : List String
+    , bloodlines : Maybe String
     , breadcrumbs : Maybe String
     , bulk : Maybe String
     , charisma : Maybe Int
@@ -83,18 +86,18 @@ type alias Document =
     , creatureFamily : Maybe String
     , damage : Maybe String
     , defenseProficiencies : List String
-    , deities : List String
+    , deities : Maybe String
     , deityCategory : Maybe String
     , dexCap : Maybe Int
     , dexterity : Maybe Int
     , divineFonts : List String
-    , domains : List String
+    , domains : Maybe String
     , domainSpell : Maybe String
     , duration : Maybe String
     , edict : Maybe String
     , familiarAbilities : List String
-    , favoredWeapons : List String
-    , feats : List String
+    , favoredWeapons : Maybe String
+    , feats : Maybe String
     , followerAlignments : List String
     , fort : Maybe Int
     , frequency : Maybe String
@@ -102,16 +105,17 @@ type alias Document =
     , hardness : Maybe String
     , heighten : List String
     , hp : Maybe String
-    , immunities : List String
+    , immunities : Maybe String
     , intelligence : Maybe Int
     , itemCategory : Maybe String
     , itemSubcategory : Maybe String
-    , languages : List String
+    , languages : Maybe String
+    , lessons : Maybe String
     , lessonType : Maybe String
     , level : Maybe Int
-    , mysteries : List String
+    , mysteries : Maybe String
     , onset : Maybe String
-    , patronThemes : List String
+    , patronThemes : Maybe String
     , perception : Maybe Int
     , perceptionProficiency : Maybe String
     , pfs : Maybe String
@@ -127,34 +131,36 @@ type alias Document =
     , requiredAbilities : Maybe String
     , requirements : Maybe String
     , resistanceValues : Maybe DamageTypeValues
-    , resistances : List String
+    , resistances : Maybe String
     , savingThrow : Maybe String
     , savingThrowProficiencies : List String
     , school : Maybe String
+    , searchMarkdown : ParsedMarkdownResult
     , secondaryCasters : Maybe String
     , secondaryChecks : Maybe String
-    , senses : List String
+    , senses : Maybe String
     , sizes : List String
-    , skills : List String
+    , skills : Maybe String
     , skillProficiencies : List String
-    , sources : List String
+    , sources : Maybe String
     , speed : Maybe String
     , speedValues : Maybe SpeedTypeValues
     , speedPenalty : Maybe String
     , spellList : Maybe String
     , spoilers : Maybe String
-    , stages : List String
+    , stages : Maybe String
     , strength : Maybe Int
     , strongestSaves : List String
+    , summary : Maybe String
     , targets : Maybe String
-    , traditions : List String
-    , traits : List String
+    , traditions : Maybe String
+    , traits : Maybe String
     , trigger : Maybe String
     , usage : Maybe String
     , vision : Maybe String
     , weakestSaves : List String
     , weaknessValues : Maybe DamageTypeValues
-    , weaknesses : List String
+    , weaknesses : Maybe String
     , weaponCategory : Maybe String
     , weaponGroup : Maybe String
     , weaponType : Maybe String
@@ -236,6 +242,10 @@ type alias SpeedTypeValues =
     , max : Maybe Int
     , swim : Maybe Int
     }
+
+
+type alias ParsedMarkdownResult =
+    Result (List String) (List Markdown.Block.Block)
 
 
 type QueryType
@@ -349,6 +359,7 @@ type Msg
     | ShowMenuPressed Bool
     | ShowQueryOptionsPressed Bool
     | ShowSpoilersChanged Bool
+    | ShowSummaryChanged Bool
     | ShowTraitsChanged Bool
     | SizeFilterAdded String
     | SizeFilterRemoved String
@@ -471,6 +482,7 @@ type alias Model =
     , showHeader : Bool
     , showResultAdditionalInfo : Bool
     , showResultSpoilers : Bool
+    , showResultSummary : Bool
     , showResultTraits : Bool
     , sort : List ( String, SortDir )
     , sourcesAggregation : Maybe (Result Http.Error (List Source))
@@ -575,6 +587,7 @@ init flagsValue =
       , showHeader = flags.showHeader
       , showResultAdditionalInfo = True
       , showResultSpoilers = True
+      , showResultSummary = True
       , showResultTraits = True
       , sort = []
       , sourcesAggregation = Nothing
@@ -592,6 +605,7 @@ init flagsValue =
         [ localStorage_get "limit-table-width"
         , localStorage_get "show-additional-info"
         , localStorage_get "show-spoilers"
+        , localStorage_get "show-summary"
         , localStorage_get "show-traits"
         , localStorage_get "theme"
         ]
@@ -965,6 +979,17 @@ update msg model =
                         _ ->
                             model
 
+                Ok "show-summary" ->
+                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
+                        Ok "1" ->
+                            { model | showResultSummary = True }
+
+                        Ok "0" ->
+                            { model | showResultSummary = False }
+
+                        _ ->
+                            model
+
                 Ok "show-traits" ->
                     case Decode.decodeValue (Decode.field "value" Decode.string) value of
                         Ok "1" ->
@@ -1256,6 +1281,13 @@ update msg model =
             ( { model | showResultSpoilers = value }
             , saveToLocalStorage
                 "show-spoilers"
+                (if value then "1" else "0")
+            )
+
+        ShowSummaryChanged value ->
+            ( { model | showResultSummary = value }
+            , saveToLocalStorage
+                "show-summary"
                 (if value then "1" else "0")
             )
 
@@ -2966,7 +2998,7 @@ documentDecoder =
     Field.attempt "ac" Decode.int <| \ac ->
     Field.attempt "actions" Decode.string <| \actions ->
     Field.attempt "activate" Decode.string <| \activate ->
-    Field.attempt "advanced_domain_spell" Decode.string <| \advancedDomainSpell ->
+    Field.attempt "advanced_domain_spell_markdown" Decode.string <| \advancedDomainSpell ->
     Field.attempt "alignment" Decode.string <| \alignment ->
     Field.attempt "ammunition" Decode.string <| \ammunition ->
     Field.attempt "anathema" Decode.string <| \anathema ->
@@ -2974,33 +3006,33 @@ documentDecoder =
     Field.attempt "area" Decode.string <| \area ->
     Field.attempt "area_of_concern" Decode.string <| \areaOfConcern ->
     Field.attempt "armor_category" Decode.string <| \armorCategory ->
-    Field.attempt "armor_group" Decode.string <| \armorGroup ->
+    Field.attempt "armor_group_markdown" Decode.string <| \armorGroup ->
     Field.attempt "aspect" Decode.string <| \aspect ->
     Field.attempt "attack_proficiency" stringListDecoder <| \attackProficiencies ->
     Field.attempt "breadcrumbs" Decode.string <| \breadcrumbs ->
-    Field.attempt "bloodline" stringListDecoder <| \bloodlines ->
+    Field.attempt "bloodline_markdown" Decode.string <| \bloodlines ->
     Field.attempt "bulk_raw" Decode.string <| \bulk ->
     Field.attempt "charisma" Decode.int <| \charisma ->
     Field.attempt "check_penalty" Decode.int <| \checkPenalty ->
     Field.attempt "cleric_spell" Decode.string <| \clericSpell ->
     Field.attempt "component" (Decode.list Decode.string) <| \components ->
     Field.attempt "constitution" Decode.int <| \constitution ->
-    Field.attempt "cost" Decode.string <| \cost ->
-    Field.attempt "creature_family" Decode.string <| \creatureFamily ->
+    Field.attempt "cost_markdown" Decode.string <| \cost ->
+    Field.attempt "creature_family_markdown" Decode.string <| \creatureFamily ->
     Field.attempt "damage" Decode.string <| \damage ->
     Field.attempt "defense_proficiency" stringListDecoder <| \defenseProficiencies ->
-    Field.attempt "deity" stringListDecoder <| \deities ->
+    Field.attempt "deity_markdown" Decode.string <| \deities ->
     Field.attempt "deity_category" Decode.string <| \deityCategory ->
     Field.attempt "dex_cap" Decode.int <| \dexCap ->
     Field.attempt "dexterity" Decode.int <| \dexterity ->
     Field.attempt "divine_font" stringListDecoder <| \divineFonts ->
-    Field.attempt "domain" stringListDecoder <| \domains ->
-    Field.attempt "domain_spell" Decode.string <| \domainSpell ->
+    Field.attempt "domain_markdown" Decode.string <| \domains ->
+    Field.attempt "domain_spell_markdown" Decode.string <| \domainSpell ->
     Field.attempt "duration_raw" Decode.string <| \duration ->
     Field.attempt "edict" Decode.string <| \edict ->
     Field.attempt "familiar_ability" stringListDecoder <| \familiarAbilities ->
-    Field.attempt "favored_weapon" stringListDecoder <| \favoredWeapons ->
-    Field.attempt "feat" stringListDecoder <| \feats ->
+    Field.attempt "favored_weapon_markdown" Decode.string <| \favoredWeapons ->
+    Field.attempt "feat_markdown" Decode.string <| \feats ->
     Field.attempt "fortitude_save" Decode.int <| \fort ->
     Field.attempt "follower_alignment" stringListDecoder <| \followerAlignments ->
     Field.attempt "frequency" Decode.string <| \frequency ->
@@ -3008,61 +3040,64 @@ documentDecoder =
     Field.attempt "hardness_raw" Decode.string <| \hardness ->
     Field.attempt "heighten" (Decode.list Decode.string) <| \heighten ->
     Field.attempt "hp_raw" Decode.string <| \hp ->
-    Field.attempt "immunity" (Decode.list Decode.string) <| \immunities ->
+    Field.attempt "immunity_markdown" Decode.string <| \immunities ->
     Field.attempt "intelligence" Decode.int <| \intelligence ->
     Field.attempt "item_category" Decode.string <| \itemCategory ->
     Field.attempt "item_subcategory" Decode.string <| \itemSubcategory ->
-    Field.attempt "language" stringListDecoder <| \languages ->
+    Field.attempt "language_markdown" Decode.string <| \languages ->
+    Field.attempt "lesson_markdown" Decode.string <| \lessons ->
     Field.attempt "lesson_type" Decode.string <| \lessonType ->
     Field.attempt "level" Decode.int <| \level ->
-    Field.attempt "mystery" stringListDecoder <| \mysteries ->
+    Field.attempt "search_markdown" Decode.string <| \searchMarkdown ->
+    Field.attempt "mystery_markdown" Decode.string <| \mysteries ->
     Field.attempt "onset_raw" Decode.string <| \onset ->
-    Field.attempt "patron_theme" stringListDecoder <| \patronThemes ->
+    Field.attempt "patron_theme_markdown" Decode.string <| \patronThemes ->
     Field.attempt "perception" Decode.int <| \perception ->
     Field.attempt "perception_proficiency" Decode.string <| \perceptionProficiency ->
     Field.attempt "pfs" Decode.string <| \pfs ->
     Field.attempt "plane_category" Decode.string <| \planeCategory ->
-    Field.attempt "prerequisite" Decode.string <| \prerequisites ->
+    Field.attempt "prerequisite_markdown" Decode.string <| \prerequisites ->
     Field.attempt "price_raw" Decode.string <| \price ->
-    Field.attempt "primary_check" Decode.string <| \primaryCheck ->
+    Field.attempt "primary_check_markdown" Decode.string <| \primaryCheck ->
     Field.attempt "range_raw" Decode.string <| \range ->
     Field.attempt "rarity" Decode.string <| \rarity ->
     Field.attempt "reflex_save" Decode.int <| \ref ->
     Field.attempt "region" Decode.string <| \region->
     Field.attempt "reload_raw" Decode.string <| \reload ->
     Field.attempt "required_abilities" Decode.string <| \requiredAbilities ->
-    Field.attempt "requirement" Decode.string <| \requirements ->
+    Field.attempt "requirement_markdown" Decode.string <| \requirements ->
     Field.attempt "resistance" damageTypeValuesDecoder <| \resistanceValues ->
-    Field.attempt "resistance_raw" (Decode.list Decode.string) <| \resistances ->
-    Field.attempt "saving_throw" Decode.string <| \savingThrow ->
+    Field.attempt "resistance_markdown" Decode.string <| \resistances ->
+    Field.attempt "saving_throw_markdown" Decode.string <| \savingThrow ->
     Field.attempt "saving_throw_proficiency" stringListDecoder <| \savingThrowProficiencies ->
     Field.attempt "school" Decode.string <| \school ->
     Field.attempt "secondary_casters_raw" Decode.string <| \secondaryCasters ->
-    Field.attempt "secondary_check" Decode.string <| \secondaryChecks ->
-    Field.attempt "sense" stringListDecoder <| \senses ->
+    Field.attempt "secondary_check_markdown" Decode.string <| \secondaryChecks ->
+    Field.attempt "sense_markdown" Decode.string <| \senses ->
     Field.attempt "size" stringListDecoder <| \sizes ->
-    Field.attempt "skill" stringListDecoder <| \skills ->
+    Field.attempt "skill_markdown" Decode.string <| \skills ->
     Field.attempt "skill_proficiency" stringListDecoder <| \skillProficiencies ->
-    Field.attempt "source" stringListDecoder <| \sources ->
+    Field.attempt "source_markdown" Decode.string <| \sources ->
     Field.attempt "speed" speedTypeValuesDecoder <| \speedValues ->
-    Field.attempt "speed_raw" Decode.string <| \speed ->
+    Field.attempt "speed_markdown" Decode.string <| \speed ->
     Field.attempt "speed_penalty" Decode.string <| \speedPenalty ->
     Field.attempt "spell_list" Decode.string <| \spellList ->
     Field.attempt "spoilers" Decode.string <| \spoilers ->
-    Field.attempt "stage" stringListDecoder <| \stages ->
+    Field.attempt "stage_markdown" Decode.string <| \stages ->
     Field.attempt "strength" Decode.int <| \strength ->
     Field.attempt "strongest_save" stringListDecoder <| \strongestSaves ->
-    Field.attempt "target" Decode.string <| \targets ->
-    Field.attempt "tradition" stringListDecoder <| \traditions ->
-    Field.attempt "trait_raw" (Decode.list Decode.string) <| \maybeTraits ->
-    Field.attempt "trigger" Decode.string <| \trigger ->
+    Field.attempt "summary" Decode.string <| \summary ->
+    Field.attempt "target_markdown" Decode.string <| \targets ->
+    Field.attempt "tradition_markdown" Decode.string <| \traditions ->
+    Field.attempt "trait_markdown" Decode.string <| \traits ->
+    Field.attempt "trigger_markdown" Decode.string <| \trigger ->
     Field.attempt "usage" Decode.string <| \usage ->
     Field.attempt "vision" Decode.string <| \vision ->
     Field.attempt "weakest_save" stringListDecoder <| \weakestSaves ->
     Field.attempt "weakness" damageTypeValuesDecoder <| \weaknessValues ->
-    Field.attempt "weakness_raw" (Decode.list Decode.string) <| \weaknesses ->
+    Field.attempt "weakness_markdown" Decode.string <| \weaknesses ->
     Field.attempt "weapon_category" Decode.string <| \weaponCategory ->
-    Field.attempt "weapon_group" Decode.string <| \weaponGroup ->
+    Field.attempt "weapon_group_markdown" Decode.string <| \weaponGroup ->
     Field.attempt "weapon_type" Decode.string <| \weaponType ->
     Field.attempt "will_save" Decode.int <| \will ->
     Field.attempt "wisdom" Decode.int <| \wisdom ->
@@ -3072,7 +3107,6 @@ documentDecoder =
         , type_ = type_
         , url = url
         , abilities = Maybe.withDefault [] abilities
-        , abilityBoosts = Maybe.withDefault [] abilityBoosts
         , abilityFlaws = Maybe.withDefault [] abilityFlaws
         , abilityType = abilityType
         , ac = ac
@@ -3090,7 +3124,7 @@ documentDecoder =
         , aspect = aspect
         , attackProficiencies = Maybe.withDefault [] attackProficiencies
         , breadcrumbs = breadcrumbs
-        , bloodlines = Maybe.withDefault [] bloodlines
+        , bloodlines = bloodlines
         , bulk = bulk
         , charisma = charisma
         , checkPenalty = checkPenalty
@@ -3101,18 +3135,18 @@ documentDecoder =
         , creatureFamily = creatureFamily
         , damage = damage
         , defenseProficiencies = Maybe.withDefault [] defenseProficiencies
-        , deities = Maybe.withDefault [] deities
+        , deities = deities
         , deityCategory = deityCategory
         , dexCap = dexCap
         , dexterity = dexterity
         , divineFonts = Maybe.withDefault [] divineFonts
-        , domains = Maybe.withDefault [] domains
+        , domains = domains
         , domainSpell = domainSpell
         , duration = duration
         , edict = edict
         , familiarAbilities = Maybe.withDefault [] familiarAbilities
-        , favoredWeapons = Maybe.withDefault [] favoredWeapons
-        , feats = Maybe.withDefault [] feats
+        , favoredWeapons = favoredWeapons
+        , feats = feats
         , fort = fort
         , followerAlignments = Maybe.withDefault [] followerAlignments
         , frequency = frequency
@@ -3120,16 +3154,17 @@ documentDecoder =
         , hardness = hardness
         , heighten = Maybe.withDefault [] heighten
         , hp = hp
-        , immunities = Maybe.withDefault [] immunities
+        , immunities = immunities
         , intelligence = intelligence
         , itemCategory = itemCategory
         , itemSubcategory = itemSubcategory
-        , languages = Maybe.withDefault [] languages
+        , languages = languages
+        , lessons = lessons
         , lessonType = lessonType
         , level = level
-        , mysteries = Maybe.withDefault [] mysteries
+        , mysteries = mysteries
         , onset = onset
-        , patronThemes = Maybe.withDefault [] patronThemes
+        , patronThemes = patronThemes
         , perception = perception
         , perceptionProficiency = perceptionProficiency
         , pfs = pfs
@@ -3145,34 +3180,41 @@ documentDecoder =
         , requiredAbilities = requiredAbilities
         , requirements = requirements
         , resistanceValues = resistanceValues
-        , resistances = Maybe.withDefault [] resistances
+        , resistances = resistances
         , savingThrow = savingThrow
         , savingThrowProficiencies = Maybe.withDefault [] savingThrowProficiencies
         , school = school
+        , searchMarkdown =
+            searchMarkdown
+                |> Maybe.withDefault ""
+                |> Markdown.Parser.parse
+                |> Result.map (List.map (Markdown.Block.walk mergeInlines))
+                |> Result.mapError (List.map Markdown.Parser.deadEndToString)
         , secondaryCasters = secondaryCasters
         , secondaryChecks = secondaryChecks
-        , senses = Maybe.withDefault [] senses
+        , senses = senses
         , sizes = Maybe.withDefault [] sizes
-        , skills = Maybe.withDefault [] skills
+        , skills = skills
         , skillProficiencies = Maybe.withDefault [] skillProficiencies
-        , sources = Maybe.withDefault [] sources
+        , sources = sources
         , speed = speed
         , speedPenalty = speedPenalty
         , speedValues = speedValues
         , spellList = spellList
         , spoilers = spoilers
-        , stages = Maybe.withDefault [] stages
+        , stages = stages
         , strength = strength
         , strongestSaves = Maybe.withDefault [] strongestSaves
+        , summary = summary
         , targets = targets
-        , traditions = Maybe.withDefault [] traditions
-        , traits = Maybe.withDefault [] maybeTraits
+        , traditions = traditions
+        , traits = traits
         , trigger = trigger
         , usage = usage
         , vision = vision
         , weakestSaves = Maybe.withDefault [] weakestSaves
         , weaknessValues = weaknessValues
-        , weaknesses = Maybe.withDefault [] weaknesses
+        , weaknesses = weaknesses
         , weaponCategory = weaponCategory
         , weaponGroup = weaponGroup
         , weaponType = weaponType
@@ -3258,6 +3300,85 @@ speedTypeValuesDecoder =
         }
 
 
+mergeInlines : Markdown.Block.Block -> Markdown.Block.Block
+mergeInlines block =
+    let
+        inlineTags : List String
+        inlineTags =
+            [ "actions"
+            , "br"
+            , "sup"
+            ]
+    in
+    mapHtmlElementChildren
+        (List.foldl
+            (\child children ->
+                case child of
+                    Markdown.Block.HtmlBlock (Markdown.Block.HtmlElement tagName a c) ->
+                        if List.member tagName inlineTags then
+                            case List.Extra.splitAt (List.length children - 1) children of
+                                -- If previous block is a paragraph, add the block to its inlines
+                                ( before, [ Markdown.Block.Paragraph inlines ] ) ->
+                                    Markdown.Block.HtmlInline (Markdown.Block.HtmlElement tagName a c)
+                                        |> List.singleton
+                                        |> List.append inlines
+                                        |> Markdown.Block.Paragraph
+                                        |> List.singleton
+                                        |> List.append before
+
+                                _ ->
+                                    List.append children [ child ]
+
+                        else
+                            List.append children [ child ]
+
+                    Markdown.Block.Paragraph inlines ->
+                        case List.Extra.splitAt (List.length children - 1) children of
+                            -- If previous block is a paragraph and its last inline is an inline tag,
+                            -- then merge the paragraphs
+                            ( before, [ Markdown.Block.Paragraph prevInlines ] ) ->
+                                case List.Extra.last prevInlines of
+                                    Just (Markdown.Block.HtmlInline (Markdown.Block.HtmlElement tagName _ _)) ->
+                                        if List.member tagName inlineTags then
+                                            List.append
+                                                before
+                                                [ Markdown.Block.Paragraph (List.append prevInlines inlines) ]
+
+                                        else
+                                            List.append children [ child ]
+
+                                    _ ->
+                                        List.append children [ child ]
+
+                            _ ->
+                                List.append children [ child ]
+
+                    _ ->
+                        List.append children [ child ]
+            )
+            []
+        )
+        block
+
+
+mapHtmlElementChildren :
+    (List (Markdown.Block.Block) -> List (Markdown.Block.Block))
+    -> Markdown.Block.Block
+    -> Markdown.Block.Block
+mapHtmlElementChildren mapFun block =
+    case block of
+        Markdown.Block.HtmlBlock (Markdown.Block.HtmlElement name attrs children) ->
+            Markdown.Block.HtmlBlock
+                (Markdown.Block.HtmlElement
+                    name
+                    attrs
+                    (mapFun children)
+                )
+
+        _ ->
+            block
+
+
 getUrl : Model -> Document -> String
 getUrl model doc =
     model.resultBaseUrl ++ doc.url
@@ -3291,6 +3412,36 @@ view model =
 
                 Lavender ->
                     Html.text cssLavender
+
+            , if model.showResultAdditionalInfo then
+                Html.text ""
+
+              else
+                Html.text ".additional-info { display:none; }"
+
+            , if model.showResultSpoilers then
+                Html.text ""
+
+              else
+                Html.text ".spoilers { display:none; }"
+
+            , if model.showResultSummary then
+                Html.text ""
+
+              else
+                Html.text ".summary { display:none; }"
+
+            , if model.showResultTraits then
+                Html.text ""
+
+              else
+                Html.text ".traits { display:none; }"
+
+            , if model.showResultAdditionalInfo && model.showResultSummary then
+                Html.text ""
+
+              else
+                Html.text ".additional-info + hr { display:none; }"
             ]
         , FontAwesome.Styles.css
         , Html.div
@@ -5999,6 +6150,11 @@ viewResultDisplay model =
                 , onCheck = ShowAdditionalInfoChanged
                 , text = "Show additional info"
                 }
+            , viewCheckbox
+                { checked = model.showResultSummary
+                , onCheck = ShowSummaryChanged
+                , text = "Show summary"
+                }
             ]
         )
     ]
@@ -6591,522 +6747,8 @@ viewSingleSearchResult model hit =
                 ]
             ]
 
-        , if model.showResultSpoilers then
-            Html.h3
-                [ HA.class "subtitle"
-                ]
-                [ hit.source.spoilers
-                    |> Maybe.map (\spoiler -> "May contain spoilers from " ++ spoiler)
-                    |> Maybe.withDefault ""
-                    |> Html.text
-                ]
-
-          else
-            Html.text ""
-
-        , if model.showResultTraits then
-            Html.div
-                [ HA.class "row"
-                ]
-                (List.map
-                    viewTrait
-                    (List.concat
-                        [ hit.source.traits
-                            |> List.filter (\trait -> List.member (String.toLower trait) [ "uncommon", "rare", "unique" ])
-
-                        , if hit.source.category == "creature" then
-                            hit.source.alignment
-                                |> Maybe.map List.singleton
-                                |> Maybe.withDefault []
-                                |> \l -> List.append l hit.source.sizes
-
-                          else
-                            []
-
-                        , hit.source.traits
-                            |> List.filter (\trait -> not (List.member (String.toLower trait) [ "uncommon", "rare", "unique" ]))
-                        ]
-                    )
-                )
-
-          else
-            Html.text ""
-
-        , if model.showResultAdditionalInfo then
-            viewSearchResultAdditionalInfo hit
-
-          else
-            Html.text ""
+            , viewMarkdown hit.source.searchMarkdown
         ]
-
-
-viewSearchResultAdditionalInfo : Hit Document -> Html msg
-viewSearchResultAdditionalInfo hit =
-    Html.div
-        [ HA.class "column"
-        , HA.class "gap-tiny"
-        ]
-        (List.append
-            (hit.source.sources
-                |> nonEmptyList
-                |> Maybe.map (viewLabelAndPluralizedText "Source" "Sources")
-                |> Maybe.map List.singleton
-                |> Maybe.withDefault []
-            )
-            (case hit.source.category of
-                "action" ->
-                    Maybe.Extra.values
-                        [ hit.source.frequency
-                            |> Maybe.map (viewLabelAndText "Frequency")
-                        , hit.source.trigger
-                            |> Maybe.map (viewLabelAndText "Trigger")
-                        , hit.source.requirements
-                            |> Maybe.map (viewLabelAndText "Requirements")
-                        ]
-
-                "ancestry" ->
-                    [ Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-medium"
-                        ]
-                        (Maybe.Extra.values
-                            [ hit.source.hp
-                                |> Maybe.map (viewLabelAndText "HP")
-                            , hit.source.sizes
-                                |> nonEmptyList
-                                |> Maybe.map (String.join " or ")
-                                |> Maybe.map (viewLabelAndText "Size")
-                            , hit.source.speed
-                                |> Maybe.map (viewLabelAndText "Speed")
-                            ]
-                        )
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-medium"
-                        ]
-                        (Maybe.Extra.values
-                            [ hit.source.abilityBoosts
-                                |> nonEmptyList
-                                |> Maybe.map (viewLabelAndPluralizedText "Ability Bost" "Ability Boosts")
-                            , hit.source.abilityFlaws
-                                |> nonEmptyList
-                                |> Maybe.map (viewLabelAndPluralizedText "Ability Flaw" "Ability Flaws")
-                            ]
-                        )
-                    ]
-
-                "armor" ->
-                    [ Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-medium"
-                        ]
-                        (Maybe.Extra.values
-                            [ hit.source.price
-                                |> Maybe.map (viewLabelAndText "Price")
-                            , hit.source.ac
-                                |> Maybe.map numberWithSign
-                                |> Maybe.map (viewLabelAndText "AC Bonus")
-                            , hit.source.dexCap
-                                |> Maybe.map numberWithSign
-                                |> Maybe.map (viewLabelAndText "Dex Cap")
-                            , hit.source.checkPenalty
-                                |> Maybe.map numberWithSign
-                                |> Maybe.map (viewLabelAndText "Check Penalty")
-                            , hit.source.speedPenalty
-                                |> Maybe.map (viewLabelAndText "Speed Penalty")
-                            ]
-                        )
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-medium"
-                        ]
-                        (Maybe.Extra.values
-                            [ hit.source.strength
-                                |> Maybe.map String.fromInt
-                                |> Maybe.map (viewLabelAndText "Strength")
-                            , hit.source.bulk
-                                |> Maybe.map (viewLabelAndText "Bulk")
-                            , hit.source.armorGroup
-                                |> Maybe.map (viewLabelAndText "Armor Group")
-                            ]
-                        )
-                    ]
-
-                "background" ->
-                    Maybe.Extra.values
-                        [ hit.source.abilities
-                            |> nonEmptyList
-                            |> Maybe.map (viewLabelAndPluralizedText "Ability" "Abilities")
-                        , hit.source.feats
-                            |> nonEmptyList
-                            |> Maybe.map (viewLabelAndPluralizedText "Feat" "Feats")
-                        , hit.source.skills
-                            |> nonEmptyList
-                            |> Maybe.map (viewLabelAndPluralizedText "Skill" "Skills")
-                        ]
-
-                "bloodline" ->
-                    hit.source.spellList
-                        |> Maybe.map (viewLabelAndText "Spell List")
-                        |> Maybe.map List.singleton
-                        |> Maybe.withDefault []
-
-                "creature" ->
-                    Maybe.Extra.values
-                        [ hit.source.creatureFamily
-                            |> Maybe.map (viewLabelAndText "Creature Family")
-                        , Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            (Maybe.Extra.values
-                                [ hit.source.hp
-                                    |> Maybe.map (viewLabelAndText "HP")
-                                , hit.source.ac
-                                    |> Maybe.map String.fromInt
-                                    |> Maybe.map (viewLabelAndText "AC")
-                                , hit.source.fort
-                                    |> Maybe.map numberWithSign
-                                    |> Maybe.map (viewLabelAndText "Fort")
-                                , hit.source.ref
-                                    |> Maybe.map numberWithSign
-                                    |> Maybe.map (viewLabelAndText "Ref")
-                                , hit.source.will
-                                    |> Maybe.map numberWithSign
-                                    |> Maybe.map (viewLabelAndText "Will")
-                                , hit.source.perception
-                                    |> Maybe.map numberWithSign
-                                    |> Maybe.map (viewLabelAndText "Perception")
-                                ]
-                            )
-                                |> Just
-                        ]
-
-                "deity" ->
-                    Maybe.Extra.values
-                        [ hit.source.divineFonts
-                            |> String.join " or "
-                            |> String.Extra.nonEmpty
-                            |> Maybe.map (viewLabelAndText "Divine Font")
-                        , hit.source.skills
-                            |> nonEmptyList
-                            |> Maybe.map (viewLabelAndPluralizedText "Divine Skill" "Divine Skills")
-                        , hit.source.favoredWeapons
-                            |> nonEmptyList
-                            |> Maybe.map (viewLabelAndPluralizedText "Favored Weapon" "Favored Weapons")
-                        , hit.source.domains
-                            |> nonEmptyList
-                            |> Maybe.map (viewLabelAndPluralizedText "Domain" "Domains")
-                        ]
-
-                "domain" ->
-                    Maybe.Extra.values
-                        [ hit.source.deities
-                            |> nonEmptyList
-                            |> Maybe.map (viewLabelAndPluralizedText "Deity" "Deities")
-                        , Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            (Maybe.Extra.values
-                                [ hit.source.domainSpell
-                                    |> Maybe.map (viewLabelAndText "Domain Spell")
-                                , hit.source.advancedDomainSpell
-                                    |> Maybe.map (viewLabelAndText "Advanced Domain Spell")
-                                ]
-                            )
-                                |> Just
-                        ]
-
-                "eidolon" ->
-                    Maybe.Extra.values
-                        [ hit.source.traditions
-                            |> nonEmptyList
-                            |> Maybe.map (viewLabelAndPluralizedText "Tradition" "Traditions")
-                        ]
-
-                "equipment" ->
-                    Maybe.Extra.values
-                        [ hit.source.price
-                            |> Maybe.map (viewLabelAndText "Price")
-                        , Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            (Maybe.Extra.values
-                                [ hit.source.hands
-                                    |> Maybe.map (viewLabelAndText "Hands")
-                                , hit.source.usage
-                                    |> Maybe.map (viewLabelAndText "Usage")
-                                , hit.source.bulk
-                                    |> Maybe.map (viewLabelAndText "Bulk")
-                                ]
-                            )
-                                |> Just
-                        , Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            (Maybe.Extra.values
-                                [ hit.source.activate
-                                    |> Maybe.map (viewLabelAndText "Activate")
-                                , hit.source.frequency
-                                    |> Maybe.map (viewLabelAndText "Frequency")
-                                , hit.source.trigger
-                                    |> Maybe.map (viewLabelAndText "Trigger")
-                                ]
-                            )
-                                |> Just
-                        ]
-
-                "familiar" ->
-                    hit.source.abilityType
-                        |> Maybe.map (viewLabelAndText "Ability Type")
-                        |> Maybe.map List.singleton
-                        |> Maybe.withDefault []
-
-                "familiar-specific" ->
-                    Maybe.Extra.values
-                        [ hit.source.requiredAbilities
-                            |> Maybe.map (viewLabelAndText "Required Number of Abilities")
-                        , hit.source.familiarAbilities
-                            |> nonEmptyList
-                            |> Maybe.map (viewLabelAndPluralizedText "Granted Ability" "Granted Abilities")
-                        ]
-
-                "feat" ->
-                    Maybe.Extra.values
-                        [ hit.source.frequency
-                            |> Maybe.map (viewLabelAndText "Frequency")
-                        , hit.source.prerequisites
-                            |> Maybe.map (viewLabelAndText "Prerequisites")
-                        , hit.source.trigger
-                            |> Maybe.map (viewLabelAndText "Trigger")
-                        , hit.source.requirements
-                            |> Maybe.map (viewLabelAndText "Requirements")
-                        ]
-
-                "lesson" ->
-                    hit.source.lessonType
-                        |> Maybe.map (viewLabelAndText "Lesson Type")
-                        |> Maybe.map List.singleton
-                        |> Maybe.withDefault []
-
-                "patron" ->
-                    hit.source.spellList
-                        |> Maybe.map (viewLabelAndText "Spell List")
-                        |> Maybe.map List.singleton
-                        |> Maybe.withDefault []
-
-                "relic" ->
-                    Maybe.Extra.values
-                        [ hit.source.aspect
-                            |> Maybe.map (viewLabelAndText "Aspect")
-                        , hit.source.prerequisites
-                            |> Maybe.map (viewLabelAndText "Prerequisite")
-                        ]
-
-                "ritual" ->
-                    [ Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-medium"
-                        ]
-                        (Maybe.Extra.values
-                            [ hit.source.actions
-                                |> Maybe.map (viewLabelAndText "Cast")
-                            , hit.source.cost
-                                |> Maybe.map (viewLabelAndText "Cost")
-                            , hit.source.secondaryCasters
-                                |> Maybe.map (viewLabelAndText "Secondary Casters")
-                            ]
-                        )
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-medium"
-                        ]
-                        (Maybe.Extra.values
-                            [ hit.source.primaryCheck
-                                |> Maybe.map (viewLabelAndText "Primary Check")
-                            , hit.source.secondaryChecks
-                                |> Maybe.map (viewLabelAndText "Secondary Checks")
-                            ]
-                        )
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-medium"
-                        ]
-                        (Maybe.Extra.values
-                            [ hit.source.requirements
-                                |> Maybe.map (viewLabelAndText "Requirements")
-                            ]
-                        )
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-medium"
-                        ]
-                        (Maybe.Extra.values
-                            [ hit.source.range
-                                |> Maybe.map (viewLabelAndText "Range")
-                            , hit.source.targets
-                                |> Maybe.map (viewLabelAndText "Targets")
-                            ]
-                        )
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-medium"
-                        ]
-                        (Maybe.Extra.values
-                            [ hit.source.duration
-                                |> Maybe.map (viewLabelAndText "Duration")
-                            ]
-                        )
-                    , hit.source.heighten
-                        |> String.join ", "
-                        |> String.Extra.nonEmpty
-                        |> Maybe.map (viewLabelAndText "Heightened")
-                        |> Maybe.withDefault (Html.text "")
-                    ]
-
-                "rules" ->
-                    hit.source.breadcrumbs
-                        |> Maybe.map Html.text
-                        |> Maybe.map List.singleton
-                        |> Maybe.withDefault []
-
-                "spell" ->
-                    Maybe.Extra.values
-                        [ hit.source.traditions
-                            |> List.filter (\tradition -> List.member (String.toLower tradition) Data.traditions)
-                            |> nonEmptyList
-                            |> Maybe.map (viewLabelAndPluralizedText "Tradition" "Traditions")
-
-                        , hit.source.traditions
-                            |> List.filter (\tradition -> not (List.member (String.toLower tradition) Data.traditions))
-                            |> nonEmptyList
-                            |> Maybe.map (viewLabelAndPluralizedText "Spell List" "Spell Lists")
-
-                        , Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            (Maybe.Extra.values
-                                [ hit.source.bloodlines
-                                    |> nonEmptyList
-                                    |> Maybe.map (viewLabelAndPluralizedText "Bloodline" "Bloodlines")
-                                , hit.source.domains
-                                    |> nonEmptyList
-                                    |> Maybe.map (viewLabelAndPluralizedText "Domain" "Domains")
-                                , hit.source.mysteries
-                                    |> nonEmptyList
-                                    |> Maybe.map (viewLabelAndPluralizedText "Mystery" "Mysteries")
-                                , hit.source.patronThemes
-                                    |> nonEmptyList
-                                    |> Maybe.map (viewLabelAndPluralizedText "Patron Theme" "Patron Themes")
-                                , hit.source.deities
-                                    |> nonEmptyList
-                                    |> Maybe.map (viewLabelAndPluralizedText "Deity" "Deities")
-                                ]
-                            )
-                                |> Just
-
-                        , Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            (Maybe.Extra.values
-                                [ hit.source.actions
-                                    |> Maybe.map (viewLabelAndText "Cast")
-                                , hit.source.components
-                                    |> nonEmptyList
-                                    |> Maybe.map (viewLabelAndPluralizedText "Component" "Components")
-                                , hit.source.trigger
-                                    |> Maybe.map (viewLabelAndText "Trigger")
-                                , hit.source.requirements
-                                    |> Maybe.map (viewLabelAndText "Requirements")
-                                ]
-                            )
-                                |> Just
-
-                        , Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            (Maybe.Extra.values
-                                [ hit.source.range
-                                    |> Maybe.map (viewLabelAndText "Range")
-                                , hit.source.targets
-                                    |> Maybe.map (viewLabelAndText "Targets")
-                                , hit.source.area
-                                    |> Maybe.map (viewLabelAndText "Area")
-                                ]
-                            )
-                                |> Just
-
-                        , Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            (Maybe.Extra.values
-                                [ hit.source.duration
-                                    |> Maybe.map (viewLabelAndText "Duration")
-                                , hit.source.savingThrow
-                                    |> Maybe.map (viewLabelAndText "Saving Throw")
-                                ]
-                            )
-                                |> Just
-                        , hit.source.heighten
-                            |> String.join ", "
-                            |> String.Extra.nonEmpty
-                            |> Maybe.map (viewLabelAndText "Heightened")
-                        ]
-
-                "weapon" ->
-                    [ Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-medium"
-                        ]
-                        (Maybe.Extra.values
-                            [ hit.source.price
-                                |> Maybe.map (viewLabelAndText "Price")
-                            , hit.source.damage
-                                |> Maybe.map (viewLabelAndText "Damage")
-                            , hit.source.bulk
-                                |> Maybe.map (viewLabelAndText "Bulk")
-                            ]
-                        )
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-medium"
-                        ]
-                        (Maybe.Extra.values
-                            [ hit.source.hands
-                                |> Maybe.map (viewLabelAndText "Hands")
-                            , hit.source.range
-                                |> Maybe.map (viewLabelAndText "Range")
-                            , hit.source.reload
-                                |> Maybe.map (viewLabelAndText "Reload")
-                            ]
-                        )
-                    , hit.source.ammunition
-                        |> Maybe.map (viewLabelAndText "Ammunition")
-                        |> Maybe.withDefault (Html.text "")
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-medium"
-                        ]
-                        (Maybe.Extra.values
-                            [ hit.source.weaponCategory
-                                |> Maybe.map (viewLabelAndText "Category")
-                            , hit.source.weaponGroup
-                                |> Maybe.map (viewLabelAndText "Group")
-                            ]
-                        )
-                    ]
-
-                _ ->
-                    []
-            )
-        )
 
 
 viewSearchResultGrid : Model -> Html Msg
@@ -7193,7 +6835,7 @@ viewSearchResultGridCell model hit column =
                     |> Html.text
 
             [ "ability_boost" ] ->
-                hit.source.abilityBoosts
+                hit.source.abilities
                     |> String.join ", "
                     |> Html.text
 
@@ -7251,7 +6893,7 @@ viewSearchResultGridCell model hit column =
             [ "armor_group" ] ->
                 hit.source.armorGroup
                     |> Maybe.withDefault ""
-                    |> Html.text
+                    |> parseAndViewAsMarkdown
 
             [ "aspect" ] ->
                 hit.source.aspect
@@ -7275,9 +6917,8 @@ viewSearchResultGridCell model hit column =
 
             [ "bloodline" ] ->
                 hit.source.bloodlines
-                    |> List.map String.Extra.toTitleCase
-                    |> String.join ", "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "bulk" ] ->
                 hit.source.bulk
@@ -7304,7 +6945,7 @@ viewSearchResultGridCell model hit column =
             [ "creature_family" ] ->
                 hit.source.creatureFamily
                     |> Maybe.withDefault ""
-                    |> Html.text
+                    |> parseAndViewAsMarkdown
 
             [ "component" ] ->
                 hit.source.components
@@ -7321,13 +6962,12 @@ viewSearchResultGridCell model hit column =
             [ "cost" ] ->
                 hit.source.cost
                     |> Maybe.withDefault ""
-                    |> Html.text
+                    |> parseAndViewAsMarkdown
 
             [ "deity" ] ->
                 hit.source.deities
-                    |> List.map String.Extra.toTitleCase
-                    |> String.join ", "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "deity_category" ] ->
                 hit.source.deityCategory
@@ -7373,9 +7013,8 @@ viewSearchResultGridCell model hit column =
 
             [ "domain" ] ->
                 hit.source.domains
-                    |> List.map String.Extra.toTitleCase
-                    |> String.join ", "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "duration" ] ->
                 hit.source.duration
@@ -7389,14 +7028,13 @@ viewSearchResultGridCell model hit column =
 
             [ "favored_weapon" ] ->
                 hit.source.favoredWeapons
-                    |> List.map String.Extra.toTitleCase
-                    |> String.join " or "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "feat" ] ->
                 hit.source.feats
-                    |> String.join ", "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "follower_alignment" ] ->
                 hit.source.followerAlignments
@@ -7436,8 +7074,8 @@ viewSearchResultGridCell model hit column =
 
             [ "immunity" ] ->
                 hit.source.immunities
-                    |> String.join ", "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "intelligence" ] ->
                 hit.source.intelligence
@@ -7457,8 +7095,13 @@ viewSearchResultGridCell model hit column =
 
             [ "language" ] ->
                 hit.source.languages
-                    |> String.join ", "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
+
+            [ "lesson" ] ->
+                hit.source.lessons
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "level" ] ->
                 hit.source.level
@@ -7468,9 +7111,8 @@ viewSearchResultGridCell model hit column =
 
             [ "mystery" ] ->
                 hit.source.mysteries
-                    |> List.map String.Extra.toTitleCase
-                    |> String.join ", "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "name" ] ->
                 Html.a
@@ -7487,9 +7129,8 @@ viewSearchResultGridCell model hit column =
 
             [ "patron_theme" ] ->
                 hit.source.patronThemes
-                    |> List.map String.Extra.toTitleCase
-                    |> String.join ", "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "perception" ] ->
                 hit.source.perception
@@ -7515,7 +7156,7 @@ viewSearchResultGridCell model hit column =
             [ "prerequisite" ] ->
                 hit.source.prerequisites
                     |> Maybe.withDefault ""
-                    |> Html.text
+                    |> parseAndViewAsMarkdown
 
             [ "price" ] ->
                 hit.source.price
@@ -7525,7 +7166,7 @@ viewSearchResultGridCell model hit column =
             [ "primary_check" ] ->
                 hit.source.primaryCheck
                     |> Maybe.withDefault ""
-                    |> Html.text
+                    |> parseAndViewAsMarkdown
 
             [ "range" ] ->
                 hit.source.range
@@ -7557,12 +7198,12 @@ viewSearchResultGridCell model hit column =
             [ "requirement" ] ->
                 hit.source.requirements
                     |> Maybe.withDefault ""
-                    |> Html.text
+                    |> parseAndViewAsMarkdown
 
             [ "resistance" ] ->
                 hit.source.resistances
-                    |> String.join ", "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "resistance", type_ ] ->
                 hit.source.resistanceValues
@@ -7574,7 +7215,7 @@ viewSearchResultGridCell model hit column =
             [ "saving_throw" ] ->
                 hit.source.savingThrow
                     |> Maybe.withDefault ""
-                    |> Html.text
+                    |> parseAndViewAsMarkdown
 
             [ "saving_throw_proficiency" ] ->
                 Html.div
@@ -7604,13 +7245,12 @@ viewSearchResultGridCell model hit column =
             [ "secondary_check" ] ->
                 hit.source.secondaryChecks
                     |> Maybe.withDefault ""
-                    |> Html.text
+                    |> parseAndViewAsMarkdown
 
             [ "sense" ] ->
                 hit.source.senses
-                    |> List.map String.Extra.toSentenceCase
-                    |> String.join ", "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "size" ] ->
                 hit.source.sizes
@@ -7619,8 +7259,8 @@ viewSearchResultGridCell model hit column =
 
             [ "skill" ] ->
                 hit.source.skills
-                    |> String.join ", "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "skill_proficiency" ] ->
                 Html.div
@@ -7638,13 +7278,13 @@ viewSearchResultGridCell model hit column =
 
             [ "source" ] ->
                 hit.source.sources
-                    |> String.join ", "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "speed" ] ->
                 hit.source.speed
                     |> Maybe.withDefault ""
-                    |> Html.text
+                    |> parseAndViewAsMarkdown
 
             [ "speed", type_ ] ->
                 hit.source.speedValues
@@ -7664,18 +7304,9 @@ viewSearchResultGridCell model hit column =
                     |> Html.text
 
             [ "stage" ] ->
-                Html.div
-                    [ HA.class "column"
-                    , HA.class "gap-small"
-                    ]
-                    (List.indexedMap
-                        (\idx stage ->
-                            Html.div
-                                []
-                                [ Html.text ("Stage " ++ (String.fromInt (idx + 1)) ++ ": " ++ stage) ]
-                        )
-                        hit.source.stages
-                    )
+                hit.source.stages
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "strength" ] ->
                 hit.source.strength
@@ -7690,26 +7321,30 @@ viewSearchResultGridCell model hit column =
                     |> String.join ", "
                     |> Html.text
 
+            [ "summary" ] ->
+                hit.source.summary
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
+
             [ "target" ] ->
                 hit.source.targets
                     |> Maybe.withDefault ""
-                    |> Html.text
+                    |> parseAndViewAsMarkdown
 
             [ "tradition" ] ->
                 hit.source.traditions
-                    |> List.map String.Extra.toTitleCase
-                    |> String.join ", "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "trait" ] ->
                 hit.source.traits
-                    |> String.join ", "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "trigger" ] ->
                 hit.source.trigger
                     |> Maybe.withDefault ""
-                    |> Html.text
+                    |> parseAndViewAsMarkdown
 
             [ "type" ] ->
                 Html.text hit.source.type_
@@ -7727,7 +7362,7 @@ viewSearchResultGridCell model hit column =
             [ "weapon_group" ] ->
                 hit.source.weaponGroup
                     |> Maybe.withDefault ""
-                    |> Html.text
+                    |> parseAndViewAsMarkdown
 
             [ "weapon_type" ] ->
                 hit.source.weaponType
@@ -7743,8 +7378,8 @@ viewSearchResultGridCell model hit column =
 
             [ "weakness" ] ->
                 hit.source.weaknesses
-                    |> String.join ", "
-                    |> Html.text
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "weakness", type_ ] ->
                 hit.source.weaknessValues
@@ -7768,6 +7403,160 @@ viewSearchResultGridCell model hit column =
             _ ->
                 Html.text ""
         ]
+
+
+parseAndViewAsMarkdown : String -> Html msg
+parseAndViewAsMarkdown string =
+    if String.isEmpty string then
+        Html.text ""
+
+    else
+        string
+            |> Markdown.Parser.parse
+            |> Result.map (List.map (Markdown.Block.walk mergeInlines))
+            |> Result.mapError (List.map Markdown.Parser.deadEndToString)
+            |> viewMarkdown
+
+
+viewMarkdown : ParsedMarkdownResult -> Html msg
+viewMarkdown markdown =
+    case markdown of
+        Ok blocks ->
+            case Markdown.Renderer.render markdownRenderer blocks of
+                Ok v ->
+                    Html.div
+                        [ HA.class "column"
+                        , HA.class "gap-small"
+                        ]
+                        v
+
+                Err err ->
+                    Html.text err
+
+        Err errors ->
+            Html.div
+                [ HA.style "color" "red" ]
+                (List.map Html.text errors)
+
+
+markdownRenderer : Markdown.Renderer.Renderer (Html msg)
+markdownRenderer =
+    let
+        defaultRenderer =
+            Markdown.Renderer.defaultHtmlRenderer
+    in
+    { defaultRenderer
+        | html =
+            Markdown.Html.oneOf
+                [ Markdown.Html.tag "actions"
+                    (\string _ ->
+                        viewTextWithActionIcons string
+                    )
+                    |> Markdown.Html.withAttribute "string"
+                , Markdown.Html.tag "additional-info"
+                    (\content ->
+                        Html.div
+                            [ HA.class "column"
+                            , HA.class "gap-tiny"
+                            , HA.class "additional-info"
+                            ]
+                            content
+                    )
+                , Markdown.Html.tag "b"
+                    (\content ->
+                        Html.span
+                            [ HA.style "font-weight" "700" ]
+                            content
+                    )
+                , Markdown.Html.tag "br"
+                    (\_ ->
+                        Html.br
+                            []
+                            []
+                    )
+                , Markdown.Html.tag "center"
+                    (\content ->
+                        Html.div
+                            [ HA.class "column"
+                            , HA.class "gap-medium"
+                            , HA.class "align-center"
+                            ]
+                            content
+                    )
+                , Markdown.Html.tag "spoilers"
+                    (\content ->
+                        Html.h3
+                            [ HA.class "row"
+                            , HA.class "subtitle"
+                            , HA.class "spoilers"
+                            ]
+                            content
+                    )
+                , Markdown.Html.tag "summary"
+                    (\content ->
+                        Html.div
+                            [ HA.class "summary"
+                            ]
+                            content
+                    )
+                , Markdown.Html.tag "sup"
+                    (\content ->
+                        Html.sup
+                            []
+                            content
+                    )
+                , Markdown.Html.tag "trait"
+                    (\label url _ ->
+                        viewTrait url label
+                    )
+                    |> Markdown.Html.withAttribute "label"
+                    |> Markdown.Html.withOptionalAttribute "url"
+                , Markdown.Html.tag "traits"
+                    (\content ->
+                        Html.div
+                            [ HA.class "row"
+                            , HA.class "traits"
+                            ]
+                            content
+                    )
+                , Markdown.Html.tag "ul"
+                    (\content ->
+                        Html.ul
+                            []
+                            content
+                    )
+                , Markdown.Html.tag "row"
+                    (\maybeGap content ->
+                        Html.div
+                            [ HA.class "row"
+                            , HA.class "wrap"
+                            , HAE.attributeMaybe
+                                (\gap -> HA.class ("gap-" ++ gap))
+                                maybeGap
+                            ]
+                            content
+                    )
+                    |> Markdown.Html.withOptionalAttribute "gap"
+                , Markdown.Html.tag "column"
+                    (\gap content ->
+                        Html.div
+                            [ HA.class "column"
+                            , HA.class ("gap-" ++ gap)
+                            , HA.style "flex" "1"
+                            ]
+                            content
+                    )
+                    |> Markdown.Html.withAttribute "gap"
+                ]
+
+        , link = \link contents ->
+            Html.a
+                [ HA.href link.destination
+                , HA.target "_blank"
+                , HAE.attributeIf (String.startsWith "http" link.destination) (HA.class "external-link")
+                ]
+                contents
+    }
 
 
 getDamageTypeValue : String -> DamageTypeValues -> Maybe Int
@@ -7972,13 +7761,23 @@ replaceActionLigatures text ( find, replace ) rem =
                 [ Html.text text ]
 
 
-viewTrait : String -> Html msg
-viewTrait trait =
+viewTrait : Maybe String -> String -> Html msg
+viewTrait maybeUrl trait =
     Html.div
         [ HA.class "trait"
         , getTraitClass trait
         ]
-        [ Html.text trait ]
+        [ case maybeUrl of
+            Just url ->
+                Html.a
+                    [ HA.href url
+                    , HA.target "_blank"
+                    ]
+                    [ Html.text trait ]
+
+            Nothing ->
+                Html.text trait
+        ]
 
 
 getTraitClass : String -> Html.Attribute msg
@@ -8340,6 +8139,11 @@ css =
         margin: 0;
     }
 
+    hr {
+        margin: 0;
+        width: 100%;
+    }
+
     input[type=text], input[type=number] {
         background-color: transparent;
         border-width: 0;
@@ -8361,6 +8165,14 @@ css =
         border-style: none;
         border-image: none;
         outline: 0;
+    }
+
+    p {
+        margin: 0;
+    }
+
+    sup > p {
+        display: inline-block;
     }
 
     select {
@@ -8473,6 +8285,11 @@ css =
 
     .column:empty, .row:empty, .grid:empty {
         display: none;
+    }
+
+    .external-link {
+        color: var(--color-external-link);
+        font-style: italic;
     }
 
     .fill-width-with-padding {
@@ -8676,11 +8493,11 @@ css =
         padding: 4px 9px;
     }
 
-    .title a {
+    .title a, .trait a {
         text-decoration: none;
     }
 
-    .title a:hover {
+    .title a:hover, .trait a:hover {
         text-decoration: underline;
     }
 
@@ -8792,6 +8609,7 @@ cssDark =
         --color-element-inactive-border: #6c6242;
         --color-element-inactive-text: #656148;
         --color-element-text: #cbc18f;
+        --color-external-link: #00ffff;
         --color-subelement-bg: #806e45;
         --color-subelement-text: #111111;
         --color-inactive-text: #999999;
@@ -8819,6 +8637,7 @@ cssDead =
         --color-element-inactive-border: #6c6242;
         --color-element-inactive-text: #656148;
         --color-element-text: #e6d8ad;
+        --color-external-link: #0000ff;
         --color-subelement-bg: #709cab;
         --color-subelement-text: #0f0f0f;
         --color-inactive-text: #999999;
@@ -8846,6 +8665,7 @@ cssLight =
         --color-element-inactive-border: #6c6242;
         --color-element-inactive-text: #87805f;
         --color-element-text: #cbc18f;
+        --color-external-link: #0000ff;
         --color-subelement-bg: #cbc18f;
         --color-subelement-text: #111111;
         --color-inactive-text: #999999;
@@ -8873,6 +8693,7 @@ cssPaper =
         --color-element-inactive-border: #48412c;
         --color-element-inactive-text: #87805f;
         --color-element-text: #cbc18f;
+        --color-external-link: #0000ff;
         --color-subelement-bg: #dbd0bc;
         --color-subelement-text: #111111;
         --color-inactive-text: #999999;
@@ -8900,6 +8721,7 @@ cssExtraContrast =
         --color-element-inactive-border: #6c6242;
         --color-element-inactive-text: #656148;
         --color-element-text: #cbc18f;
+        --color-external-link: #00ffff;
         --color-subelement-bg: #769477;
         --color-subelement-text: #111111;
         --color-inactive-text: #999999;
@@ -8927,6 +8749,7 @@ cssLavender =
         --color-element-inactive-border: #6c6242;
         --color-element-inactive-text: #656148;
         --color-element-text: #cbc18f;
+        --color-external-link: #0000ff;
         --color-subelement-bg: #f0e6ff;
         --color-subelement-text: #111111;
         --color-inactive-text: #999999;
