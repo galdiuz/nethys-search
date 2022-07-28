@@ -2361,7 +2361,10 @@ queryToParamsDict query =
 updateModelFromParams : Dict String String -> Model -> Model
 updateModelFromParams params model =
     { model
-        | query = Maybe.withDefault "" (Dict.get "q" params)
+        | query =
+            Dict.get "q" params
+                |> Maybe.Extra.orElse (Dict.get "query" params)
+                |> Maybe.withDefault ""
         , queryType =
             case Dict.get "type" params of
                 Just "eqs" ->
