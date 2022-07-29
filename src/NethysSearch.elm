@@ -4038,7 +4038,7 @@ viewQueryType model =
         ]
     , Html.div
         []
-        [ Html.text "With the complex query type you can write queries using Elasticsearch Query String syntax. The general idea is that you can search in specific fields by searching "
+        [ Html.text "The standard query type behaves like most search engines, searching on keywords. The complex query type instead allows you to write queries using Elasticsearch Query String syntax. The general idea is that you can search in specific fields by searching "
         , Html.span
             [ HA.class "monospace" ]
             [ Html.text "field:value" ]
