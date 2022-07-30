@@ -3,6 +3,17 @@ module Data exposing (..)
 import String.Extra
 
 
+abilities : List String
+abilities =
+    [ "strength"
+    , "dexterity"
+    , "constitution"
+    , "intelligence"
+    , "wisdom"
+    , "charisma"
+    ]
+
+
 alignments : List ( String, String )
 alignments =
     [ ( "ce", "Chaotic Evil" )
@@ -206,7 +217,7 @@ predefinedColumnConfigurations =
     , { columns = [ "armor_category", "ac", "dex_cap", "check_penalty", "speed_penalty", "strength", "bulk", "armor_group", "trait" ]
       , label = "Armor"
       }
-    , { columns = [ "ability_boost", "skill", "feat", "rarity", "pfs", "region" ]
+    , { columns = [ "ability", "skill", "feat", "rarity", "pfs", "source" ]
       , label = "Backgrounds"
       }
     , { columns = [ "ability", "hp", "attack_proficiency", "defense_proficiency", "saving_throw_proficiency", "perception_proficiency", "skill_proficiency", "rarity", "pfs" ]
@@ -245,6 +256,15 @@ predefinedColumnConfigurations =
     ]
 
 
+rarities : List String
+rarities =
+    [ "common"
+    , "uncommon"
+    , "rare"
+    , "unique"
+    ]
+
+
 saves : List String
 saves =
     [ "fortitude"
@@ -261,6 +281,28 @@ sizes =
     , "large"
     , "huge"
     , "gargantuan"
+    ]
+
+
+skills : List String
+skills =
+    [ "acrobatics"
+    , "arcana"
+    , "athletics"
+    , "crafting"
+    , "deception"
+    , "diplomacy"
+    , "intimidation"
+    , "lore"
+    , "medicine"
+    , "nature"
+    , "occultism"
+    , "performance"
+    , "religion"
+    , "society"
+    , "stealth"
+    , "survival"
+    , "thievery"
     ]
 
 

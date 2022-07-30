@@ -264,7 +264,9 @@ type Theme
 
 
 type Msg
-    = ActionsFilterAdded String
+    = AbilityFilterAdded String
+    | AbilityFilterRemoved String
+    | ActionsFilterAdded String
     | ActionsFilterRemoved String
     | AlignmentFilterAdded String
     | AlignmentFilterRemoved String
@@ -303,6 +305,9 @@ type Msg
     | PfsFilterRemoved String
     | QueryChanged String
     | QueryTypeSelected QueryType
+    | RarityFilterAdded String
+    | RarityFilterRemoved String
+    | RemoveAllAbilityFiltersPressed
     | RemoveAllActionsFiltersPressed
     | RemoveAllAlignmentFiltersPressed
     | RemoveAllComponentFiltersPressed
@@ -310,9 +315,11 @@ type Msg
     | RemoveAllItemCategoryFiltersPressed
     | RemoveAllItemSubcategoryFiltersPressed
     | RemoveAllPfsFiltersPressed
+    | RemoveAllRarityFiltersPressed
     | RemoveAllSavingThrowFiltersPressed
     | RemoveAllSchoolFiltersPressed
     | RemoveAllSizeFiltersPressed
+    | RemoveAllSkillFiltersPressed
     | RemoveAllSortsPressed
     | RemoveAllSourceCategoryFiltersPressed
     | RemoveAllSourceFiltersPressed
@@ -345,6 +352,8 @@ type Msg
     | ShowTraitsChanged Bool
     | SizeFilterAdded String
     | SizeFilterRemoved String
+    | SkillFilterAdded String
+    | SkillFilterRemoved String
     | SortAbilityChanged String
     | SortAdded String SortDir
     | SortOrderChanged Int Int
@@ -401,6 +410,7 @@ type alias Model =
     , defaultQuery : String
     , elasticUrl : String
     , elementHeights : Dict String Int
+    , filteredAbilities : Dict String Bool
     , filteredActions : Dict String Bool
     , filteredAlignments : Dict String Bool
     , filteredComponents : Dict String Bool
@@ -409,9 +419,11 @@ type alias Model =
     , filteredItemCategories : Dict String Bool
     , filteredItemSubcategories : Dict String Bool
     , filteredPfs : Dict String Bool
+    , filteredRarities : Dict String Bool
     , filteredSavingThrows : Dict String Bool
     , filteredSchools : Dict String Bool
     , filteredSizes : Dict String Bool
+    , filteredSkills : Dict String Bool
     , filteredSourceCategories : Dict String Bool
     , filteredSources : Dict String Bool
     , filteredStrongestSaves : Dict String Bool
@@ -502,6 +514,7 @@ init flagsValue =
       , defaultQuery = flags.defaultQuery
       , elasticUrl = flags.elasticUrl
       , elementHeights = Dict.empty
+      , filteredAbilities = Dict.empty
       , filteredActions = Dict.empty
       , filteredAlignments = Dict.empty
       , filteredComponents = Dict.empty
@@ -509,10 +522,12 @@ init flagsValue =
       , filteredFromValues = Dict.empty
       , filteredItemCategories = Dict.empty
       , filteredItemSubcategories = Dict.empty
+      , filteredRarities = Dict.empty
       , filteredSavingThrows = Dict.empty
       , filteredSchools = Dict.empty
       , filteredPfs = Dict.empty
       , filteredSizes = Dict.empty
+      , filteredSkills = Dict.empty
       , filteredSourceCategories = Dict.empty
       , filteredSources = Dict.empty
       , filteredStrongestSaves = Dict.empty
@@ -603,6 +618,16 @@ subscriptions model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        AbilityFilterAdded abilities ->
+            ( model
+            , updateUrl { model | filteredAbilities = toggleBoolDict abilities model.filteredAbilities }
+            )
+
+        AbilityFilterRemoved abilities ->
+            ( model
+            , updateUrl { model | filteredAbilities = Dict.remove abilities model.filteredAbilities }
+            )
+
         ActionsFilterAdded actions ->
             ( model
             , updateUrl { model | filteredActions = toggleBoolDict actions model.filteredActions }
@@ -990,9 +1015,24 @@ update msg model =
             , updateUrl { model | queryType = queryType }
             )
 
+        RarityFilterAdded rarity ->
+            ( model
+            , updateUrl { model | filteredRarities = toggleBoolDict rarity model.filteredRarities }
+            )
+
+        RarityFilterRemoved rarity ->
+            ( model
+            , updateUrl { model | filteredRarities = Dict.remove rarity model.filteredRarities }
+            )
+
         RemoveAllSortsPressed ->
             ( model
             , updateUrl { model | sort = [] }
+            )
+
+        RemoveAllAbilityFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredAbilities = Dict.empty }
             )
 
         RemoveAllActionsFiltersPressed ->
@@ -1030,6 +1070,11 @@ update msg model =
             , updateUrl { model | filteredPfs = Dict.empty }
             )
 
+        RemoveAllRarityFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredRarities = Dict.empty }
+            )
+
         RemoveAllSavingThrowFiltersPressed ->
             ( model
             , updateUrl { model | filteredSavingThrows = Dict.empty }
@@ -1043,6 +1088,11 @@ update msg model =
         RemoveAllSizeFiltersPressed ->
             ( model
             , updateUrl { model | filteredSizes = Dict.empty }
+            )
+
+        RemoveAllSkillFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredSkills = Dict.empty }
             )
 
         RemoveAllSourceCategoryFiltersPressed ->
@@ -1224,6 +1274,16 @@ update msg model =
         SizeFilterRemoved size ->
             ( model
             , updateUrl { model | filteredSizes = Dict.remove size model.filteredSizes }
+            )
+
+        SkillFilterAdded skill ->
+            ( model
+            , updateUrl { model | filteredSkills = toggleBoolDict skill model.filteredSkills }
+            )
+
+        SkillFilterRemoved skill ->
+            ( model
+            , updateUrl { model | filteredSkills = Dict.remove skill model.filteredSkills }
             )
 
         SortAbilityChanged value ->
@@ -1628,6 +1688,14 @@ updateUrl ({ url } as model) =
               , boolDictExcluded model.filteredTypes
                     |> String.join ";"
               )
+            , ( "include-abilities"
+              , boolDictIncluded model.filteredAbilities
+                    |> String.join ";"
+              )
+            , ( "exclude-abilities"
+              , boolDictExcluded model.filteredAbilities
+                    |> String.join ";"
+              )
             , ( "include-actions"
               , boolDictIncluded model.filteredActions
                     |> String.join ";"
@@ -1691,6 +1759,14 @@ updateUrl ({ url } as model) =
               , boolDictExcluded model.filteredPfs
                     |> String.join ";"
               )
+            , ( "include-rarities"
+              , boolDictIncluded model.filteredRarities
+                    |> String.join ";"
+              )
+            , ( "exclude-rarities"
+              , boolDictExcluded model.filteredRarities
+                    |> String.join ";"
+              )
             , ( "include-saving-throws"
               , boolDictIncluded model.filteredSavingThrows
                     |> String.join ";"
@@ -1713,6 +1789,14 @@ updateUrl ({ url } as model) =
               )
             , ( "exclude-sizes"
               , boolDictExcluded model.filteredSizes
+                    |> String.join ";"
+              )
+            , ( "include-skills"
+              , boolDictIncluded model.filteredSkills
+                    |> String.join ";"
+              )
+            , ( "exclude-skills"
+              , boolDictExcluded model.filteredSkills
                     |> String.join ";"
               )
             , ( "include-sources"
@@ -2081,16 +2165,19 @@ buildSearchFilterTerms model =
                       ]
                     ]
             )
-            [ ( "actions.keyword", boolDictIncluded model.filteredActions, False )
+            [ ( "ability", boolDictIncluded model.filteredAbilities, False )
+            , ( "actions.keyword", boolDictIncluded model.filteredActions, False )
             , ( "alignment", boolDictIncluded model.filteredAlignments, False )
             , ( "component", boolDictIncluded model.filteredComponents, model.filterComponentsOperator )
             , ( "creature_family", boolDictIncluded model.filteredCreatureFamilies, False )
             , ( "item_category", boolDictIncluded model.filteredItemCategories, False )
             , ( "item_subcategory", boolDictIncluded model.filteredItemSubcategories, False )
             , ( "pfs", boolDictIncluded model.filteredPfs, False )
+            , ( "rarity", boolDictIncluded model.filteredRarities, False )
             , ( "saving_throw", boolDictIncluded model.filteredSavingThrows, False )
             , ( "school", boolDictIncluded model.filteredSchools, False )
             , ( "size", boolDictIncluded model.filteredSizes, False )
+            , ( "skill", boolDictIncluded model.filteredSkills, False )
             , ( "source", boolDictIncluded model.filteredSources, False )
             , ( "strongest_save", boolDictIncluded model.filteredStrongestSaves, False )
             , ( "tradition", boolDictIncluded model.filteredTraditions, model.filterTraditionsOperator )
@@ -2231,16 +2318,19 @@ buildSearchMustNotTerms model =
                             Nothing
                         ]
             )
-            [ ( "actions.keyword", boolDictExcluded model.filteredActions )
+            [ ( "ability", boolDictExcluded model.filteredAbilities )
+            , ( "actions.keyword", boolDictExcluded model.filteredActions )
             , ( "alignment", boolDictExcluded model.filteredAlignments )
             , ( "component", boolDictExcluded model.filteredComponents )
             , ( "creature_family", boolDictExcluded model.filteredCreatureFamilies )
             , ( "item_category", boolDictExcluded model.filteredItemCategories )
             , ( "item_subcategory", boolDictExcluded model.filteredItemSubcategories )
             , ( "pfs", boolDictExcluded model.filteredPfs )
+            , ( "rarity", boolDictExcluded model.filteredRarities )
             , ( "saving_throw", boolDictExcluded model.filteredSavingThrows )
             , ( "school", boolDictExcluded model.filteredSchools )
             , ( "size", boolDictExcluded model.filteredSizes )
+            , ( "skill", boolDictExcluded model.filteredSkills )
             , ( "source", boolDictExcluded model.filteredSources )
             , ( "strongest_save", boolDictExcluded model.filteredStrongestSaves )
             , ( "tradition", boolDictExcluded model.filteredTraditions )
@@ -2372,6 +2462,7 @@ updateModelFromParams params model =
 
                 _ ->
                     Standard
+        , filteredAbilities = getBoolDictFromParams params ";" "abilities"
         , filteredActions = getBoolDictFromParams params ";" "actions"
         , filteredAlignments = getBoolDictFromParams params ";" "alignments"
         , filteredComponents = getBoolDictFromParams params ";" "components"
@@ -2381,9 +2472,11 @@ updateModelFromParams params model =
         , filteredItemSubcategories = getBoolDictFromParams params ";" "item-subcategories"
         , filteredWeakestSaves = getBoolDictFromParams params ";" "weakest-saves"
         , filteredPfs = getBoolDictFromParams params ";" "pfs"
+        , filteredRarities = getBoolDictFromParams params ";" "rarities"
         , filteredSavingThrows = getBoolDictFromParams params ";" "saving-throws"
         , filteredSchools = getBoolDictFromParams params ";" "schools"
         , filteredSizes = getBoolDictFromParams params ";" "sizes"
+        , filteredSkills = getBoolDictFromParams params ";" "skills"
         , filteredSources = getBoolDictFromParams params ";" "sources"
         , filteredSourceCategories = getBoolDictFromParams params ";" "source-categories"
         , filteredTraditions = getBoolDictFromParams params ";" "traditions"
@@ -3624,6 +3717,16 @@ viewFilters model =
                   , list = boolDictExcluded model.filteredActions
                   , removeMsg = ActionsFilterRemoved
                   }
+                , { class = Nothing
+                  , label = "Include abilities:"
+                  , list = boolDictIncluded model.filteredAbilities
+                  , removeMsg = AbilityFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude abilities:"
+                  , list = boolDictExcluded model.filteredAbilities
+                  , removeMsg = AbilityFilterRemoved
+                  }
                 , { class = Just "trait trait-alignment"
                   , label = "Include alignments:"
                   , list = boolDictIncluded model.filteredAlignments
@@ -3679,6 +3782,16 @@ viewFilters model =
                   , list = boolDictExcluded model.filteredItemSubcategories
                   , removeMsg = ItemSubcategoryFilterRemoved
                   }
+                , { class = Just "trait"
+                  , label = "Include rarity:"
+                  , list = boolDictIncluded model.filteredRarities
+                  , removeMsg = RarityFilterRemoved
+                  }
+                , { class = Just "trait"
+                  , label = "Exclude rarity:"
+                  , list = boolDictExcluded model.filteredRarities
+                  , removeMsg = RarityFilterRemoved
+                  }
                 , { class = Nothing
                   , label = "Include PFS:"
                   , list = boolDictIncluded model.filteredPfs
@@ -3718,6 +3831,16 @@ viewFilters model =
                   , label = "Exclude sizes:"
                   , list = boolDictExcluded model.filteredSizes
                   , removeMsg = SizeFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Include skills:"
+                  , list = boolDictIncluded model.filteredSkills
+                  , removeMsg = SkillFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude skills:"
+                  , list = boolDictExcluded model.filteredSkills
+                  , removeMsg = SkillFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include sources:"
@@ -3873,6 +3996,13 @@ viewQueryOptions model =
                     queryTypeMeasureWrapperId
                     (viewQueryType model)
               )
+            , ( "abilities"
+              , viewFoldableOptionBox
+                    model
+                    "Filter abilities / ability boosts"
+                    filterAbilitiesMeasureWrapperId
+                    (viewFilterAbilities model)
+              )
             , ( "alignments"
               , viewFoldableOptionBox
                     model
@@ -3901,12 +4031,26 @@ viewQueryOptions model =
                     filterPfsMeasureWrapperId
                     (viewFilterPfs model)
               )
+            , ( "rarities"
+              , viewFoldableOptionBox
+                    model
+                    "Filter rarities"
+                    filterRaritiesMeasureWrapperId
+                    (viewFilterRarities model)
+              )
             , ( "sizes"
               , viewFoldableOptionBox
                     model
                     "Filter sizes"
                     filterSizesMeasureWrapperId
                     (viewFilterSizes model)
+              )
+            , ( "skills"
+              , viewFoldableOptionBox
+                    model
+                    "Filter skills"
+                    filterSkillsMeasureWrapperId
+                    (viewFilterSkills model)
               )
             , ( "sources"
               , viewFoldableOptionBox
@@ -4526,6 +4670,38 @@ viewFilterSpells model =
     ]
 
 
+viewFilterAbilities : Model -> List (Html Msg)
+viewFilterAbilities model =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "align-baseline"
+        , HA.class "gap-medium"
+        ]
+        [ Html.button
+            [ HE.onClick RemoveAllAbilityFiltersPressed ]
+            [ Html.text "Reset selection" ]
+        ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (List.map
+            (\ability ->
+                Html.button
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HE.onClick (AbilityFilterAdded ability)
+                    ]
+                    [ Html.text (String.Extra.toTitleCase ability)
+                    , viewFilterIcon (Dict.get ability model.filteredAbilities)
+                    ]
+            )
+            Data.abilities
+        )
+    ]
+
+
 viewFilterAlignments : Model -> List (Html Msg)
 viewFilterAlignments model =
     [ Html.div
@@ -4887,6 +5063,52 @@ viewFilterPfs model =
     ]
 
 
+viewFilterRarities : Model -> List (Html Msg)
+viewFilterRarities model =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "align-baseline"
+        , HA.class "gap-medium"
+        ]
+        [ Html.button
+            [ HE.onClick RemoveAllRarityFiltersPressed ]
+            [ Html.text "Reset selection" ]
+        ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (case model.aggregations of
+            Just (Ok aggregations) ->
+                List.map
+                    (\rarity ->
+                        Html.button
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HA.class "trait"
+                            , HA.class ("trait-" ++ rarity)
+                            , HE.onClick (RarityFilterAdded rarity)
+                            ]
+                            [ Html.text (String.Extra.toTitleCase rarity)
+                            , viewFilterIcon (Dict.get rarity model.filteredRarities)
+                            ]
+                    )
+                    (aggregations.traits
+                        |> List.filter (\trait -> List.member trait Data.rarities)
+                        |> List.filter ((/=) "common")
+                        |> (::) "common"
+                    )
+
+            Just (Err _) ->
+                []
+
+            Nothing ->
+                [ viewScrollboxLoader ]
+        )
+    ]
+
+
 viewFilterSizes : Model -> List (Html Msg)
 viewFilterSizes model =
     [ Html.div
@@ -4917,6 +5139,38 @@ viewFilterSizes model =
                     ]
             )
             Data.sizes
+        )
+    ]
+
+
+viewFilterSkills : Model -> List (Html Msg)
+viewFilterSkills model =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "align-baseline"
+        , HA.class "gap-medium"
+        ]
+        [ Html.button
+            [ HE.onClick RemoveAllSkillFiltersPressed ]
+            [ Html.text "Reset selection" ]
+        ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (List.map
+            (\skill ->
+                Html.button
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HE.onClick (SkillFilterAdded skill)
+                    ]
+                    [ Html.text (String.Extra.toTitleCase skill)
+                    , viewFilterIcon (Dict.get skill model.filteredSkills)
+                    ]
+            )
+            Data.skills
         )
     ]
 
@@ -7911,11 +8165,14 @@ measureWrapperIds : List String
 measureWrapperIds =
     [ queryOptionsMeasureWrapperId
     , queryTypeMeasureWrapperId
+    , filterAbilitiesMeasureWrapperId
     , filterAlignmentsMeasureWrapperId
     , filterCreaturesMeasureWrapperId
     , filterItemCategoriesMeasureWrapperId
     , filterPfsMeasureWrapperId
+    , filterRaritiesMeasureWrapperId
     , filterSizesMeasureWrapperId
+    , filterSkillsMeasureWrapperId
     , filterSourcesMeasureWrapperId
     , filterSpellsMeasureWrapperId
     , filterTraitsMeasureWrapperId
@@ -7942,6 +8199,11 @@ filterTypesMeasureWrapperId =
     "filter-types-measure-wrapper"
 
 
+filterAbilitiesMeasureWrapperId : String
+filterAbilitiesMeasureWrapperId =
+    "filter-abilities-measure-wrapper"
+
+
 filterAlignmentsMeasureWrapperId : String
 filterAlignmentsMeasureWrapperId =
     "filter-alignments-measure-wrapper"
@@ -7962,9 +8224,19 @@ filterPfsMeasureWrapperId =
     "filter-pfs-measure-wrapper"
 
 
+filterRaritiesMeasureWrapperId : String
+filterRaritiesMeasureWrapperId =
+    "filter-rarities-measure-wrapper"
+
+
 filterSizesMeasureWrapperId : String
 filterSizesMeasureWrapperId =
     "filter-sizes-measure-wrapper"
+
+
+filterSkillsMeasureWrapperId : String
+filterSkillsMeasureWrapperId =
+    "filter-skills-measure-wrapper"
 
 
 filterSourcesMeasureWrapperId : String
