@@ -195,8 +195,10 @@ defaultFlags =
 type alias Aggregations =
     { actions : List String
     , creatureFamilies : List String
+    , hands : List String
     , itemCategories : List String
     , itemSubcategories : List { category : String, name : String }
+    , reloads : List String
     , sources : List String
     , traits : List String
     , types : List String
@@ -302,6 +304,8 @@ type Msg
     | FilterWeaknessChanged String
     | FilteredFromValueChanged String String
     | FilteredToValueChanged String String
+    | HandFilterAdded String
+    | HandFilterRemoved String
     | ItemCategoryFilterAdded String
     | ItemCategoryFilterRemoved String
     | ItemSubcategoryFilterAdded String
@@ -317,15 +321,19 @@ type Msg
     | QueryTypeSelected QueryType
     | RarityFilterAdded String
     | RarityFilterRemoved String
+    | ReloadFilterAdded String
+    | ReloadFilterRemoved String
     | RemoveAllAbilityFiltersPressed
     | RemoveAllActionsFiltersPressed
     | RemoveAllAlignmentFiltersPressed
     | RemoveAllComponentFiltersPressed
     | RemoveAllCreatureFamilyFiltersPressed
+    | RemoveAllHandFiltersPressed
     | RemoveAllItemCategoryFiltersPressed
     | RemoveAllItemSubcategoryFiltersPressed
     | RemoveAllPfsFiltersPressed
     | RemoveAllRarityFiltersPressed
+    | RemoveAllReloadFiltersPressed
     | RemoveAllSavingThrowFiltersPressed
     | RemoveAllSchoolFiltersPressed
     | RemoveAllSizeFiltersPressed
@@ -427,10 +435,12 @@ type alias Model =
     , filteredComponents : Dict String Bool
     , filteredCreatureFamilies : Dict String Bool
     , filteredFromValues : Dict String String
+    , filteredHands : Dict String Bool
     , filteredItemCategories : Dict String Bool
     , filteredItemSubcategories : Dict String Bool
     , filteredPfs : Dict String Bool
     , filteredRarities : Dict String Bool
+    , filteredReloads : Dict String Bool
     , filteredSavingThrows : Dict String Bool
     , filteredSchools : Dict String Bool
     , filteredSizes : Dict String Bool
@@ -532,9 +542,11 @@ init flagsValue =
       , filteredComponents = Dict.empty
       , filteredCreatureFamilies = Dict.empty
       , filteredFromValues = Dict.empty
+      , filteredHands = Dict.empty
       , filteredItemCategories = Dict.empty
       , filteredItemSubcategories = Dict.empty
       , filteredRarities = Dict.empty
+      , filteredReloads = Dict.empty
       , filteredSavingThrows = Dict.empty
       , filteredSchools = Dict.empty
       , filteredPfs = Dict.empty
@@ -830,6 +842,16 @@ update msg model =
             , updateUrl updatedModel
             )
 
+        HandFilterAdded subcategory ->
+            ( model
+            , updateUrl { model | filteredHands = toggleBoolDict subcategory model.filteredHands }
+            )
+
+        HandFilterRemoved subcategory ->
+            ( model
+            , updateUrl { model | filteredHands = Dict.remove subcategory model.filteredHands }
+            )
+
         ItemCategoryFilterAdded category ->
             let
                 newFilteredItemCategories : Dict String Bool
@@ -1050,6 +1072,16 @@ update msg model =
             , updateUrl { model | filteredRarities = Dict.remove rarity model.filteredRarities }
             )
 
+        ReloadFilterAdded reload ->
+            ( model
+            , updateUrl { model | filteredReloads = toggleBoolDict reload model.filteredReloads }
+            )
+
+        ReloadFilterRemoved reload ->
+            ( model
+            , updateUrl { model | filteredReloads = Dict.remove reload model.filteredReloads }
+            )
+
         RemoveAllSortsPressed ->
             ( model
             , updateUrl { model | sort = [] }
@@ -1080,6 +1112,11 @@ update msg model =
             , updateUrl { model | filteredCreatureFamilies = Dict.empty }
             )
 
+        RemoveAllHandFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredHands = Dict.empty }
+            )
+
         RemoveAllItemCategoryFiltersPressed ->
             ( model
             , updateUrl { model | filteredItemCategories = Dict.empty }
@@ -1098,6 +1135,11 @@ update msg model =
         RemoveAllRarityFiltersPressed ->
             ( model
             , updateUrl { model | filteredRarities = Dict.empty }
+            )
+
+        RemoveAllReloadFiltersPressed ->
+            ( model
+            , updateUrl { model | filteredReloads = Dict.empty }
             )
 
         RemoveAllSavingThrowFiltersPressed ->
@@ -1767,6 +1809,14 @@ updateUrl ({ url } as model) =
               , boolDictExcluded model.filteredCreatureFamilies
                     |> String.join ";"
               )
+            , ( "include-hands"
+              , boolDictIncluded model.filteredHands
+                    |> String.join ";"
+              )
+            , ( "exclude-hands"
+              , boolDictExcluded model.filteredHands
+                    |> String.join ";"
+              )
             , ( "include-item-categories"
               , boolDictIncluded model.filteredItemCategories
                     |> String.join ";"
@@ -1797,6 +1847,14 @@ updateUrl ({ url } as model) =
               )
             , ( "exclude-rarities"
               , boolDictExcluded model.filteredRarities
+                    |> String.join ";"
+              )
+            , ( "include-reloads"
+              , boolDictIncluded model.filteredReloads
+                    |> String.join ";"
+              )
+            , ( "exclude-reloads"
+              , boolDictExcluded model.filteredReloads
                     |> String.join ";"
               )
             , ( "include-saving-throws"
@@ -2202,10 +2260,12 @@ buildSearchFilterTerms model =
             , ( "alignment", boolDictIncluded model.filteredAlignments, False )
             , ( "component", boolDictIncluded model.filteredComponents, model.filterComponentsOperator )
             , ( "creature_family", boolDictIncluded model.filteredCreatureFamilies, False )
+            , ( "hands.keyword", boolDictIncluded model.filteredHands, False )
             , ( "item_category", boolDictIncluded model.filteredItemCategories, False )
             , ( "item_subcategory", boolDictIncluded model.filteredItemSubcategories, False )
             , ( "pfs", boolDictIncluded model.filteredPfs, False )
             , ( "rarity", boolDictIncluded model.filteredRarities, False )
+            , ( "reload_raw.keyword", boolDictIncluded model.filteredReloads, False )
             , ( "saving_throw", boolDictIncluded model.filteredSavingThrows, False )
             , ( "school", boolDictIncluded model.filteredSchools, False )
             , ( "size", boolDictIncluded model.filteredSizes, False )
@@ -2359,6 +2419,7 @@ buildSearchMustNotTerms model =
             , ( "item_subcategory", boolDictExcluded model.filteredItemSubcategories )
             , ( "pfs", boolDictExcluded model.filteredPfs )
             , ( "rarity", boolDictExcluded model.filteredRarities )
+            , ( "reload_raw.keyword", boolDictExcluded model.filteredReloads )
             , ( "saving_throw", boolDictExcluded model.filteredSavingThrows )
             , ( "school", boolDictExcluded model.filteredSchools )
             , ( "size", boolDictExcluded model.filteredSizes )
@@ -2500,11 +2561,13 @@ updateModelFromParams params model =
         , filteredComponents = getBoolDictFromParams params ";" "components"
         , filteredCreatureFamilies = getBoolDictFromParams params ";" "creature-families"
         , filteredStrongestSaves = getBoolDictFromParams params ";" "strongest-saves"
+        , filteredHands = getBoolDictFromParams params ";" "hands"
         , filteredItemCategories = getBoolDictFromParams params ";" "item-categories"
         , filteredItemSubcategories = getBoolDictFromParams params ";" "item-subcategories"
         , filteredWeakestSaves = getBoolDictFromParams params ";" "weakest-saves"
         , filteredPfs = getBoolDictFromParams params ";" "pfs"
         , filteredRarities = getBoolDictFromParams params ";" "rarities"
+        , filteredReloads = getBoolDictFromParams params ";" "reloads"
         , filteredSavingThrows = getBoolDictFromParams params ";" "saving-throws"
         , filteredSchools = getBoolDictFromParams params ";" "schools"
         , filteredSizes = getBoolDictFromParams params ";" "sizes"
@@ -2894,6 +2957,10 @@ aggregationsDecoder =
         (aggregationBucketDecoder Decode.string)
         <| \creatureFamilies ->
     Field.requireAt
+        [ "aggregations", "hands.keyword" ]
+        (aggregationBucketDecoder Decode.string)
+        <| \hands ->
+    Field.requireAt
         [ "aggregations", "item_category" ]
         (aggregationBucketDecoder Decode.string)
         <| \itemCategories ->
@@ -2909,6 +2976,10 @@ aggregationsDecoder =
             )
         )
         <| \itemSubcategories ->
+    Field.requireAt
+        [ "aggregations", "reload_raw.keyword" ]
+        (aggregationBucketDecoder Decode.string)
+        <| \reloads ->
     Field.requireAt
         [ "aggregations", "source" ]
         (aggregationBucketDecoder Decode.string)
@@ -2928,8 +2999,10 @@ aggregationsDecoder =
     Decode.succeed
         { actions = actions
         , creatureFamilies = creatureFamilies
+        , hands = hands
         , itemCategories = itemCategories
         , itemSubcategories = itemSubcategories
+        , reloads = reloads
         , sources = sources
         , traits = traits
         , types = types
@@ -3914,6 +3987,16 @@ viewFilters model =
                   , removeMsg = CreatureFamilyFilterRemoved
                   }
                 , { class = Nothing
+                  , label = "Include hands:"
+                  , list = boolDictIncluded model.filteredHands
+                  , removeMsg = HandFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude hands:"
+                  , list = boolDictExcluded model.filteredHands
+                  , removeMsg = HandFilterRemoved
+                  }
+                , { class = Nothing
                   , label = "Include item categories:"
                   , list = boolDictIncluded model.filteredItemCategories
                   , removeMsg = ItemCategoryFilterRemoved
@@ -3933,6 +4016,16 @@ viewFilters model =
                   , list = boolDictExcluded model.filteredItemSubcategories
                   , removeMsg = ItemSubcategoryFilterRemoved
                   }
+                , { class = Nothing
+                  , label = "Include PFS:"
+                  , list = boolDictIncluded model.filteredPfs
+                  , removeMsg = PfsFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude PFS:"
+                  , list = boolDictExcluded model.filteredPfs
+                  , removeMsg = PfsFilterRemoved
+                  }
                 , { class = Just "trait"
                   , label = "Include rarity:"
                   , list = boolDictIncluded model.filteredRarities
@@ -3944,14 +4037,14 @@ viewFilters model =
                   , removeMsg = RarityFilterRemoved
                   }
                 , { class = Nothing
-                  , label = "Include PFS:"
-                  , list = boolDictIncluded model.filteredPfs
-                  , removeMsg = PfsFilterRemoved
+                  , label = "Include reload:"
+                  , list = boolDictIncluded model.filteredReloads
+                  , removeMsg = ReloadFilterRemoved
                   }
                 , { class = Nothing
-                  , label = "Exclude PFS:"
-                  , list = boolDictExcluded model.filteredPfs
-                  , removeMsg = PfsFilterRemoved
+                  , label = "Exclude reload:"
+                  , list = boolDictExcluded model.filteredReloads
+                  , removeMsg = ReloadFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include saving throws:"
@@ -5565,6 +5658,80 @@ viewFilterWeapons model =
                     ]
             )
             Data.weaponTypes
+        )
+
+    , Html.h4
+        []
+        [ Html.text "Filter hands" ]
+    , Html.button
+        [ HA.style "align-self" "flex-start"
+        , HA.style "justify-self" "flex-start"
+        , HE.onClick RemoveAllHandFiltersPressed
+        ]
+        [ Html.text "Reset selection" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (case model.aggregations of
+            Just (Ok { hands })->
+                (List.map
+                    (\hand ->
+                        Html.button
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HE.onClick (HandFilterAdded hand)
+                            ]
+                            [ Html.text hand
+                            , viewFilterIcon (Dict.get hand model.filteredHands)
+                            ]
+                    )
+                    (List.sort hands)
+                )
+
+            Just (Err _) ->
+                []
+
+            Nothing ->
+                [ viewScrollboxLoader ]
+        )
+
+    , Html.h4
+        []
+        [ Html.text "Filter reload" ]
+    , Html.button
+        [ HA.style "align-self" "flex-start"
+        , HA.style "justify-self" "flex-start"
+        , HE.onClick RemoveAllReloadFiltersPressed
+        ]
+        [ Html.text "Reset selection" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (case model.aggregations of
+            Just (Ok { reloads })->
+                (List.map
+                    (\reload ->
+                        Html.button
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HE.onClick (ReloadFilterAdded reload)
+                            ]
+                            [ Html.text reload
+                            , viewFilterIcon (Dict.get reload model.filteredReloads)
+                            ]
+                    )
+                    (List.sort reloads)
+                )
+
+            Just (Err _) ->
+                []
+
+            Nothing ->
+                [ viewScrollboxLoader ]
         )
     ]
 
