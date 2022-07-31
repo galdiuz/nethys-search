@@ -7772,7 +7772,6 @@ markdownRenderer =
             Html.a
                 [ HA.href link.destination
                 , HA.target "_blank"
-                , HAE.attributeIf (String.startsWith "http" link.destination) (HA.class "external-link")
                 ]
                 contents
     }
