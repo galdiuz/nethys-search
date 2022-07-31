@@ -255,6 +255,12 @@ type QueryType
     | ElasticsearchQueryString
 
 
+type LoadType
+    = LoadNew
+    | LoadMore
+    | LoadRemaining
+
+
 type ResultDisplay
     = List
     | Table
@@ -312,6 +318,7 @@ type Msg
     | ItemSubcategoryFilterRemoved String
     | LimitTableWidthChanged Bool
     | LoadMorePressed
+    | LoadRemainingPressed
     | LocalStorageValueReceived Decode.Value
     | MenuOpenDelayPassed
     | NoOp
@@ -466,6 +473,7 @@ type alias Model =
     , limitTableWidth : Bool
     , menuOpen : Bool
     , overlayActive : Bool
+    , pageSize : Int
     , query : String
     , queryOptionsOpen : Bool
     , queryType : QueryType
@@ -573,6 +581,7 @@ init flagsValue =
       , limitTableWidth = False
       , menuOpen = False
       , overlayActive = False
+      , pageSize = 50
       , query = ""
       , queryOptionsOpen = False
       , queryType = Standard
@@ -622,7 +631,7 @@ init flagsValue =
         , localStorage_get "theme"
         ]
     )
-        |> searchWithCurrentQuery False
+        |> searchWithCurrentQuery LoadNew
         |> updateTitle
         |> getAggregations
         |> getSourcesAggregation
@@ -723,7 +732,7 @@ update msg model =
             , Cmd.none
             )
                 |> (if not (Dict.isEmpty model.filteredSourceCategories) then
-                        searchWithCurrentQuery False
+                        searchWithCurrentQuery LoadNew
                     else
                         identity
                    )
@@ -926,7 +935,13 @@ update msg model =
             ( model
             , Cmd.none
             )
-                |> searchWithCurrentQuery True
+                |> searchWithCurrentQuery LoadMore
+
+        LoadRemainingPressed ->
+            ( model
+            , Cmd.none
+            )
+                |> searchWithCurrentQuery LoadRemaining
 
         LocalStorageValueReceived value ->
             ( case Decode.decodeValue (Decode.field "key" Decode.string) value of
@@ -1594,7 +1609,7 @@ update msg model =
                     )
             , Cmd.none
             )
-                |> searchWithCurrentQuery False
+                |> searchWithCurrentQuery LoadNew
                 |> updateTitle
 
         UrlRequested urlRequest ->
@@ -2021,8 +2036,8 @@ searchFields =
     ]
 
 
-buildSearchBody : Model -> Encode.Value
-buildSearchBody model =
+buildSearchBody : Model -> Int -> Encode.Value
+buildSearchBody model size =
     let
         filters : List (List ( String, Encode.Value ))
         filters =
@@ -2081,7 +2096,7 @@ buildSearchBody model =
                 ]
           )
             |> Just
-        , Just ( "size", Encode.int 50 )
+        , Just ( "size", Encode.int size )
         , ( "sort"
           , Encode.list identity
                 (if List.isEmpty (getValidSortFields model.sort) then
@@ -2674,10 +2689,10 @@ getQueryParam url param =
         |> Maybe.withDefault ""
 
 
-searchWithCurrentQuery : Bool -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-searchWithCurrentQuery loadMore ( model, cmd ) =
+searchWithCurrentQuery : LoadType -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+searchWithCurrentQuery load ( model, cmd ) =
     if ((Just (getSearchKey model.url) /= model.lastSearchKey)
-        || loadMore
+        || load /= LoadNew
         )
         && (Dict.isEmpty model.filteredSourceCategories
             || Maybe.Extra.isJust model.sourcesAggregation
@@ -2698,13 +2713,21 @@ searchWithCurrentQuery loadMore ( model, cmd ) =
                 { model
                     | lastSearchKey = Just (getSearchKey model.url)
                     , searchResults =
-                        if loadMore then
+                        if load /= LoadNew then
                             model.searchResults
 
                         else
                             []
                     , tracker = Just newTracker
                 }
+
+            size : Int
+            size =
+                if load == LoadRemaining then
+                    10000
+
+                else
+                    model.pageSize
         in
         ( newModel
         , Cmd.batch
@@ -2721,7 +2744,7 @@ searchWithCurrentQuery loadMore ( model, cmd ) =
                 { method = "POST"
                 , url = model.elasticUrl ++ "/_search"
                 , headers = []
-                , body = Http.jsonBody (buildSearchBody newModel)
+                , body = Http.jsonBody (buildSearchBody newModel size)
                 , expect = Http.expectJson GotSearchResult esResultDecoder
                 , timeout = Just 10000
                 , tracker = Just ("search-" ++ String.fromInt newTracker)
@@ -6720,6 +6743,10 @@ viewSearchResults model =
                 |> List.map (Maybe.map List.length)
                 |> List.map (Maybe.withDefault 0)
                 |> List.sum
+
+        remaining : Int
+        remaining =
+            Maybe.withDefault 0 total - resultCount
     in
     Html.div
         [ HA.class "column"
@@ -6792,22 +6819,33 @@ viewSearchResults model =
                                     []
                                 ]
 
-                          else if resultCount < Maybe.withDefault 0 total then
+                          else
                             Html.div
-                                [ HA.class "column"
-                                , HA.class "align-center"
+                                [ HA.class "row"
+                                , HA.class "gap-medium"
+                                , HA.style "justify-content" "center"
                                 , HA.style "position" "sticky"
                                 , HA.style "left" "0"
                                 , HA.style "padding-bottom" "var(--gap-medium)"
                                 ]
-                                [ Html.button
-                                    [ HE.onClick LoadMorePressed
-                                    ]
-                                    [ Html.text "Load more" ]
-                                ]
+                                [ if remaining > model.pageSize then
+                                    Html.button
+                                        [ HE.onClick LoadMorePressed
+                                        ]
+                                        [ Html.text ("Load " ++ String.fromInt model.pageSize ++ " more") ]
 
-                          else
-                            Html.text ""
+                                  else
+                                    Html.text ""
+
+                                , if remaining > 0 && remaining < 1000 then
+                                    Html.button
+                                        [ HE.onClick LoadRemainingPressed
+                                        ]
+                                        [ Html.text ("Load remaining " ++ String.fromInt remaining) ]
+
+                                  else
+                                    Html.text ""
+                                ]
                         ]
                     ]
                 ]
@@ -6841,21 +6879,35 @@ viewSearchResults model =
                         []
                     ]
 
-                  else if resultCount < Maybe.withDefault 0 total then
-                    [ Html.button
-                        [ HE.onClick LoadMorePressed
-                        , HA.style "align-self" "center"
-                        ]
-                        [ Html.text "Load more" ]
-                    ]
-
                   else
-                    []
+                    [ Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-medium"
+                        , HA.style "justify-content" "center"
+                        ]
+                        [ if remaining > model.pageSize then
+                            Html.button
+                                [ HE.onClick LoadMorePressed
+                                ]
+                                [ Html.text ("Load " ++ String.fromInt model.pageSize ++ " more") ]
+
+                          else
+                            Html.text ""
+
+                        , if remaining > 0 && remaining < 1000 then
+                            Html.button
+                                [ HE.onClick LoadRemainingPressed
+                                ]
+                                [ Html.text ("Load remaining " ++ String.fromInt remaining) ]
+
+                          else
+                            Html.text ""
+                        ]
+                    ]
 
                 , if resultCount > 0 then
                     [ Html.button
                         [ HE.onClick ScrollToTopPressed
-                        , HA.style "align-self" "center"
                         ]
                         [ Html.text "Scroll to top" ]
                     ]
