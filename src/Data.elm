@@ -62,8 +62,8 @@ damageTypes =
 
 fields : List ( String, String )
 fields =
-    [ ( "ability", "Ability related to a deity or skill" )
-    , ( "ability_boost", "Ancestry ability boost" )
+    [ ( "ability", "Related abilities or ability boosts" )
+    , ( "ability_boost", "Alias for 'ability'" )
     , ( "ability_flaw", "Ancestry ability flaw" )
     , ( "ability_type", "Familiar ability type (Familiar / Master)" )
     , ( "ac", "[n] Armor class of an armor, creature, or shield" )
@@ -89,7 +89,7 @@ fields =
     , ( "component", "Spell casting components (Material / Somatic / Verbal)" )
     , ( "con", "[n] Alias for 'constitution'" )
     , ( "constitution", "[n] Constitution" )
-    , ( "cost", "Cost to use an action or cast a ritual" )
+    , ( "cost", "Cost to use an action, ritual, or spell" )
     , ( "creature_family", "Creature family" )
     , ( "damage", "Weapon damage" )
     , ( "deed", "Gunslinger way deeds" )
@@ -117,6 +117,7 @@ fields =
     , ( "hands", "Hands required to use item" )
     , ( "hardness", "[n] Hazard or shield hardness" )
     , ( "heighten", "Spell heightens available" )
+    , ( "heighten_level", "All levels a spell can be heightened to (including base level)" )
     , ( "hex_cantrip", "Witch patron theme hex cantrip" )
     , ( "home_plane", "Summoner eidolon home plane" )
     , ( "hp", "[n] Hit points" )
