@@ -3807,7 +3807,7 @@ viewQuery model =
                 []
                 [ Html.text "Query type: Complex" ]
 
-          else if stringContainsChar model.query ":()\"" then
+          else if stringContainsChar model.query ":()\"+-" then
             Html.div
                 [ HA.class "option-container"
                 , HA.class "row"
