@@ -170,7 +170,8 @@ type alias Document =
 
 
 type alias Flags =
-    { currentUrl : String
+    { autofocus : Bool
+    , currentUrl : String
     , defaultQuery : String
     , elasticUrl : String
     , fixedQueryString : String
@@ -182,7 +183,8 @@ type alias Flags =
 
 defaultFlags : Flags
 defaultFlags =
-    { currentUrl = "/"
+    { autofocus = False
+    , currentUrl = "/"
     , defaultQuery = ""
     , elasticUrl = ""
     , fixedQueryString = ""
@@ -433,6 +435,7 @@ port navigation_urlChanged : (String -> msg) -> Sub msg
 
 type alias Model =
     { aggregations : Maybe (Result Http.Error Aggregations)
+    , autofocus : Bool
     , autoQueryType : Bool
     , debounce : Int
     , defaultQuery : String
@@ -542,6 +545,7 @@ init flagsValue =
             parseUrl flags.currentUrl
     in
     ( { aggregations = Nothing
+      , autofocus = flags.autofocus
       , autoQueryType = False
       , debounce = 0
       , defaultQuery = flags.defaultQuery
@@ -2970,13 +2974,15 @@ flagsDecoder : Decode.Decoder Flags
 flagsDecoder =
     Field.require "currentUrl" Decode.string <| \currentUrl ->
     Field.require "elasticUrl" Decode.string <| \elasticUrl ->
+    Field.attempt "autofocus" Decode.bool <| \autofocus ->
     Field.attempt "resultBaseUrl" Decode.string <| \resultBaseUrl ->
     Field.attempt "showHeader" Decode.bool <| \showHeader ->
     Field.attempt "defaultQuery" Decode.string <| \defaultQuery ->
     Field.attempt "fixedQueryString" Decode.string <| \fixedQueryString ->
     Field.attempt "hideFilters" (Decode.list Decode.string) <| \hideFilters ->
     Decode.succeed
-        { currentUrl = currentUrl
+        { autofocus = Maybe.withDefault defaultFlags.autofocus autofocus
+        , currentUrl = currentUrl
         , defaultQuery = Maybe.withDefault defaultFlags.defaultQuery defaultQuery
         , elasticUrl = elasticUrl
         , fixedQueryString = Maybe.withDefault defaultFlags.fixedQueryString fixedQueryString
@@ -3788,7 +3794,7 @@ viewQuery model =
             , HA.class "input-container"
             ]
             [ Html.input
-                [ HA.autofocus True
+                [ HA.autofocus model.autofocus
                 , HA.class "query-input"
                 , HA.placeholder "Enter search query"
                 , HA.type_ "text"
