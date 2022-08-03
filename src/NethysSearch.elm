@@ -288,6 +288,7 @@ type Msg
     | ActionsFilterRemoved String
     | AlignmentFilterAdded String
     | AlignmentFilterRemoved String
+    | AutoQueryTypeChanged Bool
     | ColumnResistanceChanged String
     | ColumnSpeedChanged String
     | ColumnWeaknessChanged String
@@ -432,6 +433,7 @@ port navigation_urlChanged : (String -> msg) -> Sub msg
 
 type alias Model =
     { aggregations : Maybe (Result Http.Error Aggregations)
+    , autoQueryType : Bool
     , debounce : Int
     , defaultQuery : String
     , elasticUrl : String
@@ -540,6 +542,7 @@ init flagsValue =
             parseUrl flags.currentUrl
     in
     ( { aggregations = Nothing
+      , autoQueryType = False
       , debounce = 0
       , defaultQuery = flags.defaultQuery
       , elasticUrl = flags.elasticUrl
@@ -623,7 +626,8 @@ init flagsValue =
                 |> queryToParamsDict
             )
     , Cmd.batch
-        [ localStorage_get "limit-table-width"
+        [ localStorage_get "auto-query-type"
+        , localStorage_get "limit-table-width"
         , localStorage_get "show-additional-info"
         , localStorage_get "show-spoilers"
         , localStorage_get "show-summary"
@@ -681,6 +685,16 @@ update msg model =
         AlignmentFilterRemoved alignment ->
             ( model
             , updateUrl { model | filteredAlignments = Dict.remove alignment model.filteredAlignments }
+            )
+
+        AutoQueryTypeChanged enabled ->
+            ( { model | autoQueryType = enabled }
+            , Cmd.batch
+                [ saveToLocalStorage
+                    "auto-query-type"
+                    (if enabled then "1" else "0")
+                , updateUrl { model | autoQueryType = enabled }
+                ]
             )
 
         ColumnResistanceChanged resistance ->
@@ -945,6 +959,17 @@ update msg model =
 
         LocalStorageValueReceived value ->
             ( case Decode.decodeValue (Decode.field "key" Decode.string) value of
+                Ok "auto-query-type" ->
+                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
+                        Ok "1" ->
+                            { model | autoQueryType = True }
+
+                        Ok "0" ->
+                            { model | autoQueryType = False }
+
+                        _ ->
+                            model
+
                 Ok "theme" ->
                     case Decode.decodeValue (Decode.field "value" Decode.string) value of
                         Ok "dark" ->
@@ -1747,12 +1772,20 @@ updateUrl ({ url } as model) =
         | query =
             [ ( "q", model.query )
             , ( "type"
-              , case model.queryType of
-                    Standard ->
+              , if model.autoQueryType then
+                    if queryCouldBeComplex model.query then
+                        "eqs"
+
+                    else
                         ""
 
-                    ElasticsearchQueryString ->
-                        "eqs"
+                else
+                    case model.queryType of
+                        Standard ->
+                            ""
+
+                        ElasticsearchQueryString ->
+                            "eqs"
               )
             , ( "include-traits"
               , boolDictIncluded model.filteredTraits
@@ -3618,42 +3651,49 @@ viewMenu model =
                         ]
                         [ viewRadioButton
                             { checked = model.theme == Dark
+                            , enabled = True
                             , name = "theme-type"
                             , onInput = ThemeSelected Dark
                             , text = "Dark"
                             }
                         , viewRadioButton
                             { checked = model.theme == Light
+                            , enabled = True
                             , name = "theme-type"
                             , onInput = ThemeSelected Light
                             , text = "Light"
                             }
                         , viewRadioButton
                             { checked = model.theme == Paper
+                            , enabled = True
                             , name = "theme-type"
                             , onInput = ThemeSelected Paper
                             , text = "Paper"
                             }
                         , viewRadioButton
                             { checked = model.theme == ExtraContrast
+                            , enabled = True
                             , name = "theme-type"
                             , onInput = ThemeSelected ExtraContrast
                             , text = "Extra Contrast"
                             }
                         , viewRadioButton
                             { checked = model.theme == Dead
+                            , enabled = True
                             , name = "theme-type"
                             , onInput = ThemeSelected Dead
                             , text = "Theme of the Dead"
                             }
                         , viewRadioButton
                             { checked = model.theme == Lavender
+                            , enabled = True
                             , name = "theme-type"
                             , onInput = ThemeSelected Lavender
                             , text = "Lavender"
                             }
                         , viewRadioButton
                             { checked = model.theme == Blackbird
+                            , enabled = True
                             , name = "theme-type"
                             , onInput = ThemeSelected Blackbird
                             , text = "Blackbird"
@@ -3807,7 +3847,7 @@ viewQuery model =
                 []
                 [ Html.text "Query type: Complex" ]
 
-          else if stringContainsChar model.query ":()\"+-" then
+          else if not model.autoQueryType && queryCouldBeComplex model.query then
             Html.div
                 [ HA.class "option-container"
                 , HA.class "row"
@@ -3821,12 +3861,15 @@ viewQuery model =
                     ]
                     [ FontAwesome.Icon.viewIcon FontAwesome.Solid.exclamation ]
                 , Html.div
-                    [ HE.onClick (QueryTypeSelected ElasticsearchQueryString)
-                    ]
+                    []
                     [ Html.text "Your query contains characters that can be used with the complex query type, but you are currently using the standard query type. Would you like to "
                     , Html.button
-                        []
+                        [ HE.onClick (QueryTypeSelected ElasticsearchQueryString) ]
                         [ Html.text "switch to complex query type" ]
+                    , Html.text " or "
+                    , Html.button
+                        [ HE.onClick (AutoQueryTypeChanged True) ]
+                        [ Html.text "enable automatic query type switching" ]
                     , Html.text "?"
                     ]
                 ]
@@ -4436,15 +4479,22 @@ viewQueryType model =
         ]
         [ viewRadioButton
             { checked = model.queryType == Standard
+            , enabled = not model.autoQueryType
             , name = "query-type"
             , onInput = QueryTypeSelected Standard
             , text = "Standard"
             }
         , viewRadioButton
             { checked = model.queryType == ElasticsearchQueryString
+            , enabled = not model.autoQueryType
             , name = "query-type"
             , onInput = QueryTypeSelected ElasticsearchQueryString
             , text = "Complex"
+            }
+        , viewCheckbox
+            { checked = model.autoQueryType
+            , onCheck = AutoQueryTypeChanged
+            , text = "Automatically set query type based on query"
             }
         ]
     , Html.div
@@ -4675,12 +4725,14 @@ viewFilterTraits model =
             [ Html.text "Reset selection" ]
         , viewRadioButton
             { checked = model.filterTraitsOperator
+            , enabled = True
             , name = "filter-traits"
             , onInput = FilterTraitsOperatorChanged True
             , text = "Include all (AND)"
             }
         , viewRadioButton
             { checked = not model.filterTraitsOperator
+            , enabled = True
             , name = "filter-traits"
             , onInput = FilterTraitsOperatorChanged False
             , text = "Include any (OR)"
@@ -4797,12 +4849,14 @@ viewFilterSpells model =
             [ Html.text "Reset selection" ]
         , viewRadioButton
             { checked = model.filterComponentsOperator
+            , enabled = True
             , name = "filter-components"
             , onInput = FilterComponentsOperatorChanged True
             , text = "Include all (AND)"
             }
         , viewRadioButton
             { checked = not model.filterComponentsOperator
+            , enabled = True
             , name = "filter-components"
             , onInput = FilterComponentsOperatorChanged False
             , text = "Include any (OR)"
@@ -4905,12 +4959,14 @@ viewFilterSpells model =
             [ Html.text "Reset selection" ]
         , viewRadioButton
             { checked = model.filterTraditionsOperator
+            , enabled = True
             , name = "filter-traditions"
             , onInput = FilterTraditionsOperatorChanged True
             , text = "Include all (AND)"
             }
         , viewRadioButton
             { checked = not model.filterTraditionsOperator
+            , enabled = True
             , name = "filter-traditions"
             , onInput = FilterTraditionsOperatorChanged False
             , text = "Include any (OR)"
@@ -6211,12 +6267,14 @@ viewResultDisplay model =
         ]
         [ viewRadioButton
             { checked = model.resultDisplay == List
+            , enabled = True
             , name = "result-display"
             , onInput = ResultDisplayChanged List
             , text = "List"
             }
         , viewRadioButton
             { checked = model.resultDisplay == Table
+            , enabled = True
             , name = "result-display"
             , onInput = ResultDisplayChanged Table
             , text = "Table"
@@ -6705,8 +6763,8 @@ viewCheckbox { checked, onCheck, text } =
         ]
 
 
-viewRadioButton : { checked : Bool, name : String, onInput : msg, text : String } -> Html msg
-viewRadioButton { checked, name, onInput, text } =
+viewRadioButton : { checked : Bool, enabled : Bool, name : String, onInput : msg, text : String } -> Html msg
+viewRadioButton { checked, enabled, name, onInput, text } =
     Html.label
         [ HA.class "row"
         , HA.class "align-baseline"
@@ -6714,6 +6772,7 @@ viewRadioButton { checked, name, onInput, text } =
         [ Html.input
             [ HA.type_ "radio"
             , HA.checked checked
+            , HA.disabled (not enabled)
             , HA.name name
             , HE.onClick onInput
             ]
@@ -8143,6 +8202,15 @@ viewScrollboxLoader =
             ]
             []
         ]
+
+
+queryCouldBeComplex : String -> Bool
+queryCouldBeComplex query =
+    stringContainsChar query ":()\"+-*?"
+        || String.contains " OR " query
+        || String.contains " AND " query
+        || String.contains " || " query
+        || String.contains " && " query
 
 
 stringContainsChar : String -> String -> Bool
