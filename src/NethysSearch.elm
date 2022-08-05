@@ -749,11 +749,6 @@ update msg model =
             ( { model | aggregations = Just result }
             , Cmd.none
             )
-                |> (if not (Dict.isEmpty model.filteredSourceCategories) then
-                        searchWithCurrentQuery LoadNew
-                    else
-                        identity
-                   )
 
         GotElementHeight id height ->
             ( { model | elementHeights = Dict.insert id height model.elementHeights }
@@ -2239,8 +2234,13 @@ getAggregation fun model =
 buildSearchFilterTerms : Model -> List (List ( String, Encode.Value ))
 buildSearchFilterTerms model =
     List.concat
-        [ List.map
-            (\( field, list, isAnd ) ->
+        [ List.concatMap
+            (\( field, dict, isAnd ) ->
+                let
+                    list : List String
+                    list =
+                        boolDictIncluded dict
+                in
                 if List.isEmpty list then
                     []
 
@@ -2307,32 +2307,7 @@ buildSearchFilterTerms model =
                       ]
                     ]
             )
-            [ ( "ability", boolDictIncluded model.filteredAbilities, False )
-            , ( "actions.keyword", boolDictIncluded model.filteredActions, False )
-            , ( "alignment", boolDictIncluded model.filteredAlignments, False )
-            , ( "component", boolDictIncluded model.filteredComponents, model.filterComponentsOperator )
-            , ( "creature_family", boolDictIncluded model.filteredCreatureFamilies, False )
-            , ( "hands.keyword", boolDictIncluded model.filteredHands, False )
-            , ( "item_category", boolDictIncluded model.filteredItemCategories, False )
-            , ( "item_subcategory", boolDictIncluded model.filteredItemSubcategories, False )
-            , ( "pfs", boolDictIncluded model.filteredPfs, False )
-            , ( "rarity", boolDictIncluded model.filteredRarities, False )
-            , ( "reload_raw.keyword", boolDictIncluded model.filteredReloads, False )
-            , ( "saving_throw", boolDictIncluded model.filteredSavingThrows, False )
-            , ( "school", boolDictIncluded model.filteredSchools, False )
-            , ( "size", boolDictIncluded model.filteredSizes, False )
-            , ( "skill", boolDictIncluded model.filteredSkills, False )
-            , ( "source", boolDictIncluded model.filteredSources, False )
-            , ( "strongest_save", boolDictIncluded model.filteredStrongestSaves, False )
-            , ( "tradition", boolDictIncluded model.filteredTraditions, model.filterTraditionsOperator )
-            , ( "trait", boolDictIncluded model.filteredTraits, model.filterTraitsOperator )
-            , ( "type", boolDictIncluded model.filteredTypes, False )
-            , ( "weakest_save", boolDictIncluded model.filteredWeakestSaves, False )
-            , ( "weapon_category", boolDictIncluded model.filteredWeaponCategories, False )
-            , ( "weapon_group", boolDictIncluded model.filteredWeaponGroups, False )
-            , ( "weapon_type", boolDictIncluded model.filteredWeaponTypes, False )
-            ]
-            |> List.concat
+            (filterFields model)
 
         , List.map
             (\( field, value ) ->
@@ -2368,46 +2343,6 @@ buildSearchFilterTerms model =
             )
             (Dict.toList model.filteredToValues)
 
-        , if List.isEmpty (boolDictIncluded model.filteredSourceCategories) then
-            []
-
-          else
-            [ ( "bool"
-              , Encode.object
-                    [ ( "should"
-                      , Encode.list Encode.object
-                            (List.map
-                                (\category ->
-                                    [ ( "terms"
-                                      , Encode.object
-                                            [ ( "source"
-                                              , Encode.list Encode.string
-                                                    (List.filterMap
-                                                        (\source ->
-                                                            if String.toLower source.category == category then
-                                                                Just source.name
-
-                                                            else
-                                                                Nothing
-                                                        )
-                                                        (model.sourcesAggregation
-                                                            |> Maybe.andThen Result.toMaybe
-                                                            |> Maybe.withDefault []
-                                                        )
-                                                    )
-                                              )
-                                            ]
-                                      )
-                                    ]
-                                )
-                                (boolDictIncluded model.filteredSourceCategories)
-                            )
-                      )
-                    ]
-              )
-            ]
-                |> List.singleton
-
         , if String.isEmpty model.fixedQueryString then
             []
 
@@ -2419,8 +2354,13 @@ buildSearchFilterTerms model =
 buildSearchMustNotTerms : Model -> List (List ( String, Encode.Value ))
 buildSearchMustNotTerms model =
     List.concat
-        [ List.map
-            (\( field, list ) ->
+        [ List.concatMap
+            (\( field, dict, _ ) ->
+                let
+                    list : List String
+                    list =
+                        boolDictExcluded dict
+                in
                 if List.isEmpty list then
                     []
 
@@ -2462,31 +2402,7 @@ buildSearchMustNotTerms model =
                             Nothing
                         ]
             )
-            [ ( "ability", boolDictExcluded model.filteredAbilities )
-            , ( "actions.keyword", boolDictExcluded model.filteredActions )
-            , ( "alignment", boolDictExcluded model.filteredAlignments )
-            , ( "component", boolDictExcluded model.filteredComponents )
-            , ( "creature_family", boolDictExcluded model.filteredCreatureFamilies )
-            , ( "item_category", boolDictExcluded model.filteredItemCategories )
-            , ( "item_subcategory", boolDictExcluded model.filteredItemSubcategories )
-            , ( "pfs", boolDictExcluded model.filteredPfs )
-            , ( "rarity", boolDictExcluded model.filteredRarities )
-            , ( "reload_raw.keyword", boolDictExcluded model.filteredReloads )
-            , ( "saving_throw", boolDictExcluded model.filteredSavingThrows )
-            , ( "school", boolDictExcluded model.filteredSchools )
-            , ( "size", boolDictExcluded model.filteredSizes )
-            , ( "skill", boolDictExcluded model.filteredSkills )
-            , ( "source", boolDictExcluded model.filteredSources )
-            , ( "strongest_save", boolDictExcluded model.filteredStrongestSaves )
-            , ( "tradition", boolDictExcluded model.filteredTraditions )
-            , ( "trait", boolDictExcluded model.filteredTraits )
-            , ( "type", boolDictExcluded model.filteredTypes )
-            , ( "weakest_save", boolDictExcluded model.filteredWeakestSaves )
-            , ( "weapon_category", boolDictExcluded model.filteredWeaponCategories )
-            , ( "weapon_group", boolDictExcluded model.filteredWeaponGroups )
-            , ( "weapon_type", boolDictExcluded model.filteredWeaponTypes)
-            ]
-                |> List.concat
+            (filterFields model)
 
         , List.map
             (\category ->
@@ -2728,13 +2644,7 @@ getQueryParam url param =
 
 searchWithCurrentQuery : LoadType -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 searchWithCurrentQuery load ( model, cmd ) =
-    if ((Just (getSearchKey model.url) /= model.lastSearchKey)
-        || load /= LoadNew
-        )
-        && (Dict.isEmpty model.filteredSourceCategories
-            || Maybe.Extra.isJust model.sourcesAggregation
-        )
-    then
+    if (Just (getSearchKey model.url) /= model.lastSearchKey) || load /= LoadNew then
         let
             newTracker : Int
             newTracker =
@@ -2967,6 +2877,13 @@ buildSourcesAggregationBody =
                 ]
           )
         , ( "size", Encode.int 0 )
+        , ( "query"
+          , Encode.object
+                [ ( "match"
+                  , Encode.object [ ( "type", Encode.string "source" ) ]
+                  )
+                ]
+          )
         ]
 
 
@@ -4246,19 +4163,7 @@ viewFilters model =
             , HA.class "gap-medium"
             , HA.class "align-baseline"
             ]
-            (Dict.merge
-                (\field from ->
-                    (::) ( field, Just from, Nothing )
-                )
-                (\field from to ->
-                    (::) ( field, Just from, Just to )
-                )
-                (\field to ->
-                    (::) ( field, Nothing, Just to )
-                )
-                model.filteredFromValues
-                model.filteredToValues
-                []
+            (mergeFromToValues model
                 |> List.map
                     (\( field, maybeFrom, maybeTo ) ->
                         Html.div
@@ -4478,6 +4383,11 @@ viewFoldableOptionBox model label wrapperId content =
 
 viewQueryType : Model -> List (Html Msg)
 viewQueryType model =
+    let
+        currentQuery : String
+        currentQuery =
+            currentQueryAsComplex model
+    in
     [ Html.div
         [ HA.class "row"
         , HA.class "align-baseline"
@@ -4582,7 +4492,25 @@ viewQueryType model =
                 )
             ]
         ]
-    , Html.h3
+
+    , Html.h4
+        []
+        [ Html.text "Current filters as complex query" ]
+    , Html.div
+        [ HA.class "scrollbox"
+        , HA.class "monospace"
+        ]
+        [ if String.isEmpty currentQuery then
+            Html.span
+                [ HA.style "color" "var(--color-inactive-text)" ]
+                [ Html.text "No filters applied"
+                ]
+
+          else
+            Html.text currentQuery
+        ]
+
+    , Html.h4
         []
         [ Html.text "Example queries" ]
     , Html.div
@@ -4649,6 +4577,118 @@ viewQueryType model =
             [ Html.text "resistance.fire:* NOT resistance.all:*" ]
         ]
     ]
+
+
+filterFields : Model -> List ( String, Dict String Bool, Bool )
+filterFields model =
+    [ ( "ability", model.filteredAbilities, False )
+    , ( "actions.keyword", model.filteredActions, False )
+    , ( "alignment", model.filteredAlignments, False )
+    , ( "component", model.filteredComponents, model.filterComponentsOperator )
+    , ( "creature_family", model.filteredCreatureFamilies, False )
+    , ( "hands.keyword", model.filteredHands, False )
+    , ( "item_category", model.filteredItemCategories, False )
+    , ( "item_subcategory", model.filteredItemSubcategories, False )
+    , ( "pfs", model.filteredPfs, False )
+    , ( "rarity", model.filteredRarities, False )
+    , ( "reload_raw.keyword", model.filteredReloads, False )
+    , ( "saving_throw", model.filteredSavingThrows, False )
+    , ( "school", model.filteredSchools, False )
+    , ( "size", model.filteredSizes, False )
+    , ( "skill", model.filteredSkills, False )
+    , ( "source", model.filteredSources, False )
+    , ( "source_category", model.filteredSourceCategories, False )
+    , ( "strongest_save", model.filteredStrongestSaves, False )
+    , ( "tradition", model.filteredTraditions, model.filterTraditionsOperator )
+    , ( "trait", model.filteredTraits, model.filterTraitsOperator )
+    , ( "type", model.filteredTypes, False )
+    , ( "weakest_save", model.filteredWeakestSaves, False )
+    , ( "weapon_category", model.filteredWeaponCategories, False )
+    , ( "weapon_group", model.filteredWeaponGroups, False )
+    , ( "weapon_type", model.filteredWeaponTypes, False )
+    ]
+
+
+mergeFromToValues : Model -> List ( String, Maybe String, Maybe String )
+mergeFromToValues model =
+    Dict.merge
+        (\field from ->
+            (::) ( field, Just from, Nothing )
+        )
+        (\field from to ->
+            (::) ( field, Just from, Just to )
+        )
+        (\field to ->
+            (::) ( field, Nothing, Just to )
+        )
+        model.filteredFromValues
+        model.filteredToValues
+        []
+
+
+currentQueryAsComplex : Model -> String
+currentQueryAsComplex model =
+    let
+        surroundWithQuotes : String -> String
+        surroundWithQuotes s =
+            if String.contains " " s then
+                "\"" ++ s ++ "\""
+
+            else
+                s
+
+        surroundWithParantheses : Dict String Bool -> String -> String
+        surroundWithParantheses dict s =
+            if Dict.size dict > 1 || List.length (boolDictExcluded dict) /= 0 then
+                "(" ++ s ++ ")"
+            else
+                s
+    in
+    [ filterFields model
+        |> List.filterMap
+            (\( field, dict, isAnd ) ->
+                if Dict.isEmpty dict then
+                    Nothing
+
+                else
+                    [ boolDictIncluded dict
+                        |> List.map surroundWithQuotes
+                        |> String.join (if isAnd then " AND " else " OR ")
+                    , boolDictExcluded dict
+                        |> List.map surroundWithQuotes
+                        |> List.map (String.append "-")
+                        |> String.join " "
+                    ]
+                        |> List.filter (not << String.isEmpty)
+                        |> String.join " "
+                        |> surroundWithParantheses dict
+                        |> String.append ":"
+                        |> String.append field
+                        |> Just
+            )
+    , List.map
+        (\( field, maybeFrom, maybeTo ) ->
+            case ( maybeFrom, maybeTo ) of
+                ( Just from, Just to ) ->
+                    if from == to then
+                        field ++ ":" ++ from
+
+                    else
+                        field ++ ":[" ++ from ++ " TO " ++ to ++ "]"
+
+                ( Just from, Nothing ) ->
+                    field ++ ":>=" ++ from
+
+                ( Nothing, Just to ) ->
+                    field ++ ":<=" ++ to
+
+                ( Nothing, Nothing ) ->
+                    ""
+        )
+        (mergeFromToValues model)
+    ]
+        |> List.concat
+        |> String.join " "
 
 
 viewFilterTypes : Model -> List (Html Msg)
