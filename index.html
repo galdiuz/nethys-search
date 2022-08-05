@@ -29,20 +29,6 @@
             }
         });
 
-        app.ports.document_getElementHeight.subscribe(id => {
-            window.requestAnimationFrame(() => {
-                let element = document.getElementById(id);
-                let height = element.scrollHeight;
-                let foldableChildren = element.getElementsByClassName('foldable-container');
-                let childrenHeights = Array.from(foldableChildren, c => c.clientHeight);
-                height -= childrenHeights.reduce((a, b) => a + b, 0);
-                app.ports.document_receiveElementHeight.send({
-                    'id': id,
-                    'height': height,
-                });
-            });
-        });
-
         app.ports.localStorage_get.subscribe(key => {
             let value = localStorage.getItem(key);
             app.ports.localStorage_receive.send({key: key, value: value});
