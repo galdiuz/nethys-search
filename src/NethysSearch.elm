@@ -75,6 +75,7 @@ type alias Document =
     , armorGroup : Maybe String
     , attackProficiencies : List String
     , aspect : Maybe String
+    , baseItems : Maybe String
     , bloodlines : Maybe String
     , breadcrumbs : Maybe String
     , bulk : Maybe String
@@ -3062,8 +3063,9 @@ documentDecoder =
     Field.attempt "armor_group_markdown" Decode.string <| \armorGroup ->
     Field.attempt "aspect" Decode.string <| \aspect ->
     Field.attempt "attack_proficiency" stringListDecoder <| \attackProficiencies ->
-    Field.attempt "breadcrumbs" Decode.string <| \breadcrumbs ->
+    Field.attempt "base_item_markdown" Decode.string <| \baseItems ->
     Field.attempt "bloodline_markdown" Decode.string <| \bloodlines ->
+    Field.attempt "breadcrumbs" Decode.string <| \breadcrumbs ->
     Field.attempt "bulk_raw" Decode.string <| \bulk ->
     Field.attempt "charisma" Decode.int <| \charisma ->
     Field.attempt "check_penalty" Decode.int <| \checkPenalty ->
@@ -3176,8 +3178,9 @@ documentDecoder =
         , armorGroup = armorGroup
         , aspect = aspect
         , attackProficiencies = Maybe.withDefault [] attackProficiencies
-        , breadcrumbs = breadcrumbs
+        , baseItems = baseItems
         , bloodlines = bloodlines
+        , breadcrumbs = breadcrumbs
         , bulk = bulk
         , charisma = charisma
         , checkPenalty = checkPenalty
@@ -3895,7 +3898,7 @@ allFilters =
       , label = "Creature families"
       , view = viewFilterCreatureFamilies
       }
-    , { id = "item-category"
+    , { id = "item-categories"
       , label = "Item categories"
       , view = viewFilterItemCategories
       }
@@ -3919,7 +3922,7 @@ allFilters =
       , label = "Reload"
       , view = viewFilterReload
       }
-    , { id = "saving-throw"
+    , { id = "saving-throws"
       , label = "Saving throws"
       , view = viewFilterSavingThrows
       }
@@ -7305,6 +7308,11 @@ viewSearchResultGridCell model hit column =
                         )
                         hit.source.attackProficiencies
                     )
+
+            [ "base_item" ] ->
+                hit.source.baseItems
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown
 
             [ "bloodline" ] ->
                 hit.source.bloodlines

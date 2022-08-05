@@ -77,6 +77,7 @@ fields =
     , ( "armor_group", "Armor group" )
     , ( "aspect", "Relic gift aspect type" )
     , ( "attack_proficiency", "A class's attack proficiencies" )
+    , ( "base_item", "Base item of a specific magic item" )
     , ( "bloodline", "Sorcerer bloodlines associated with a spell" )
     , ( "bloodline_spell", "Sorcerer bloodline's spells" )
     , ( "bulk", "Item bulk ('L' is 0.1)" )
@@ -324,6 +325,7 @@ sortFields =
     , ( "armor_category", "armor_category", False )
     , ( "armor_group", "armor_group", False )
     , ( "aspect", "aspect", False )
+    , ( "base_item", "base_item.keyword", False )
     , ( "bloodline", "bloodline", False )
     , ( "bulk", "bulk", True )
     , ( "charisma", "charisma", True )
@@ -459,6 +461,7 @@ tableColumns =
     , "armor_group"
     , "aspect"
     , "attack_proficiency"
+    , "base_item"
     , "bloodline"
     , "bulk"
     , "charisma"
