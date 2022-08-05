@@ -269,6 +269,7 @@ type QueryType
 
 type LoadType
     = LoadNew
+    | LoadNewForce
     | LoadMore
     | LoadRemaining
 
@@ -334,6 +335,7 @@ type Msg
     | LocalStorageValueReceived Decode.Value
     | MenuOpenDelayPassed
     | NoOp
+    | PageSizeChanged Int
     | PfsFilterAdded String
     | PfsFilterRemoved String
     | QueryChanged String
@@ -640,6 +642,7 @@ init flagsValue =
     , Cmd.batch
         [ localStorage_get "auto-query-type"
         , localStorage_get "limit-table-width"
+        , localStorage_get "page-size"
         , localStorage_get "show-additional-info"
         , localStorage_get "show-spoilers"
         , localStorage_get "show-summary"
@@ -1016,6 +1019,18 @@ update msg model =
                         _ ->
                             model
 
+                Ok "page-size" ->
+                    case Decode.decodeValue (Decode.field "value" Decode.int) value of
+                        Ok size ->
+                            if List.member size Data.pageSizes then
+                                { model | pageSize = size }
+
+                            else
+                                model
+
+                        Err _ ->
+                            model
+
                 Ok "show-additional-info" ->
                     case Decode.decodeValue (Decode.field "value" Decode.string) value of
                         Ok "1" ->
@@ -1074,6 +1089,14 @@ update msg model =
             ( model
             , Cmd.none
             )
+
+        PageSizeChanged size ->
+            ( { model | pageSize = size }
+            , saveToLocalStorage
+                "page-size"
+                (String.fromInt size)
+            )
+                |> searchWithCurrentQuery LoadNewForce
 
         PfsFilterAdded pfs ->
             ( model
@@ -2636,7 +2659,7 @@ searchWithCurrentQuery load ( model, cmd ) =
                 { model
                     | lastSearchKey = Just (getSearchKey model.url)
                     , searchResults =
-                        if load /= LoadNew then
+                        if load /= LoadNew && load /= LoadNewForce then
                             model.searchResults
 
                         else
@@ -3948,6 +3971,10 @@ allOptions =
     , { id = "sort"
       , label = "Sort results"
       , view = viewSortResults
+      }
+    , { id = "page-size"
+      , label = "Result amount"
+      , view = viewResultPageSize
       }
     ]
 
@@ -6317,6 +6344,28 @@ viewQueryType model =
             [ HA.class "monospace" ]
             [ Html.text "resistance.fire:* NOT resistance.all:*" ]
         ]
+    ]
+
+
+viewResultPageSize : Model -> List (Html Msg)
+viewResultPageSize model =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        ]
+        (List.map
+            (\size ->
+                viewRadioButton
+                    { checked = model.pageSize == size
+                    , enabled = True
+                    , name = "page-size"
+                    , onInput = PageSizeChanged size
+                    , text = String.fromInt size
+                    }
+            )
+            Data.pageSizes
+        )
+    , Html.text "Number of results to load. Smaller numbers gives faster results."
     ]
 
 

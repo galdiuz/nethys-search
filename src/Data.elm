@@ -210,6 +210,11 @@ magicSchools =
     ]
 
 
+pageSizes : List Int
+pageSizes =
+    [ 20, 50, 100, 250 ]
+
+
 predefinedColumnConfigurations : List { columns : List String, label : String }
 predefinedColumnConfigurations =
     [ { columns = [ "hp", "size", "speed", "ability_boost", "ability_flaw", "language", "vision", "rarity", "pfs" ]
