@@ -311,6 +311,7 @@ type Msg
     | CreatureFamilyFilterAdded String
     | CreatureFamilyFilterRemoved String
     | DebouncePassed Int
+    | DeleteColumnConfigurationPressed
     | GotAggregationsResult (Result Http.Error Aggregations)
     | GotSearchResult (Result Http.Error SearchResult)
     | GotSourcesAggregationResult (Result Http.Error (List Source))
@@ -373,6 +374,9 @@ type Msg
     | RemoveAllWeaponGroupFiltersPressed
     | RemoveAllWeaponTypeFiltersPressed
     | ResultDisplayChanged ResultDisplay
+    | SaveColumnConfigurationPressed
+    | SavedColumnConfigurationNameChanged String
+    | SavedColumnConfigurationSelected String
     | SavingThrowFilterAdded String
     | SavingThrowFilterRemoved String
     | SchoolFilterAdded String
@@ -492,6 +496,8 @@ type alias Model =
     , removeFilters : List String
     , resultBaseUrl : String
     , resultDisplay : ResultDisplay
+    , savedColumnConfigurations : Dict String (List String)
+    , savedColumnConfigurationName : String
     , searchCreatureFamilies : String
     , searchItemCategories : String
     , searchItemSubcategories : String
@@ -603,6 +609,8 @@ init flagsValue =
       , removeFilters = flags.removeFilters
       , resultBaseUrl = flags.resultBaseUrl
       , resultDisplay = List
+      , savedColumnConfigurations = Dict.empty
+      , savedColumnConfigurationName = ""
       , searchCreatureFamilies = ""
       , searchItemCategories = ""
       , searchItemSubcategories = ""
@@ -642,6 +650,7 @@ init flagsValue =
             )
     , Cmd.batch
         [ localStorage_get "auto-query-type"
+        , localStorage_get "column-configurations"
         , localStorage_get "limit-table-width"
         , localStorage_get "page-size"
         , localStorage_get "show-additional-info"
@@ -751,6 +760,17 @@ update msg model =
 
             else
                 ( model, Cmd.none )
+
+        DeleteColumnConfigurationPressed ->
+            ( { model
+                | savedColumnConfigurations =
+                    Dict.remove
+                        model.savedColumnConfigurationName
+                        model.savedColumnConfigurations
+              }
+            , Cmd.none
+            )
+                |> saveColumnConfigurationsToLocalStorage
 
         GotAggregationsResult result ->
             ( { model | aggregations = Just result }
@@ -969,6 +989,19 @@ update msg model =
                             { model | autoQueryType = False }
 
                         _ ->
+                            model
+
+                Ok "column-configurations" ->
+                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
+                        Ok string ->
+                            case Decode.decodeString (Decode.dict (Decode.list Decode.string)) string of
+                                Ok configurations ->
+                                    { model | savedColumnConfigurations = configurations }
+
+                                Err _ ->
+                                    model
+
+                        Err _ ->
                             model
 
                 Ok "theme" ->
@@ -1285,6 +1318,37 @@ update msg model =
         ResultDisplayChanged value ->
             ( model
             , updateUrl { model | resultDisplay = value }
+            )
+
+        SaveColumnConfigurationPressed ->
+            ( { model
+                | savedColumnConfigurations =
+                    if String.isEmpty model.savedColumnConfigurationName then
+                        model.savedColumnConfigurations
+
+                    else
+                        Dict.insert
+                            model.savedColumnConfigurationName
+                            model.tableColumns
+                            model.savedColumnConfigurations
+              }
+            , Cmd.none
+            )
+                |> saveColumnConfigurationsToLocalStorage
+
+        SavedColumnConfigurationNameChanged value ->
+            ( { model | savedColumnConfigurationName = value }
+            , Cmd.none
+            )
+
+        SavedColumnConfigurationSelected name ->
+            ( { model
+                | savedColumnConfigurationName = name
+                , tableColumns =
+                    Dict.get name model.savedColumnConfigurations
+                        |> Maybe.withDefault model.tableColumns
+              }
+            , Cmd.none
             )
 
         SavingThrowFilterAdded savingThrow ->
@@ -1763,6 +1827,20 @@ saveToLocalStorage key value =
             , ( "value", Encode.string value )
             ]
         )
+
+
+saveColumnConfigurationsToLocalStorage : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+saveColumnConfigurationsToLocalStorage ( model, cmd ) =
+    ( model
+    , Cmd.batch
+        [ cmd
+        , saveToLocalStorage
+            "column-configurations"
+            (Encode.dict identity (Encode.list Encode.string) model.savedColumnConfigurations
+                |> Encode.encode 0
+            )
+        ]
+    )
 
 
 updateUrl : Model -> Cmd Msg
@@ -6475,7 +6553,7 @@ viewResultDisplay model =
                         )
                     ]
                 ]
-            , Html.div
+            , Html.h4
                 []
                 [ Html.text "Predefined column configurations" ]
             , Html.div
@@ -6490,6 +6568,54 @@ viewResultDisplay model =
                             [ Html.text label ]
                     )
                     Data.predefinedColumnConfigurations
+                )
+
+            , Html.h4
+                []
+                [ Html.text "User-defined column configurations" ]
+            , Html.div
+                [ HA.class "row"
+                , HA.class "gap-small"
+                ]
+                [ Html.div
+                    [ HA.class "input-container" ]
+                    [ Html.input
+                        [ HA.placeholder "Name"
+                        , HA.type_ "text"
+                        , HA.value model.savedColumnConfigurationName
+                        , HE.onInput SavedColumnConfigurationNameChanged
+                        ]
+                        []
+                    ]
+                , Html.button
+                    [ HA.disabled
+                        (String.isEmpty model.savedColumnConfigurationName
+                            || Dict.get model.savedColumnConfigurationName model.savedColumnConfigurations
+                                == Just model.tableColumns
+                        )
+                    , HE.onClick SaveColumnConfigurationPressed ]
+                    [ Html.text "Save" ]
+                , Html.button
+                    [ HA.disabled
+                        (not (Dict.member
+                            model.savedColumnConfigurationName
+                            model.savedColumnConfigurations
+                        ))
+                    , HE.onClick (DeleteColumnConfigurationPressed)
+                    ]
+                    [ Html.text "Delete" ]
+                ]
+            , Html.div
+                [ HA.class "row"
+                , HA.class "gap-medium"
+                ]
+                (List.map
+                    (\name ->
+                        Html.button
+                            [ HE.onClick (SavedColumnConfigurationSelected name) ]
+                            [ Html.text name ]
+                    )
+                    (Dict.keys model.savedColumnConfigurations)
                 )
             ]
 
