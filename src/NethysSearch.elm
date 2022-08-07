@@ -8491,6 +8491,9 @@ getTraitClass trait =
         "no alignment" ->
             HA.class "trait-alignment"
 
+        "any" ->
+            HA.class "trait-alignment"
+
         "lg" ->
             HA.class "trait-alignment"
 

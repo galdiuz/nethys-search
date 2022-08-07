@@ -26,6 +26,7 @@ alignments =
     , ( "ne", "Neutral Evil" )
     , ( "ng", "Neutral Good" )
     , ( "no alignment", "No Alignment")
+    , ( "any", "Any")
     ]
 
 
