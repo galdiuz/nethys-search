@@ -42,6 +42,7 @@ import Url.Parser.Query
 type alias SearchResult =
     { hits : List (Hit Document)
     , total : Int
+    , typeAggs : Dict String Int
     }
 
 
@@ -276,7 +277,8 @@ type LoadType
 
 
 type ResultDisplay
-    = List
+    = ByType
+    | List
     | Table
 
 
@@ -2105,11 +2107,15 @@ updateUrl ({ url } as model) =
                     ""
               )
             , ( "display"
-              , if model.resultDisplay == Table then
-                    "table"
+              , case model.resultDisplay of
+                    ByType ->
+                        "type"
 
-                else
-                    ""
+                    List ->
+                        ""
+
+                    Table ->
+                        "table"
               )
             , ( "columns"
               , if model.resultDisplay == Table then
@@ -2206,6 +2212,7 @@ buildSearchBody model size =
                 ]
           )
             |> Just
+        , Just ( "aggs", Encode.object [ (buildTermsAggregation "type") ] )
         , Just ( "size", Encode.int size )
         , ( "sort"
           , Encode.list identity
@@ -2659,11 +2666,15 @@ updateModelFromParams params model =
                     )
                 |> Dict.fromList
         , resultDisplay =
-            if Dict.get "display" params == Just "table" then
-                Table
+            case Dict.get "display" params of
+                Just "type" ->
+                    ByType
 
-            else
-                List
+                Just "table" ->
+                    Table
+
+                _ ->
+                    List
         , sort =
             Dict.get "sort" params
                 |> Maybe.map (String.split ",")
@@ -2997,12 +3008,21 @@ encodeObjectMaybe list =
 
 esResultDecoder : Decode.Decoder SearchResult
 esResultDecoder =
+    Field.requireAt [ "aggregations", "type", "buckets" ] (Decode.list (aggregationBucketCountDecoder Decode.string)) <| \aggs ->
     Field.requireAt [ "hits", "hits" ] (Decode.list (hitDecoder documentDecoder)) <| \hits ->
     Field.requireAt [ "hits", "total", "value" ] Decode.int <| \total ->
     Decode.succeed
         { hits = hits
         , total = total
+        , typeAggs = Dict.fromList aggs
         }
+
+
+aggregationBucketCountDecoder : Decode.Decoder a -> Decode.Decoder ( a, Int )
+aggregationBucketCountDecoder keyDecoder =
+    Field.require "key" keyDecoder <| \key ->
+    Field.require "doc_count" Decode.int <| \count ->
+    Decode.succeed ( key, count )
 
 
 aggregationsDecoder : Decode.Decoder Aggregations
@@ -6471,179 +6491,190 @@ viewResultDisplay model =
             , onInput = ResultDisplayChanged Table
             , text = "Table"
             }
+        , viewRadioButton
+            { checked = model.resultDisplay == ByType
+            , enabled = True
+            , name = "result-display"
+            , onInput = ResultDisplayChanged ByType
+            , text = "By Type"
+            }
         ]
     , Html.div
         [ HA.class "column"
         , HA.class "gap-small"
         ]
-        (if model.resultDisplay == Table then
-            [ Html.h4
-                []
-                [ Html.text "Table configuration" ]
-            , viewCheckbox
-                { checked = model.limitTableWidth
-                , onCheck = LimitTableWidthChanged
-                , text = "Limit table width"
-                }
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-small"
+        (case model.resultDisplay of
+            List ->
+                [ Html.h4
+                    []
+                    [ Html.text "List configuration" ]
+                , viewCheckbox
+                    { checked = model.showResultSpoilers
+                    , onCheck = ShowSpoilersChanged
+                    , text = "Show spoiler warning"
+                    }
+                , viewCheckbox
+                    { checked = model.showResultTraits
+                    , onCheck = ShowTraitsChanged
+                    , text = "Show traits"
+                    }
+                , viewCheckbox
+                    { checked = model.showResultAdditionalInfo
+                    , onCheck = ShowAdditionalInfoChanged
+                    , text = "Show additional info"
+                    }
+                , viewCheckbox
+                    { checked = model.showResultSummary
+                    , onCheck = ShowSummaryChanged
+                    , text = "Show summary"
+                    }
                 ]
-                [ Html.div
-                    [ HA.class "column"
-                    , HA.class "gap-tiny"
-                    , HA.class "grow"
-                    , HA.style "flex-basis" "300px"
+
+            Table ->
+                [ Html.h4
+                    []
+                    [ Html.text "Table configuration" ]
+                , viewCheckbox
+                    { checked = model.limitTableWidth
+                    , onCheck = LimitTableWidthChanged
+                    , text = "Limit table width"
+                    }
+                , Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-small"
                     ]
                     [ Html.div
-                        []
-                        [ Html.text "Selected columns" ]
-                    , Html.div
-                        [ HA.class "scrollbox"
-                        , HA.class "column"
-                        , HA.class "gap-small"
+                        [ HA.class "column"
+                        , HA.class "gap-tiny"
+                        , HA.class "grow"
+                        , HA.style "flex-basis" "300px"
                         ]
-                        (List.indexedMap
-                            (\index column ->
-                                Html.div
-                                    [ HA.class "row"
-                                    , HA.class "gap-small"
-                                    , HA.class "align-center"
-                                    ]
-                                    [ Html.button
-                                        [ HE.onClick (TableColumnRemoved column)
+                        [ Html.div
+                            []
+                            [ Html.text "Selected columns" ]
+                        , Html.div
+                            [ HA.class "scrollbox"
+                            , HA.class "column"
+                            , HA.class "gap-small"
+                            ]
+                            (List.indexedMap
+                                (\index column ->
+                                    Html.div
+                                        [ HA.class "row"
+                                        , HA.class "gap-small"
+                                        , HA.class "align-center"
                                         ]
-                                        [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times
+                                        [ Html.button
+                                            [ HE.onClick (TableColumnRemoved column)
+                                            ]
+                                            [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times
+                                            ]
+                                        , Html.button
+                                            [ HA.disabled (index == 0)
+                                            , HE.onClick (TableColumnMoved index (index - 1))
+                                            ]
+                                            [ FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronUp
+                                            ]
+                                        , Html.button
+                                            [ HA.disabled (index + 1 == List.length model.tableColumns)
+                                            , HE.onClick (TableColumnMoved index (index + 1))
+                                            ]
+                                            [ FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronDown
+                                            ]
+                                        , Html.text (sortFieldToLabel column)
                                         ]
-                                    , Html.button
-                                        [ HA.disabled (index == 0)
-                                        , HE.onClick (TableColumnMoved index (index - 1))
-                                        ]
-                                        [ FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronUp
-                                        ]
-                                    , Html.button
-                                        [ HA.disabled (index + 1 == List.length model.tableColumns)
-                                        , HE.onClick (TableColumnMoved index (index + 1))
-                                        ]
-                                        [ FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronDown
-                                        ]
-                                    , Html.text (sortFieldToLabel column)
-                                    ]
+                                )
+                                model.tableColumns
                             )
-                            model.tableColumns
+                        ]
+                    , Html.div
+                        [ HA.class "column"
+                        , HA.class "gap-tiny"
+                        , HA.class "grow"
+                        , HA.style "flex-basis" "300px"
+                        ]
+                        [ Html.div
+                            []
+                            [ Html.text "Available columns" ]
+                        , Html.div
+                            [ HA.class "scrollbox"
+                            , HA.class "column"
+                            , HA.class "gap-small"
+                            ]
+                            (List.concatMap
+                                (viewResultDisplayColumn model)
+                                Data.tableColumns
+                            )
+                        ]
+                    ]
+                , Html.h4
+                    []
+                    [ Html.text "Predefined column configurations" ]
+                , Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-medium"
+                    ]
+                    (List.map
+                        (\{ columns, label } ->
+                            Html.button
+                                [ HE.onClick (TableColumnSetChosen columns)
+                                ]
+                                [ Html.text label ]
                         )
+                        Data.predefinedColumnConfigurations
+                    )
+
+                , Html.h4
+                    []
+                    [ Html.text "User-defined column configurations" ]
+                , Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-small"
+                    ]
+                    [ Html.div
+                        [ HA.class "input-container" ]
+                        [ Html.input
+                            [ HA.placeholder "Name"
+                            , HA.type_ "text"
+                            , HA.value model.savedColumnConfigurationName
+                            , HE.onInput SavedColumnConfigurationNameChanged
+                            ]
+                            []
+                        ]
+                    , Html.button
+                        [ HA.disabled
+                            (String.isEmpty model.savedColumnConfigurationName
+                                || Dict.get model.savedColumnConfigurationName model.savedColumnConfigurations
+                                    == Just model.tableColumns
+                            )
+                        , HE.onClick SaveColumnConfigurationPressed ]
+                        [ Html.text "Save" ]
+                    , Html.button
+                        [ HA.disabled
+                            (not (Dict.member
+                                model.savedColumnConfigurationName
+                                model.savedColumnConfigurations
+                            ))
+                        , HE.onClick (DeleteColumnConfigurationPressed)
+                        ]
+                        [ Html.text "Delete" ]
                     ]
                 , Html.div
-                    [ HA.class "column"
-                    , HA.class "gap-tiny"
-                    , HA.class "grow"
-                    , HA.style "flex-basis" "300px"
+                    [ HA.class "row"
+                    , HA.class "gap-medium"
                     ]
-                    [ Html.div
-                        []
-                        [ Html.text "Available columns" ]
-                    , Html.div
-                        [ HA.class "scrollbox"
-                        , HA.class "column"
-                        , HA.class "gap-small"
-                        ]
-                        (List.concatMap
-                            (viewResultDisplayColumn model)
-                            Data.tableColumns
+                    (List.map
+                        (\name ->
+                            Html.button
+                                [ HE.onClick (SavedColumnConfigurationSelected name) ]
+                                [ Html.text name ]
                         )
-                    ]
-                ]
-            , Html.h4
-                []
-                [ Html.text "Predefined column configurations" ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-medium"
-                ]
-                (List.map
-                    (\{ columns, label } ->
-                        Html.button
-                            [ HE.onClick (TableColumnSetChosen columns)
-                            ]
-                            [ Html.text label ]
+                        (Dict.keys model.savedColumnConfigurations)
                     )
-                    Data.predefinedColumnConfigurations
-                )
+                ]
 
-            , Html.h4
+            ByType ->
                 []
-                [ Html.text "User-defined column configurations" ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-small"
-                ]
-                [ Html.div
-                    [ HA.class "input-container" ]
-                    [ Html.input
-                        [ HA.placeholder "Name"
-                        , HA.type_ "text"
-                        , HA.value model.savedColumnConfigurationName
-                        , HE.onInput SavedColumnConfigurationNameChanged
-                        ]
-                        []
-                    ]
-                , Html.button
-                    [ HA.disabled
-                        (String.isEmpty model.savedColumnConfigurationName
-                            || Dict.get model.savedColumnConfigurationName model.savedColumnConfigurations
-                                == Just model.tableColumns
-                        )
-                    , HE.onClick SaveColumnConfigurationPressed ]
-                    [ Html.text "Save" ]
-                , Html.button
-                    [ HA.disabled
-                        (not (Dict.member
-                            model.savedColumnConfigurationName
-                            model.savedColumnConfigurations
-                        ))
-                    , HE.onClick (DeleteColumnConfigurationPressed)
-                    ]
-                    [ Html.text "Delete" ]
-                ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "gap-medium"
-                ]
-                (List.map
-                    (\name ->
-                        Html.button
-                            [ HE.onClick (SavedColumnConfigurationSelected name) ]
-                            [ Html.text name ]
-                    )
-                    (Dict.keys model.savedColumnConfigurations)
-                )
-            ]
-
-         else
-            [ Html.h4
-                []
-                [ Html.text "List configuration" ]
-            , viewCheckbox
-                { checked = model.showResultSpoilers
-                , onCheck = ShowSpoilersChanged
-                , text = "Show spoiler warning"
-                }
-            , viewCheckbox
-                { checked = model.showResultTraits
-                , onCheck = ShowTraitsChanged
-                , text = "Show traits"
-                }
-            , viewCheckbox
-                { checked = model.showResultAdditionalInfo
-                , onCheck = ShowAdditionalInfoChanged
-                , text = "Show additional info"
-                }
-            , viewCheckbox
-                { checked = model.showResultSummary
-                , onCheck = ShowSummaryChanged
-                , text = "Show summary"
-                }
-            ]
         )
     ]
 
@@ -7073,151 +7104,85 @@ viewSearchResults model =
                     ]
               ]
 
-            , if model.resultDisplay == Table then
-                [ Html.div
-                    [ HA.class "fill-width-with-padding"
-                    , HA.style "transition" "max-width ease-in-out 0.2s"
-                    , if model.limitTableWidth then
-                        HA.class  "limit-width"
+            , case model.resultDisplay of
+                List ->
+                    viewSearchResultsList model remaining resultCount
 
-                      else
-                        HA.style "max-width" "100%"
-                    ]
-                    [ Html.div
-                        [ HA.class "column"
-                        , HA.class "gap-medium"
-                        , HA.style "max-height" "95vh"
-                        , HA.style "overflow" "auto"
-                        ]
-                        [ viewSearchResultGrid model
+                Table ->
+                    viewSearchResultsTable model remaining
 
-                        , case List.Extra.last model.searchResults of
-                            Just (Err (Http.BadStatus 400)) ->
-                                Html.h2
-                                    []
-                                    [ Html.text "Error: Failed to parse query" ]
-
-                            Just (Err _) ->
-                                Html.h2
-                                    []
-                                    [ Html.text "Error: Search failed" ]
-
-                            _ ->
-                                Html.text ""
-
-                        , if Maybe.Extra.isJust model.tracker then
-                            Html.div
-                                [ HA.class "column"
-                                , HA.class "align-center"
-                                , HA.style "position" "sticky"
-                                , HA.style "left" "0"
-                                , HA.style "padding-bottom" "var(--gap-medium)"
-                                ]
-                                [ Html.div
-                                    [ HA.class "loader"
-                                    ]
-                                    []
-                                ]
-
-                          else
-                            Html.div
-                                [ HA.class "row"
-                                , HA.class "gap-medium"
-                                , HA.style "justify-content" "center"
-                                , HA.style "position" "sticky"
-                                , HA.style "left" "0"
-                                , HA.style "padding-bottom" "var(--gap-medium)"
-                                ]
-                                [ if remaining > model.pageSize then
-                                    Html.button
-                                        [ HE.onClick LoadMorePressed
-                                        ]
-                                        [ Html.text ("Load " ++ String.fromInt model.pageSize ++ " more") ]
-
-                                  else
-                                    Html.text ""
-
-                                , if remaining > 0 && remaining < 1000 then
-                                    Html.button
-                                        [ HE.onClick LoadRemainingPressed
-                                        ]
-                                        [ Html.text ("Load remaining " ++ String.fromInt remaining) ]
-
-                                  else
-                                    Html.text ""
-                                ]
-                        ]
-                    ]
-                ]
-
-              else
-                [ List.map
-                    (\result ->
-                        case result of
-                            Ok r ->
-                                List.map (viewSingleSearchResult model) r.hits
-
-                            Err (Http.BadStatus 400) ->
-                                [ Html.h2
-                                    []
-                                    [ Html.text "Error: Failed to parse query" ]
-                                ]
-
-                            Err _ ->
-                                [ Html.h2
-                                    []
-                                    [ Html.text "Error: Search failed" ]
-                                ]
-                    )
-                    model.searchResults
-                    |> List.concat
-
-                , if Maybe.Extra.isJust model.tracker then
-                    [ Html.div
-                        [ HA.class "loader"
-                        ]
-                        []
-                    ]
-
-                  else
-                    [ Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-medium"
-                        , HA.style "justify-content" "center"
-                        ]
-                        [ if remaining > model.pageSize then
-                            Html.button
-                                [ HE.onClick LoadMorePressed
-                                ]
-                                [ Html.text ("Load " ++ String.fromInt model.pageSize ++ " more") ]
-
-                          else
-                            Html.text ""
-
-                        , if remaining > 0 && remaining < 1000 then
-                            Html.button
-                                [ HE.onClick LoadRemainingPressed
-                                ]
-                                [ Html.text ("Load remaining " ++ String.fromInt remaining) ]
-
-                          else
-                            Html.text ""
-                        ]
-                    ]
-
-                , if resultCount > 0 then
-                    [ Html.button
-                        [ HE.onClick ScrollToTopPressed
-                        ]
-                        [ Html.text "Scroll to top" ]
-                    ]
-
-                  else
-                    []
-                ]
-                    |> List.concat
+                ByType ->
+                    viewSearchResultsByType model remaining
             ]
         )
+
+
+viewSearchResultsList : Model -> Int -> Int -> List (Html Msg)
+viewSearchResultsList model remaining resultCount =
+    [ List.concatMap
+        (\result ->
+            case result of
+                Ok r ->
+                    List.map (viewSingleSearchResult model) r.hits
+
+                Err (Http.BadStatus 400) ->
+                    [ Html.h2
+                        []
+                        [ Html.text "Error: Failed to parse query" ]
+                    ]
+
+                Err _ ->
+                    [ Html.h2
+                        []
+                        [ Html.text "Error: Search failed" ]
+                    ]
+        )
+        model.searchResults
+
+    , if Maybe.Extra.isJust model.tracker then
+        [ Html.div
+            [ HA.class "loader"
+            ]
+            []
+        ]
+
+      else
+        [ Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
+            , HA.style "justify-content" "center"
+            ]
+            [ if remaining > model.pageSize then
+                Html.button
+                    [ HE.onClick LoadMorePressed
+                    ]
+                    [ Html.text ("Load " ++ String.fromInt model.pageSize ++ " more") ]
+
+              else
+                Html.text ""
+
+            , if remaining > 0 && remaining < 1000 then
+                Html.button
+                    [ HE.onClick LoadRemainingPressed
+                    ]
+                    [ Html.text ("Load remaining " ++ String.fromInt remaining) ]
+
+              else
+                Html.text ""
+            ]
+        ]
+
+    , if resultCount > 0 then
+        [ Html.button
+            [ HE.onClick ScrollToTopPressed
+            ]
+            [ Html.text "Scroll to top" ]
+        ]
+
+      else
+        []
+    ]
+        |> List.concat
 
 
 viewSingleSearchResult : Model -> Hit Document -> Html msg
@@ -7269,6 +7234,85 @@ viewSingleSearchResult model hit =
 
             , viewMarkdown hit.source.searchMarkdown
         ]
+
+
+viewSearchResultsTable : Model -> Int -> List (Html Msg)
+viewSearchResultsTable model remaining =
+    [ Html.div
+        [ HA.class "fill-width-with-padding"
+        , HA.style "transition" "max-width ease-in-out 0.2s"
+        , if model.limitTableWidth then
+            HA.class  "limit-width"
+
+          else
+            HA.style "max-width" "100%"
+        ]
+        [ Html.div
+            [ HA.class "column"
+            , HA.class "gap-medium"
+            , HA.style "max-height" "95vh"
+            , HA.style "overflow" "auto"
+            ]
+            [ viewSearchResultGrid model
+
+            , case List.Extra.last model.searchResults of
+                Just (Err (Http.BadStatus 400)) ->
+                    Html.h2
+                        []
+                        [ Html.text "Error: Failed to parse query" ]
+
+                Just (Err _) ->
+                    Html.h2
+                        []
+                        [ Html.text "Error: Search failed" ]
+
+                _ ->
+                    Html.text ""
+
+            , if Maybe.Extra.isJust model.tracker then
+                Html.div
+                    [ HA.class "column"
+                    , HA.class "align-center"
+                    , HA.style "position" "sticky"
+                    , HA.style "left" "0"
+                    , HA.style "padding-bottom" "var(--gap-medium)"
+                    ]
+                    [ Html.div
+                        [ HA.class "loader"
+                        ]
+                        []
+                    ]
+
+              else
+                Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-medium"
+                    , HA.style "justify-content" "center"
+                    , HA.style "position" "sticky"
+                    , HA.style "left" "0"
+                    , HA.style "padding-bottom" "var(--gap-medium)"
+                    ]
+                    [ if remaining > model.pageSize then
+                        Html.button
+                            [ HE.onClick LoadMorePressed
+                            ]
+                            [ Html.text ("Load " ++ String.fromInt model.pageSize ++ " more") ]
+
+                      else
+                        Html.text ""
+
+                    , if remaining > 0 && remaining < 1000 then
+                        Html.button
+                            [ HE.onClick LoadRemainingPressed
+                            ]
+                            [ Html.text ("Load remaining " ++ String.fromInt remaining) ]
+
+                      else
+                        Html.text ""
+                    ]
+            ]
+        ]
+    ]
 
 
 viewSearchResultGrid : Model -> Html Msg
@@ -7929,6 +7973,116 @@ viewSearchResultGridCell model hit column =
                 Html.text ""
         ]
 
+
+viewSearchResultsByType : Model -> Int -> List (Html Msg)
+viewSearchResultsByType model remaining =
+    let
+        typeAggs : Dict String Int
+        typeAggs =
+            case List.head model.searchResults of
+                Just (Ok results) ->
+                    results.typeAggs
+
+                _ ->
+                    Dict.empty
+
+        emptyDictByType : Dict String (List a)
+        emptyDictByType =
+            typeAggs
+                |> Dict.keys
+                |> List.map (\key -> ( String.Extra.toTitleCase key, [] ))
+                |> Dict.fromList
+
+        resultsByType : List ( String, List (Hit Document) )
+        resultsByType =
+            model.searchResults
+                |> List.concatMap (Result.map .hits >> Result.withDefault [])
+                |> List.Extra.gatherEqualsBy (.source >> .type_ >> String.Extra.toTitleCase)
+                |> List.map
+                    (\(first, rem) ->
+                        ( first.source.type_, first :: rem )
+                    )
+                |> Dict.fromList
+                |> \dict -> Dict.union dict emptyDictByType
+                |> Dict.toList
+    in
+    [ if Maybe.Extra.isJust model.tracker then
+        Html.div
+            [ HA.class "loader"
+            ]
+            []
+
+      else
+        Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
+            , HA.style "justify-content" "center"
+            ]
+            [ if remaining > model.pageSize then
+                Html.button
+                    [ HE.onClick LoadMorePressed
+                    ]
+                    [ Html.text ("Load " ++ String.fromInt model.pageSize ++ " more") ]
+
+              else
+                Html.text ""
+
+            , if remaining > 0 && remaining < 1000 then
+                Html.button
+                    [ HE.onClick LoadRemainingPressed
+                    ]
+                    [ Html.text ("Load remaining " ++ String.fromInt remaining) ]
+
+              else
+                Html.text ""
+            ]
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-large"
+        , HA.class "limit-width"
+        , HA.class "fill-width-with-padding"
+        ]
+        (List.map
+            (\(type_, hits) ->
+                Html.div
+                    [ HA.class "column"
+                    , HA.class "gap-small"
+                    ]
+                    [ Html.h2
+                        [ HA.class "title" ]
+                        [ Html.div
+                            []
+                            [ Html.text type_ ]
+                        , Html.div
+                            []
+                            [ Html.text (String.fromInt (List.length hits))
+                            , Html.text "/"
+                            , Html.text
+                                (typeAggs
+                                    |> Dict.get (String.toLower type_)
+                                    |> Maybe.map String.fromInt
+                                    |> Maybe.withDefault ""
+                                )
+                            ]
+                        ]
+                    , Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-small"
+                        ]
+                        (hits
+                            |> List.sortBy (.source >> .name)
+                            |> List.map
+                                (\hit ->
+                                    Html.a
+                                        [ HA.href (getUrl model hit.source) ]
+                                        [ Html.text hit.source.name ]
+                                )
+                        )
+                    ]
+            )
+            resultsByType
+        )
+    ]
 
 parseAndViewAsMarkdown : String -> Html msg
 parseAndViewAsMarkdown string =
