@@ -42,7 +42,7 @@ import Url.Parser.Query
 type alias SearchResult =
     { hits : List (Hit Document)
     , total : Int
-    , typeAggs : Dict String Int
+    , groupAggs : Maybe GroupAggregations
     }
 
 
@@ -87,6 +87,7 @@ type alias Document =
     , constitution : Maybe Int
     , cost : Maybe String
     , creatureFamily : Maybe String
+    , creatureFamilyMarkdown : Maybe String
     , damage : Maybe String
     , defenseProficiencies : List String
     , deities : Maybe String
@@ -97,6 +98,7 @@ type alias Document =
     , domains : Maybe String
     , domainSpell : Maybe String
     , duration : Maybe String
+    , durationValue : Maybe Int
     , edict : Maybe String
     , familiarAbilities : List String
     , favoredWeapons : Maybe String
@@ -127,6 +129,7 @@ type alias Document =
     , price : Maybe String
     , primaryCheck : Maybe String
     , range : Maybe String
+    , rangeValue : Maybe Int
     , rarity : Maybe String
     , ref : Maybe Int
     , region : Maybe String
@@ -145,6 +148,7 @@ type alias Document =
     , sizes : List String
     , skills : Maybe String
     , skillProficiencies : List String
+    , sourceList : List String
     , sources : Maybe String
     , speed : Maybe String
     , speedValues : Maybe SpeedTypeValues
@@ -156,7 +160,9 @@ type alias Document =
     , strongestSaves : List String
     , summary : Maybe String
     , targets : Maybe String
+    , traditionList : List String
     , traditions : Maybe String
+    , traitList : List String
     , traits : Maybe String
     , trigger : Maybe String
     , usage : Maybe String
@@ -166,9 +172,25 @@ type alias Document =
     , weaknesses : Maybe String
     , weaponCategory : Maybe String
     , weaponGroup : Maybe String
+    , weaponGroupMarkdown : Maybe String
     , weaponType : Maybe String
     , will : Maybe Int
     , wisdom : Maybe Int
+    }
+
+
+type alias GroupAggregations =
+    { group1 : List GroupBucket
+    , group2 : Maybe (List GroupBucket)
+    , group3 : Maybe (List GroupBucket)
+    }
+
+
+type alias GroupBucket =
+    { count : Int
+    , key1 : Maybe String
+    , key2 : Maybe String
+    , key3 : Maybe String
     }
 
 
@@ -277,9 +299,21 @@ type LoadType
 
 
 type ResultDisplay
-    = ByType
+    = Grouped
     | List
     | Table
+
+
+type GroupedDisplay
+    = Show
+    | Dim
+    | Hide
+
+
+type GroupedSort
+    = Alphanum
+    | CountLoaded
+    | CountTotal
 
 
 type SortDir
@@ -315,6 +349,7 @@ type Msg
     | DebouncePassed Int
     | DeleteColumnConfigurationPressed
     | GotAggregationsResult (Result Http.Error Aggregations)
+    | GotGroupAggregationsResult (Result Http.Error SearchResult)
     | GotSearchResult (Result Http.Error SearchResult)
     | GotSourcesAggregationResult (Result Http.Error (List Source))
     | FilterAbilityChanged String
@@ -327,6 +362,11 @@ type Msg
     | FilterWeaknessChanged String
     | FilteredFromValueChanged String String
     | FilteredToValueChanged String String
+    | GroupField1Changed String
+    | GroupField2Changed (Maybe String)
+    | GroupField3Changed (Maybe String)
+    | GroupedDisplayChanged GroupedDisplay
+    | GroupedSortChanged GroupedSort
     | HandFilterAdded String
     | HandFilterRemoved String
     | ItemCategoryFilterAdded String
@@ -488,6 +528,11 @@ type alias Model =
     , filterTraditionsOperator : Bool
     , filterTraitsOperator : Bool
     , fixedQueryString : String
+    , groupField1 : String
+    , groupField2 : Maybe String
+    , groupField3 : Maybe String
+    , groupedDisplay : GroupedDisplay
+    , groupedSort : GroupedSort
     , lastSearchKey : Maybe String
     , limitTableWidth : Bool
     , menuOpen : Bool
@@ -503,8 +548,9 @@ type alias Model =
     , searchCreatureFamilies : String
     , searchItemCategories : String
     , searchItemSubcategories : String
-    , searchSources : String
+    , searchResultGroupAggs : Maybe GroupAggregations
     , searchResults : List (Result Http.Error SearchResult)
+    , searchSources : String
     , searchTraits : String
     , searchTypes : String
     , selectedColumnResistance : String
@@ -601,6 +647,11 @@ init flagsValue =
       , filterTraditionsOperator = True
       , filterTraitsOperator = True
       , fixedQueryString = flags.fixedQueryString
+      , groupField1 = "type"
+      , groupField2 = Nothing
+      , groupField3 = Nothing
+      , groupedDisplay = Dim
+      , groupedSort = Alphanum
       , lastSearchKey = Nothing
       , limitTableWidth = False
       , menuOpen = False
@@ -616,8 +667,9 @@ init flagsValue =
       , searchCreatureFamilies = ""
       , searchItemCategories = ""
       , searchItemSubcategories = ""
-      , searchSources = ""
+      , searchResultGroupAggs = Nothing
       , searchResults = []
+      , searchSources = ""
       , searchTraits = ""
       , searchTypes = ""
       , selectedColumnResistance = "acid"
@@ -653,6 +705,7 @@ init flagsValue =
     , Cmd.batch
         [ localStorage_get "auto-query-type"
         , localStorage_get "column-configurations"
+        , localStorage_get "grouped-display"
         , localStorage_get "limit-table-width"
         , localStorage_get "page-size"
         , localStorage_get "show-additional-info"
@@ -779,6 +832,16 @@ update msg model =
             , Cmd.none
             )
 
+        GotGroupAggregationsResult result ->
+            ( { model
+                | searchResultGroupAggs =
+                    result
+                        |> Result.toMaybe
+                        |> Maybe.andThen .groupAggs
+              }
+            , Cmd.none
+            )
+
         GotSearchResult result ->
             let
                 containsTeleport : Bool
@@ -801,6 +864,11 @@ update msg model =
                     List.append
                         (List.filter Result.Extra.isOk model.searchResults)
                         [ result ]
+                , searchResultGroupAggs =
+                    result
+                        |> Result.toMaybe
+                        |> Maybe.andThen .groupAggs
+                        |> Maybe.Extra.orElse model.searchResultGroupAggs
                 , tracker = Nothing
               }
             , case ( containsTeleport, firstResultUrl ) of
@@ -886,6 +954,56 @@ update msg model =
             in
             ( updatedModel
             , updateUrl updatedModel
+            )
+
+        GroupField1Changed field ->
+            updateWithNewGroupFields { model | groupField1 = field }
+
+        GroupField2Changed field ->
+            updateWithNewGroupFields
+                { model
+                    | groupField2 = field
+                    , groupField3 =
+                        if field == Nothing then
+                            Nothing
+
+                        else
+                            model.groupField3
+                }
+
+        GroupField3Changed field ->
+            updateWithNewGroupFields { model | groupField3 = field }
+
+        GroupedDisplayChanged value ->
+            ( { model | groupedDisplay = value }
+            , saveToLocalStorage
+                "grouped-display"
+                (case value of
+                    Show ->
+                        "show"
+
+                    Dim ->
+                        "dim"
+
+                    Hide ->
+                        "hide"
+                )
+            )
+
+        GroupedSortChanged value ->
+            ( { model | groupedSort = value }
+            , saveToLocalStorage
+                "grouped-sort"
+                (case value of
+                    Alphanum ->
+                        "alphanum"
+
+                    CountLoaded ->
+                        "count-loaded"
+
+                    CountTotal ->
+                        "count-total"
+                )
             )
 
         HandFilterAdded subcategory ->
@@ -1004,6 +1122,34 @@ update msg model =
                                     model
 
                         Err _ ->
+                            model
+
+                Ok "grouped-display" ->
+                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
+                        Ok "show" ->
+                            { model | groupedDisplay = Show }
+
+                        Ok "dim" ->
+                            { model | groupedDisplay = Dim }
+
+                        Ok "hide" ->
+                            { model | groupedDisplay = Hide }
+
+                        _ ->
+                            model
+
+                Ok "grouped-sort" ->
+                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
+                        Ok "alphanum" ->
+                            { model | groupedSort = Alphanum }
+
+                        Ok "count-loaded" ->
+                            { model | groupedSort = CountLoaded }
+
+                        Ok "count-total" ->
+                            { model | groupedSort = CountTotal }
+
+                        _ ->
                             model
 
                 Ok "theme" ->
@@ -2108,8 +2254,8 @@ updateUrl ({ url } as model) =
               )
             , ( "display"
               , case model.resultDisplay of
-                    ByType ->
-                        "type"
+                    Grouped ->
+                        "grouped"
 
                     List ->
                         ""
@@ -2120,6 +2266,27 @@ updateUrl ({ url } as model) =
             , ( "columns"
               , if model.resultDisplay == Table then
                     String.join "," model.tableColumns
+
+                else
+                    ""
+              )
+            , ( "group-field-1"
+              , if model.resultDisplay == Grouped then
+                    model.groupField1
+
+                else
+                    ""
+              )
+            , ( "group-field-2"
+              , if model.resultDisplay == Grouped then
+                    Maybe.withDefault "" model.groupField2
+
+                else
+                    ""
+              )
+            , ( "group-field-3"
+              , if model.resultDisplay == Grouped then
+                    Maybe.withDefault "" model.groupField3
 
                 else
                     ""
@@ -2152,68 +2319,20 @@ searchFields =
     ]
 
 
-buildSearchBody : Model -> Int -> Encode.Value
-buildSearchBody model size =
-    let
-        filters : List (List ( String, Encode.Value ))
-        filters =
-            buildSearchFilterTerms model
-
-        mustNots : List (List ( String, Encode.Value ))
-        mustNots =
-            buildSearchMustNotTerms model
-    in
+buildSearchBody : Model -> LoadType -> Encode.Value
+buildSearchBody model load =
     encodeObjectMaybe
-        [ ( "query"
-          , Encode.object
-                [ ( "bool"
-                  , encodeObjectMaybe
-                        [ if String.isEmpty model.query then
-                            Nothing
+        [ Just (buildSearchQuery model)
+        , Just
+            ( "size"
+            , Encode.int
+                (if load == LoadRemaining then
+                    10000
 
-                          else
-                            Just
-                                ( "should"
-                                , Encode.list Encode.object
-                                    (case model.queryType of
-                                        Standard ->
-                                            buildStandardQueryBody model.query
-
-                                        ElasticsearchQueryString ->
-                                            [ buildElasticsearchQueryStringQueryBody model.query ]
-                                    )
-                                )
-
-                        , if List.isEmpty filters then
-                            Nothing
-
-                          else
-                            Just
-                                ( "filter"
-                                , Encode.list Encode.object filters
-                                )
-
-                        , if List.isEmpty mustNots then
-                            Nothing
-
-                          else
-                            Just
-                                ( "must_not"
-                                , Encode.list Encode.object mustNots
-                                )
-
-                        , if String.isEmpty model.query then
-                            Nothing
-
-                          else
-                            Just ( "minimum_should_match", Encode.int 1 )
-                        ]
-                  )
-                ]
-          )
-            |> Just
-        , Just ( "aggs", Encode.object [ (buildTermsAggregation "type") ] )
-        , Just ( "size", Encode.int size )
+                 else
+                    model.pageSize
+                )
+            )
         , ( "sort"
           , Encode.list identity
                 (if List.isEmpty (getValidSortFields model.sort) then
@@ -2251,7 +2370,124 @@ buildSearchBody model size =
             |> Maybe.andThen List.Extra.last
             |> Maybe.map .sort
             |> Maybe.map (Tuple.pair "search_after")
+        , if load == LoadNew || load == LoadNewForce then
+            Just (buildGroupAggs model)
+
+          else
+            Nothing
         ]
+
+
+buildSearchGroupAggregationsBody : Model -> Encode.Value
+buildSearchGroupAggregationsBody model =
+    Encode.object
+        [ buildSearchQuery model
+        , buildGroupAggs model
+        , ( "size", Encode.int 0 )
+        ]
+
+
+buildSearchQuery : Model -> ( String, Encode.Value )
+buildSearchQuery model =
+    let
+        filters : List (List ( String, Encode.Value ))
+        filters =
+            buildSearchFilterTerms model
+
+        mustNots : List (List ( String, Encode.Value ))
+        mustNots =
+            buildSearchMustNotTerms model
+    in
+    ( "query"
+    , Encode.object
+        [ ( "bool"
+          , encodeObjectMaybe
+                [ if String.isEmpty model.query then
+                    Nothing
+
+                  else
+                    Just
+                        ( "should"
+                        , Encode.list Encode.object
+                            (case model.queryType of
+                                Standard ->
+                                    buildStandardQueryBody model.query
+
+                                ElasticsearchQueryString ->
+                                    [ buildElasticsearchQueryStringQueryBody model.query ]
+                            )
+                        )
+
+                , if List.isEmpty filters then
+                    Nothing
+
+                  else
+                    Just
+                        ( "filter"
+                        , Encode.list Encode.object filters
+                        )
+
+                , if List.isEmpty mustNots then
+                    Nothing
+
+                  else
+                    Just
+                        ( "must_not"
+                        , Encode.list Encode.object mustNots
+                        )
+
+                , if String.isEmpty model.query then
+                    Nothing
+
+                  else
+                    Just ( "minimum_should_match", Encode.int 1 )
+                ]
+          )
+        ]
+    )
+
+
+buildGroupAggs : Model -> ( String, Encode.Value )
+buildGroupAggs model =
+    ( "aggs"
+    , encodeObjectMaybe
+        [ buildCompositeAggregation
+            "group1"
+            True
+            [ ( "field1", mapSortFieldToElastic model.groupField1 )
+            ]
+            |> Just
+        , Maybe.map
+            (\field2 ->
+                buildCompositeAggregation
+                    "group2"
+                    True
+                    [ ( "field1", mapSortFieldToElastic model.groupField1 )
+                    , ( "field2", mapSortFieldToElastic field2 )
+                    ]
+            )
+            model.groupField2
+        , Maybe.map2
+            (\field2 field3 ->
+                buildCompositeAggregation
+                    "group3"
+                    True
+                    [ ( "field1", mapSortFieldToElastic model.groupField1 )
+                    , ( "field2", mapSortFieldToElastic field2 )
+                    , ( "field3", mapSortFieldToElastic field3 )
+                    ]
+            )
+            model.groupField2
+            model.groupField3
+        ]
+    )
+
+
+mapSortFieldToElastic : String -> String
+mapSortFieldToElastic field =
+    List.Extra.find (Tuple3.first >> (==) field) Data.sortFields
+        |> Maybe.map Tuple3.second
+        |> Maybe.withDefault field
 
 
 getValidSortFields : List ( String, SortDir ) -> List ( String, SortDir )
@@ -2667,8 +2903,8 @@ updateModelFromParams params model =
                 |> Dict.fromList
         , resultDisplay =
             case Dict.get "display" params of
-                Just "type" ->
-                    ByType
+                Just "grouped" ->
+                    Grouped
 
                 Just "table" ->
                     Table
@@ -2704,6 +2940,25 @@ updateModelFromParams params model =
 
             else
                 model.tableColumns
+        , groupField1 =
+            if Dict.get "display" params == Just "grouped" then
+                Dict.get "group-field-1" params
+                    |> Maybe.withDefault model.groupField1
+
+            else
+                model.groupField1
+        , groupField2 =
+            if Dict.get "display" params == Just "grouped" then
+                Dict.get "group-field-2" params
+
+            else
+                model.groupField2
+        , groupField3 =
+            if Dict.get "display" params == Just "grouped" then
+                Dict.get "group-field-3" params
+
+            else
+                model.groupField3
     }
 
 
@@ -2756,14 +3011,6 @@ searchWithCurrentQuery load ( model, cmd ) =
                             []
                     , tracker = Just newTracker
                 }
-
-            size : Int
-            size =
-                if load == LoadRemaining then
-                    10000
-
-                else
-                    model.pageSize
         in
         ( newModel
         , Cmd.batch
@@ -2780,7 +3027,7 @@ searchWithCurrentQuery load ( model, cmd ) =
                 { method = "POST"
                 , url = model.elasticUrl ++ "/_search"
                 , headers = []
-                , body = Http.jsonBody (buildSearchBody newModel size)
+                , body = Http.jsonBody (buildSearchBody newModel load)
                 , expect = Http.expectJson GotSearchResult esResultDecoder
                 , timeout = Just 10000
                 , tracker = Just ("search-" ++ String.fromInt newTracker)
@@ -2808,6 +3055,15 @@ getSearchKey url =
                     [ "display", _ ] ->
                         False
 
+                    [ "group-field-1", _ ] ->
+                        False
+
+                    [ "group-field-2", _ ] ->
+                        False
+
+                    [ "group-field-3", _ ] ->
+                        False
+
                     [ "q", q ] ->
                         q
                             |> Url.percentDecode
@@ -2828,6 +3084,24 @@ updateTitle ( model, cmd ) =
     , Cmd.batch
         [ cmd
         , document_setTitle model.query
+        ]
+    )
+
+
+updateWithNewGroupFields : Model -> ( Model, Cmd Msg )
+updateWithNewGroupFields model =
+    ( { model | searchResultGroupAggs = Nothing }
+    , Cmd.batch
+        [ updateUrl model
+        , Http.request
+            { method = "POST"
+            , url = model.elasticUrl ++ "/_search"
+            , headers = []
+            , body = Http.jsonBody (buildSearchGroupAggregationsBody model)
+            , expect = Http.expectJson GotGroupAggregationsResult esResultDecoder
+            , timeout = Just 10000
+            , tracker = Nothing
+            }
         ]
     )
 
@@ -2879,6 +3153,7 @@ buildAggregationsBody model =
                     )
                     [ buildCompositeAggregation
                         "item_subcategory"
+                        False
                         [ ( "category", "item_category" )
                         , ( "name", "item_subcategory" )
                         ]
@@ -2905,14 +3180,14 @@ buildTermsAggregation field =
     )
 
 
-buildCompositeAggregation : String -> List ( String, String ) -> ( String, Encode.Value )
-buildCompositeAggregation name sources =
+buildCompositeAggregation : String -> Bool -> List ( String, String ) -> ( String, Encode.Value )
+buildCompositeAggregation name missing sources =
     ( name
     , Encode.object
         [ ( "composite"
           , Encode.object
                 [ ( "sources"
-                  , Encode.list Encode.object (List.map buildCompositeTermsSource sources)
+                  , Encode.list Encode.object (List.map (buildCompositeTermsSource missing) sources)
                   )
                 , ( "size", Encode.int 10000 )
                 ]
@@ -2921,13 +3196,15 @@ buildCompositeAggregation name sources =
     )
 
 
-buildCompositeTermsSource : ( String, String ) -> List ( String, Encode.Value )
-buildCompositeTermsSource ( name, field ) =
+buildCompositeTermsSource : Bool -> ( String, String ) -> List ( String, Encode.Value )
+buildCompositeTermsSource missing ( name, field ) =
     [ ( name
       , Encode.object
             [ ( "terms"
               , Encode.object
                     [ ( "field", Encode.string field )
+                    -- TODO: Fix
+                    , ( "missing_bucket", Encode.bool missing )
                     ]
               )
             ]
@@ -2960,6 +3237,7 @@ buildSourcesAggregationBody =
           , Encode.object
                 [ buildCompositeAggregation
                     "source"
+                    False
                     [ ( "category", "source_category" )
                     , ( "name", "name.keyword" )
                     ]
@@ -3008,14 +3286,49 @@ encodeObjectMaybe list =
 
 esResultDecoder : Decode.Decoder SearchResult
 esResultDecoder =
-    Field.requireAt [ "aggregations", "type", "buckets" ] (Decode.list (aggregationBucketCountDecoder Decode.string)) <| \aggs ->
     Field.requireAt [ "hits", "hits" ] (Decode.list (hitDecoder documentDecoder)) <| \hits ->
     Field.requireAt [ "hits", "total", "value" ] Decode.int <| \total ->
+    Field.attempt "aggregations" groupAggregationsDecoder <| \groupAggs ->
     Decode.succeed
         { hits = hits
         , total = total
-        , typeAggs = Dict.fromList aggs
+        , groupAggs = groupAggs
         }
+
+
+groupAggregationsDecoder : Decode.Decoder GroupAggregations
+groupAggregationsDecoder =
+    Field.requireAt [ "group1", "buckets" ] (Decode.list groupBucketDecoder) <| \group1 ->
+    Field.attemptAt [ "group2", "buckets" ] (Decode.list groupBucketDecoder) <| \group2 ->
+    Field.attemptAt [ "group3", "buckets" ] (Decode.list groupBucketDecoder) <| \group3 ->
+    Decode.succeed
+        { group1 = group1
+        , group2 = group2
+        , group3 = group3
+        }
+
+
+groupBucketDecoder : Decode.Decoder GroupBucket
+groupBucketDecoder =
+    Field.require "doc_count" Decode.int <| \count ->
+    Field.attemptAt [ "key", "field1" ] decodeToString <| \key1 ->
+    Field.attemptAt [ "key", "field2" ] decodeToString <| \key2 ->
+    Field.attemptAt [ "key", "field3" ] decodeToString <| \key3 ->
+    Decode.succeed
+        { count = count
+        , key1 = key1
+        , key2 = key2
+        , key3 = key3
+        }
+
+
+decodeToString : Decode.Decoder String
+decodeToString =
+    Decode.oneOf
+        [ Decode.string
+        , Decode.map String.fromInt Decode.int
+        , Decode.map String.fromFloat Decode.float
+        ]
 
 
 aggregationBucketCountDecoder : Decode.Decoder a -> Decode.Decoder ( a, Int )
@@ -3171,7 +3484,8 @@ documentDecoder =
     Field.attempt "component" (Decode.list Decode.string) <| \components ->
     Field.attempt "constitution" Decode.int <| \constitution ->
     Field.attempt "cost_markdown" Decode.string <| \cost ->
-    Field.attempt "creature_family_markdown" Decode.string <| \creatureFamily ->
+    Field.attempt "creature_family" Decode.string <| \creatureFamily ->
+    Field.attempt "creature_family_markdown" Decode.string <| \creatureFamilyMarkdown ->
     Field.attempt "damage" Decode.string <| \damage ->
     Field.attempt "defense_proficiency" stringListDecoder <| \defenseProficiencies ->
     Field.attempt "deity_markdown" Decode.string <| \deities ->
@@ -3181,6 +3495,7 @@ documentDecoder =
     Field.attempt "divine_font" stringListDecoder <| \divineFonts ->
     Field.attempt "domain_markdown" Decode.string <| \domains ->
     Field.attempt "domain_spell_markdown" Decode.string <| \domainSpell ->
+    Field.attempt "duration" Decode.int <| \durationValue ->
     Field.attempt "duration_raw" Decode.string <| \duration ->
     Field.attempt "edict" Decode.string <| \edict ->
     Field.attempt "familiar_ability" stringListDecoder <| \familiarAbilities ->
@@ -3212,6 +3527,7 @@ documentDecoder =
     Field.attempt "prerequisite_markdown" Decode.string <| \prerequisites ->
     Field.attempt "price_raw" Decode.string <| \price ->
     Field.attempt "primary_check_markdown" Decode.string <| \primaryCheck ->
+    Field.attempt "range" Decode.int <| \rangeValue ->
     Field.attempt "range_raw" Decode.string <| \range ->
     Field.attempt "rarity" Decode.string <| \rarity ->
     Field.attempt "reflex_save" Decode.int <| \ref ->
@@ -3230,6 +3546,7 @@ documentDecoder =
     Field.attempt "size" stringListDecoder <| \sizes ->
     Field.attempt "skill_markdown" Decode.string <| \skills ->
     Field.attempt "skill_proficiency" stringListDecoder <| \skillProficiencies ->
+    Field.attempt "source" stringListDecoder <| \sourceList ->
     Field.attempt "source_markdown" Decode.string <| \sources ->
     Field.attempt "speed" speedTypeValuesDecoder <| \speedValues ->
     Field.attempt "speed_markdown" Decode.string <| \speed ->
@@ -3241,8 +3558,10 @@ documentDecoder =
     Field.attempt "strongest_save" stringListDecoder <| \strongestSaves ->
     Field.attempt "summary" Decode.string <| \summary ->
     Field.attempt "target_markdown" Decode.string <| \targets ->
+    Field.attempt "tradition" stringListDecoder <| \traditionList ->
     Field.attempt "tradition_markdown" Decode.string <| \traditions ->
     Field.attempt "trait_markdown" Decode.string <| \traits ->
+    Field.attempt "trait" stringListDecoder <| \traitList ->
     Field.attempt "trigger_markdown" Decode.string <| \trigger ->
     Field.attempt "usage" Decode.string <| \usage ->
     Field.attempt "vision" Decode.string <| \vision ->
@@ -3250,7 +3569,8 @@ documentDecoder =
     Field.attempt "weakness" damageTypeValuesDecoder <| \weaknessValues ->
     Field.attempt "weakness_markdown" Decode.string <| \weaknesses ->
     Field.attempt "weapon_category" Decode.string <| \weaponCategory ->
-    Field.attempt "weapon_group_markdown" Decode.string <| \weaponGroup ->
+    Field.attempt "weapon_group" Decode.string <| \weaponGroup ->
+    Field.attempt "weapon_group_markdown" Decode.string <| \weaponGroupMarkdown ->
     Field.attempt "weapon_type" Decode.string <| \weaponType ->
     Field.attempt "will_save" Decode.int <| \will ->
     Field.attempt "wisdom" Decode.int <| \wisdom ->
@@ -3287,6 +3607,7 @@ documentDecoder =
         , constitution = constitution
         , cost = cost
         , creatureFamily = creatureFamily
+        , creatureFamilyMarkdown = creatureFamilyMarkdown
         , damage = damage
         , defenseProficiencies = Maybe.withDefault [] defenseProficiencies
         , deities = deities
@@ -3297,6 +3618,7 @@ documentDecoder =
         , domains = domains
         , domainSpell = domainSpell
         , duration = duration
+        , durationValue = durationValue
         , edict = edict
         , familiarAbilities = Maybe.withDefault [] familiarAbilities
         , favoredWeapons = favoredWeapons
@@ -3327,6 +3649,7 @@ documentDecoder =
         , price = price
         , primaryCheck = primaryCheck
         , range = range
+        , rangeValue = rangeValue
         , rarity = rarity
         , ref = ref
         , region = region
@@ -3350,6 +3673,7 @@ documentDecoder =
         , sizes = Maybe.withDefault [] sizes
         , skills = skills
         , skillProficiencies = Maybe.withDefault [] skillProficiencies
+        , sourceList = Maybe.withDefault [] sourceList
         , sources = sources
         , speed = speed
         , speedPenalty = speedPenalty
@@ -3361,7 +3685,9 @@ documentDecoder =
         , strongestSaves = Maybe.withDefault [] strongestSaves
         , summary = summary
         , targets = targets
+        , traditionList = Maybe.withDefault [] traditionList
         , traditions = traditions
+        , traitList = Maybe.withDefault [] traitList
         , traits = traits
         , trigger = trigger
         , usage = usage
@@ -3371,6 +3697,7 @@ documentDecoder =
         , weaknesses = weaknesses
         , weaponCategory = weaponCategory
         , weaponGroup = weaponGroup
+        , weaponGroupMarkdown = weaponGroupMarkdown
         , weaponType = weaponType
         , will = will
         , wisdom = wisdom
@@ -6492,11 +6819,11 @@ viewResultDisplay model =
             , text = "Table"
             }
         , viewRadioButton
-            { checked = model.resultDisplay == ByType
+            { checked = model.resultDisplay == Grouped
             , enabled = True
             , name = "result-display"
-            , onInput = ResultDisplayChanged ByType
-            , text = "By Type"
+            , onInput = ResultDisplayChanged Grouped
+            , text = "Grouped"
             }
         ]
     , Html.div
@@ -6673,8 +7000,147 @@ viewResultDisplay model =
                     )
                 ]
 
-            ByType ->
-                []
+            Grouped ->
+                [ Html.h4
+                    []
+                    [ Html.text "Group by" ]
+                , Html.div
+                    [ HA.class "column"
+                    , HA.class "gap-tiny"
+                    ]
+                    [ Html.div
+                        [ HA.class "scrollbox"
+                        , HA.class "column"
+                        , HA.class "gap-small"
+                        ]
+                        (List.map
+                            (\field ->
+                                Html.div
+                                    [ HA.class "row"
+                                    , HA.class "gap-small"
+                                    , HA.class "align-center"
+                                    ]
+                                    [ Html.button
+                                        [ HE.onClick (GroupField1Changed field)
+                                        , HA.disabled (model.groupField1 == field)
+                                        , HAE.attributeIf
+                                            (model.groupField1 == field)
+                                            (HA.class "active")
+                                        ]
+                                        [ Html.text "1st" ]
+                                    , Html.button
+                                        [ HE.onClick
+                                            (if model.groupField2 == Just field then
+                                                GroupField2Changed Nothing
+
+                                             else
+                                                GroupField2Changed (Just field)
+                                            )
+                                        , HAE.attributeIf
+                                            (model.groupField2 == Just field)
+                                            (HA.class "active")
+                                        ]
+                                        [ Html.text "2nd" ]
+                                    , Html.button
+                                        [ HE.onClick
+                                            (if model.groupField3 == Just field then
+                                                GroupField3Changed Nothing
+
+                                             else
+                                                GroupField3Changed (Just field)
+                                            )
+                                        , HA.disabled (model.groupField2 == Nothing)
+                                        , HAE.attributeIf
+                                            (model.groupField3 == Just field)
+                                            (HA.class "active")
+                                        ]
+                                        [ Html.text "3rd" ]
+                                    , Html.text (toTitleCase (String.Extra.humanize field))
+                                    ]
+                            )
+                            [ "ability"
+                            , "actions"
+                            , "alignment"
+                            , "creature_family"
+                            , "duration"
+                            , "item_category"
+                            , "item_subcategory"
+                            , "level"
+                            , "hands"
+                            , "pfs"
+                            , "range"
+                            , "rarity"
+                            , "school"
+                            , "size"
+                            , "source"
+                            , "type"
+                            , "weapon_category"
+                            , "weapon_group"
+                            , "weapon_type"
+                            ]
+                        )
+                    ]
+
+                , Html.h4
+                    []
+                    [ Html.text "Groups with 0 loaded results" ]
+                , Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-medium"
+                    ]
+                    [ viewRadioButton
+                        { checked = model.groupedDisplay == Show
+                        , enabled = True
+                        , name = "grouped-display"
+                        , onInput = GroupedDisplayChanged Show
+                        , text = "Show"
+                        }
+                    , viewRadioButton
+                        { checked = model.groupedDisplay == Dim
+                        , enabled = True
+                        , name = "grouped-display"
+                        , onInput = GroupedDisplayChanged Dim
+                        , text = "Dim"
+                        }
+                    , viewRadioButton
+                        { checked = model.groupedDisplay == Hide
+                        , enabled = True
+                        , name = "grouped-display"
+                        , onInput = GroupedDisplayChanged Hide
+                        , text = "Hide"
+                        }
+                    ]
+
+                , Html.h4
+                    []
+                    [ Html.text "Group sort order" ]
+                , Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-medium"
+                    ]
+                    [ viewRadioButton
+                        { checked = model.groupedSort == Alphanum
+                        , enabled = True
+                        , name = "grouped-sort"
+                        , onInput = GroupedSortChanged Alphanum
+                        , text = "Alphanumeric"
+                        }
+                    , viewRadioButton
+                        { checked = model.groupedSort == CountLoaded
+                        , enabled = True
+                        , name = "grouped-sort"
+                        , onInput = GroupedSortChanged CountLoaded
+                        , text = "Count (Loaded)"
+                        }
+                    , viewRadioButton
+                        { checked = model.groupedSort == CountTotal
+                        , enabled = True
+                        , name = "grouped-sort"
+                        , onInput = GroupedSortChanged CountTotal
+                        , text = "Count (Total)"
+                        }
+                    ]
+                ]
         )
     ]
 
@@ -6697,7 +7163,7 @@ viewResultDisplayColumn model column =
             [ FontAwesome.Icon.viewIcon FontAwesome.Solid.plus
             ]
 
-        , Html.text (String.Extra.humanize column)
+        , Html.text (toTitleCase (String.Extra.humanize column))
         ]
 
     , case column of
@@ -7111,10 +7577,37 @@ viewSearchResults model =
                 Table ->
                     viewSearchResultsTable model remaining
 
-                ByType ->
-                    viewSearchResultsByType model remaining
+                Grouped ->
+                    viewSearchResultsGrouped model remaining
             ]
         )
+
+
+viewLoadMoreButtons : Model -> Int -> Html Msg
+viewLoadMoreButtons model remaining =
+    Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        , HA.style "justify-content" "center"
+        ]
+        [ if remaining > model.pageSize then
+            Html.button
+                [ HE.onClick LoadMorePressed
+                ]
+                [ Html.text ("Load " ++ String.fromInt model.pageSize ++ " more") ]
+
+          else
+            Html.text ""
+
+        , if remaining > 0 && remaining < 1000 then
+            Html.button
+                [ HE.onClick LoadRemainingPressed
+                ]
+                [ Html.text ("Load remaining " ++ String.fromInt remaining) ]
+
+          else
+            Html.text ""
+        ]
 
 
 viewSearchResultsList : Model -> Int -> Int -> List (Html Msg)
@@ -7147,30 +7640,7 @@ viewSearchResultsList model remaining resultCount =
         ]
 
       else
-        [ Html.div
-            [ HA.class "row"
-            , HA.class "gap-medium"
-            , HA.style "justify-content" "center"
-            ]
-            [ if remaining > model.pageSize then
-                Html.button
-                    [ HE.onClick LoadMorePressed
-                    ]
-                    [ Html.text ("Load " ++ String.fromInt model.pageSize ++ " more") ]
-
-              else
-                Html.text ""
-
-            , if remaining > 0 && remaining < 1000 then
-                Html.button
-                    [ HE.onClick LoadRemainingPressed
-                    ]
-                    [ Html.text ("Load remaining " ++ String.fromInt remaining) ]
-
-              else
-                Html.text ""
-            ]
-        ]
+        [ viewLoadMoreButtons model remaining ]
 
     , if resultCount > 0 then
         [ Html.button
@@ -7512,7 +7982,7 @@ viewSearchResultGridCell model hit column =
                     |> Html.text
 
             [ "creature_family" ] ->
-                hit.source.creatureFamily
+                hit.source.creatureFamilyMarkdown
                     |> Maybe.withDefault ""
                     |> parseAndViewAsMarkdown
 
@@ -7929,7 +8399,7 @@ viewSearchResultGridCell model hit column =
                     |> Html.text
 
             [ "weapon_group" ] ->
-                hit.source.weaponGroup
+                hit.source.weaponGroupMarkdown
                     |> Maybe.withDefault ""
                     |> parseAndViewAsMarkdown
 
@@ -7974,68 +8444,43 @@ viewSearchResultGridCell model hit column =
         ]
 
 
-viewSearchResultsByType : Model -> Int -> List (Html Msg)
-viewSearchResultsByType model remaining =
+viewSearchResultsGrouped : Model -> Int -> List (Html Msg)
+viewSearchResultsGrouped model remaining =
     let
-        typeAggs : Dict String Int
-        typeAggs =
-            case List.head model.searchResults of
-                Just (Ok results) ->
-                    results.typeAggs
-
-                _ ->
-                    Dict.empty
-
-        emptyDictByType : Dict String (List a)
-        emptyDictByType =
-            typeAggs
-                |> Dict.keys
-                |> List.map (\key -> ( String.Extra.toTitleCase key, [] ))
-                |> Dict.fromList
-
-        resultsByType : List ( String, List (Hit Document) )
-        resultsByType =
+        allHits : List (Hit Document)
+        allHits =
             model.searchResults
                 |> List.concatMap (Result.map .hits >> Result.withDefault [])
-                |> List.Extra.gatherEqualsBy (.source >> .type_ >> String.Extra.toTitleCase)
+
+        keys : List String
+        keys =
+            model.searchResultGroupAggs
+                |> Maybe.map .group1
+                |> Maybe.withDefault []
+                |> List.map .key1
+                |> List.map (Maybe.withDefault "")
+
+        counts : Dict String Int
+        counts =
+            model.searchResultGroupAggs
+                |> Maybe.map .group1
+                |> Maybe.withDefault []
                 |> List.map
-                    (\(first, rem) ->
-                        ( first.source.type_, first :: rem )
+                    (\agg ->
+                        ( Maybe.withDefault "" agg.key1, agg.count )
                     )
                 |> Dict.fromList
-                |> \dict -> Dict.union dict emptyDictByType
-                |> Dict.toList
+
     in
-    [ if Maybe.Extra.isJust model.tracker then
+    [ if Maybe.Extra.isJust model.tracker || model.searchResultGroupAggs == Nothing then
         Html.div
             [ HA.class "loader"
             ]
             []
 
       else
-        Html.div
-            [ HA.class "row"
-            , HA.class "gap-medium"
-            , HA.style "justify-content" "center"
-            ]
-            [ if remaining > model.pageSize then
-                Html.button
-                    [ HE.onClick LoadMorePressed
-                    ]
-                    [ Html.text ("Load " ++ String.fromInt model.pageSize ++ " more") ]
+        viewLoadMoreButtons model remaining
 
-              else
-                Html.text ""
-
-            , if remaining > 0 && remaining < 1000 then
-                Html.button
-                    [ HE.onClick LoadRemainingPressed
-                    ]
-                    [ Html.text ("Load remaining " ++ String.fromInt remaining) ]
-
-              else
-                Html.text ""
-            ]
     , Html.div
         [ HA.class "column"
         , HA.class "gap-large"
@@ -8043,46 +8488,575 @@ viewSearchResultsByType model remaining =
         , HA.class "fill-width-with-padding"
         ]
         (List.map
-            (\(type_, hits) ->
+            (\( key1, hits1 ) ->
                 Html.div
                     [ HA.class "column"
                     , HA.class "gap-small"
+                    , HAE.attributeIf (List.length hits1 == 0) (groupedDisplayAttribute model)
                     ]
                     [ Html.h2
                         [ HA.class "title" ]
                         [ Html.div
                             []
-                            [ Html.text type_ ]
+                            [ viewGroupedTitle model.groupField1 key1
+                            ]
                         , Html.div
                             []
-                            [ Html.text (String.fromInt (List.length hits))
+                            [ Html.text (String.fromInt (List.length hits1))
                             , Html.text "/"
                             , Html.text
-                                (typeAggs
-                                    |> Dict.get (String.toLower type_)
-                                    |> Maybe.map String.fromInt
-                                    |> Maybe.withDefault ""
+                                (Dict.get key1 counts
+                                    |> Maybe.withDefault 0
+                                    |> String.fromInt
                                 )
                             ]
                         ]
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-small"
-                        ]
-                        (hits
-                            |> List.sortBy (.source >> .name)
-                            |> List.map
-                                (\hit ->
-                                    Html.a
-                                        [ HA.href (getUrl model hit.source) ]
-                                        [ Html.text hit.source.name ]
-                                )
-                        )
+
+                    , case model.groupField2 of
+                        Just field2 ->
+                            viewSearchResultsGroupedLevel2 model key1 field2 hits1
+
+                        Nothing ->
+                            viewSearchResultsGroupedLinkList model hits1
                     ]
             )
-            resultsByType
+            (if model.searchResultGroupAggs == Nothing then
+                []
+
+             else
+                groupDocumentsByField keys model.groupField1 allHits
+                    |> Dict.toList
+                    |> sortGroupedList model "" counts
+            )
         )
     ]
+
+
+viewSearchResultsGroupedLevel2 : Model -> String -> String -> List (Hit Document) -> Html Msg
+viewSearchResultsGroupedLevel2 model key1 field2 hits1 =
+    let
+        keys : List String
+        keys =
+            model.searchResultGroupAggs
+                |> Maybe.andThen .group2
+                |> Maybe.withDefault []
+                |> List.filter
+                    (\agg ->
+                        agg.key1 == Just key1
+                    )
+                |> List.map .key2
+                |> List.map (Maybe.withDefault "")
+
+        counts : Dict String Int
+        counts =
+            model.searchResultGroupAggs
+                |> Maybe.andThen .group2
+                |> Maybe.withDefault []
+                |> List.map
+                    (\agg ->
+                        ( Maybe.withDefault "" agg.key1
+                            ++ "--"
+                            ++ Maybe.withDefault "" agg.key2
+                        , agg.count
+                        )
+                    )
+                |> Dict.fromList
+    in
+    Html.div
+        [ HA.class "column"
+        , HA.class "gap-large"
+        ]
+        (List.map
+            (\( key2, hits2 ) ->
+                Html.div
+                    [ HA.class "column"
+                    , HA.class "gap-small"
+                    , HAE.attributeIf (List.length hits2 == 0) (groupedDisplayAttribute model)
+                    ]
+                    [ Html.h3
+                        [ HA.class "subtitle" ]
+                        [ Html.div
+                            []
+                            [ viewGroupedTitle field2 key2
+                            ]
+                        , Html.div
+                            []
+                            [ Html.text (String.fromInt (List.length hits2))
+                            , Html.text "/"
+                            , Html.text
+                                (Dict.get (key1 ++ "--" ++ key2) counts
+                                    |> Maybe.withDefault 0
+                                    |> String.fromInt
+                                )
+                            ]
+                        ]
+                    , case model.groupField3 of
+                        Just field3 ->
+                            viewSearchResultsGroupedLevel3 model key1 key2 field3 hits2
+
+                        Nothing ->
+                            viewSearchResultsGroupedLinkList model hits2
+                    ]
+            )
+            (groupDocumentsByField keys field2 hits1
+                |> Dict.toList
+                |> sortGroupedList model (key1 ++ "--") counts
+            )
+        )
+
+
+viewSearchResultsGroupedLevel3 : Model -> String -> String -> String -> List (Hit Document) -> Html Msg
+viewSearchResultsGroupedLevel3 model key1 key2 field3 hits2 =
+    let
+        keys : List String
+        keys =
+            model.searchResultGroupAggs
+                |> Maybe.andThen .group3
+                |> Maybe.withDefault []
+                |> List.filter
+                    (\agg ->
+                        agg.key1 == Just key1
+                        && agg.key2 == Just key2
+                    )
+                |> List.map .key3
+                |> List.map (Maybe.withDefault "")
+
+        counts : Dict String Int
+        counts =
+            model.searchResultGroupAggs
+                |> Maybe.andThen .group3
+                |> Maybe.withDefault []
+                |> List.map
+                    (\agg ->
+                        ( Maybe.withDefault "" agg.key1
+                            ++ "--"
+                            ++ Maybe.withDefault "" agg.key2
+                            ++ "--"
+                            ++ Maybe.withDefault "" agg.key3
+                        , agg.count
+                        )
+                    )
+                |> Dict.fromList
+    in
+    Html.div
+        [ HA.class "column"
+        , HA.class "gap-large"
+        ]
+        (List.map
+            (\( key3, hits3 ) ->
+                Html.div
+                    [ HA.class "column"
+                    , HA.class "gap-small"
+                    , HAE.attributeIf (List.length hits3 == 0) (groupedDisplayAttribute model)
+                    ]
+                    [ Html.h4
+                        [ HA.class "subtitle"
+                        , HA.style "background-color" "var(--color-subsubelement-bg)"
+                        , HA.style "color" "var(--color-subsubelement-text)"
+                        , HA.style "border-radius" "4px"
+                        , HA.style "line-height" "16px"
+                        ]
+                        [ Html.div
+                            []
+                            [ viewGroupedTitle field3 key3
+                            ]
+                        , Html.div
+                            []
+                            [ Html.text (String.fromInt (List.length hits3))
+                            , Html.text "/"
+                            , Html.text
+                                (Dict.get (key1 ++ "--" ++ key2 ++ "--" ++ key3) counts
+                                    |> Maybe.withDefault 0
+                                    |> String.fromInt
+                                )
+                            ]
+                        ]
+                    , viewSearchResultsGroupedLinkList model hits3
+                    ]
+            )
+            (groupDocumentsByField keys field3 hits2
+                |> Dict.toList
+                |> sortGroupedList model (key1 ++ "--" ++ key2 ++ "--") counts
+            )
+        )
+
+
+viewSearchResultsGroupedLinkList model hits =
+    Html.div
+        [ HA.class "row"
+        , HA.class "gap-small"
+        ]
+        (hits
+            |> List.sortBy (.source >> .name)
+            |> List.map
+                (\hit ->
+                    Html.a
+                        [ HA.href (getUrl model hit.source) ]
+                        [ Html.text hit.source.name ]
+                )
+        )
+
+
+groupedDisplayAttribute : Model -> Html.Attribute msg
+groupedDisplayAttribute model =
+    case model.groupedDisplay of
+        Show ->
+            HAE.empty
+
+        Dim ->
+            HA.class "dim"
+
+        Hide ->
+            HA.style "display" "none"
+
+
+groupDocumentsByField : List String -> String -> List (Hit Document) -> Dict String (List (Hit Document))
+groupDocumentsByField keys field hits =
+    List.foldl
+        (\hit dict ->
+            case field of
+                "ability" ->
+                    if List.isEmpty hit.source.abilities then
+                        insertToListDict "" hit dict
+
+                    else
+                        List.foldl
+                            (\ability ->
+                                insertToListDict (String.toLower ability) hit
+                            )
+                            dict
+                            (List.Extra.unique hit.source.abilities)
+
+                "actions" ->
+                    insertToListDict
+                        (hit.source.actions
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        hit
+                        dict
+
+                "alignment" ->
+                    insertToListDict
+                        (hit.source.alignment
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        hit
+                        dict
+
+                "creature_family" ->
+                    insertToListDict
+                        (hit.source.creatureFamily
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        hit
+                        dict
+
+                "duration" ->
+                    insertToListDict
+                        (hit.source.durationValue
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        hit
+                        dict
+
+                "item_category" ->
+                    insertToListDict
+                        (hit.source.itemCategory
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        hit
+                        dict
+
+                "item_subcategory" ->
+                    insertToListDict
+                        (hit.source.itemSubcategory
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        hit
+                        dict
+
+                "level" ->
+                    insertToListDict
+                        (hit.source.level
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        hit
+                        dict
+
+                "pfs" ->
+                    insertToListDict
+                        (hit.source.pfs
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        hit
+                        dict
+
+                "range" ->
+                    insertToListDict
+                        (hit.source.rangeValue
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        hit
+                        dict
+
+                "rarity" ->
+                    insertToListDict
+                        (hit.source.rarity
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        hit
+                        dict
+
+                "school" ->
+                    insertToListDict
+                        (hit.source.school
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        hit
+                        dict
+
+                "size" ->
+                    if List.isEmpty hit.source.sizes then
+                        insertToListDict "" hit dict
+
+                    else
+                        List.foldl
+                            (\size ->
+                                insertToListDict (String.toLower size) hit
+                            )
+                            dict
+                            hit.source.sizes
+
+                "source" ->
+                    List.foldl
+                        (\source ->
+                            insertToListDict (String.toLower source) hit
+                        )
+                        dict
+                        hit.source.sourceList
+
+                "tradition" ->
+                    if List.isEmpty hit.source.traditionList then
+                        insertToListDict "" hit dict
+
+                    else
+                        List.foldl
+                            (\tradition ->
+                                insertToListDict (String.toLower tradition) hit
+                            )
+                            dict
+                            hit.source.traditionList
+
+                "trait" ->
+                    if List.isEmpty hit.source.traitList then
+                        insertToListDict "" hit dict
+
+                    else
+                        List.foldl
+                            (\trait ->
+                                insertToListDict (String.toLower trait) hit
+                            )
+                            dict
+                            hit.source.traitList
+
+                "type" ->
+                    insertToListDict (String.toLower hit.source.type_) hit dict
+
+                "weapon_category" ->
+                    insertToListDict
+                        (hit.source.weaponCategory
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        hit
+                        dict
+
+                "weapon_group" ->
+                    insertToListDict
+                        (hit.source.weaponGroup
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        hit
+                        dict
+
+                "weapon_type" ->
+                    insertToListDict
+                        (hit.source.weaponType
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        hit
+                        dict
+
+                _ ->
+                    dict
+        )
+        (keys
+            |> List.map (\key -> ( key, [] ))
+            |> Dict.fromList
+        )
+        hits
+
+
+sortGroupedList model keyPrefix counts list =
+    List.sortWith
+        (\( k1, v1 ) ( k2, v2 ) ->
+            case model.groupedSort of
+                Alphanum ->
+                    case ( List.length v1, List.length v2 ) of
+                        ( 0, 0 ) ->
+                            Maybe.map2 compare (String.toInt k1) (String.toInt k2)
+                                |> Maybe.withDefault (compare k1 k2)
+
+                        ( 0, _ ) ->
+                            GT
+
+                        ( _, 0 ) ->
+                            LT
+
+                        ( _, _ ) ->
+                            Maybe.map2 compare (String.toInt k1) (String.toInt k2)
+                                |> Maybe.withDefault (compare k1 k2)
+
+                CountLoaded ->
+                    compare (List.length v2) (List.length v1)
+
+                CountTotal ->
+                    compare
+                        (Dict.get (keyPrefix ++ k2) counts
+                            |> Maybe.withDefault 0
+                        )
+                        (Dict.get (keyPrefix ++ k1) counts
+                            |> Maybe.withDefault 0
+                        )
+        )
+        list
+
+
+viewGroupedTitle : String -> String -> Html msg
+viewGroupedTitle field value =
+    if value == "" then
+        Html.text "N/A"
+
+    else if field == "actions.keyword" then
+        viewTextWithActionIcons value
+
+    else if field == "alignment" then
+        Html.text
+            (Dict.fromList Data.alignments
+                |> Dict.get value
+                |> Maybe.withDefault value
+                |> String.Extra.toTitleCase
+            )
+
+    else if field == "duration" then
+        case String.toInt value of
+            Just duration ->
+                Html.text (durationToString duration)
+
+            Nothing ->
+                Html.text value
+
+    else if field == "level" then
+        Html.text ("Level " ++ value)
+
+    else if field == "pfs" then
+        Html.div
+            [ HA.class "row"
+            , HA.class "gap-small"
+            , HA.class "align-center"
+            ]
+            [ viewPfsIcon 0 value
+            , Html.text (String.Extra.toTitleCase value)
+            ]
+
+    else if field == "range" then
+        case String.toInt value of
+            Just range ->
+                Html.text (rangeToString range)
+
+            Nothing ->
+                Html.text value
+
+    else
+        Html.text (toTitleCase value)
+
+
+insertToListDict : comparable -> a -> Dict comparable (List a) -> Dict comparable (List a)
+insertToListDict key value dict =
+    Dict.update
+        key
+        (\maybeList ->
+            maybeList
+                |> Maybe.withDefault []
+                |> (::) value
+                |> Just
+        )
+        dict
+
+
+durationToString : Int -> String
+durationToString duration =
+    if duration > 60 * 60 * 24 * 365 then
+        String.fromInt (duration // (60 * 60 * 24 * 365)) ++ " years"
+
+    else if duration == 60 * 60 * 24 * 365 then
+        "1 year"
+
+    else if duration > 60 * 60 * 24 then
+        String.fromInt (duration // (60 * 60 * 24)) ++ " days"
+
+    else if duration == 60 * 60 * 24 then
+        "1 day"
+
+    else if duration > 60 * 60 then
+        String.fromInt (duration // (60 * 60)) ++ " hours"
+
+    else if duration == 60 * 60 then
+        "1 hour"
+
+    else if duration > 60 then
+        String.fromInt (duration // 60) ++ " minutes"
+
+    else if duration == 60 then
+        "1 minute"
+
+    else if duration == 6 then
+        "1 round"
+
+    else
+        String.fromInt (duration // 6) ++ " rounds"
+
+
+rangeToString : Int -> String
+rangeToString range =
+    if range == 100000000 then
+        "Unlimited"
+
+    else if range == 10000000 then
+        "Planetary"
+
+    else if range > 5280 then
+        String.fromInt (range // 5280) ++ " miles"
+
+    else if range == 5280 then
+        "1 mile"
+
+    else
+        String.fromInt range ++ " feet"
+
 
 parseAndViewAsMarkdown : String -> Html msg
 parseAndViewAsMarkdown string =
@@ -8551,7 +9525,11 @@ viewPfsIcon height pfs =
         Just url ->
             Html.img
                 [ HA.src url
-                , HA.style "height" (String.fromInt height ++ "px")
+                , if height == 0 then
+                    HA.style "height" "1em"
+
+                  else
+                    HA.style "height" (String.fromInt height ++ "px")
                 ]
                 []
 
@@ -8626,8 +9604,8 @@ stringContainsChar str chars =
         chars
 
 
-capitalizeSource : String -> String
-capitalizeSource str =
+toTitleCase : String -> String
+toTitleCase str =
     str
         |> String.Extra.toTitleCase
         |> String.replace " In " " in "
@@ -8638,7 +9616,7 @@ capitalizeSource str =
         |> String.replace " The " " the "
         |> String.replace ": the " ": The "
         |> String.replace ", the " ", The "
-        |> String.replace "Pfs " "PFS "
+        |> String.replace "Pfs" "PFS"
         |> String.replace "Gm's " "GM's "
 
 
@@ -8856,6 +9834,14 @@ css =
         display: none;
     }
 
+    .dim {
+        opacity: 0.5;
+    }
+
+    .dim .dim {
+        opacity: inherit;
+    }
+
     .external-link {
         color: var(--color-external-link);
         font-style: italic;
@@ -9042,7 +10028,9 @@ css =
         border-radius: 4px;
         background-color: var(--color-subelement-bg);
         color: var(--color-subelement-text);
+        display: flex;
         font-variant: var(--element-font-variant);
+        justify-content: space-between;
         line-height: 1rem;
         padding: 4px 9px;
     }
@@ -9172,6 +10160,8 @@ cssBlackbird =
         --color-external-link: #a2a4a3;
         --color-subelement-bg: #404859;
         --color-subelement-text: #ededed;
+        --color-subsubelement-bg: #404859;
+        --color-subsubelement-text: #ededed;
         --color-inactive-text: #999999;
         --color-table-even: #404859;
         --color-table-odd: #21252b;
@@ -9200,6 +10190,8 @@ cssDark =
         --color-external-link: #00ffff;
         --color-subelement-bg: #806e45;
         --color-subelement-text: #111111;
+        --color-subsubelement-bg: #627d62;
+        --color-subsubelement-text: #0f0f0f;
         --color-inactive-text: #999999;
         --color-table-even: #64542f;
         --color-table-odd: #342c19;
@@ -9228,6 +10220,8 @@ cssDead =
         --color-external-link: #0000ff;
         --color-subelement-bg: #709cab;
         --color-subelement-text: #0f0f0f;
+        --color-subsubelement-bg: #c18479;
+        --color-subsubelement-text: #0f0f0f;
         --color-inactive-text: #999999;
         --color-table-even: #c3cdce;
         --color-table-odd: #74919b;
@@ -9256,6 +10250,8 @@ cssLight =
         --color-external-link: #0000ff;
         --color-subelement-bg: #cbc18f;
         --color-subelement-text: #111111;
+        --color-subsubelement-bg: #627d62;
+        --color-subsubelement-text: #0f0f0f;
         --color-inactive-text: #999999;
         --color-table-even: #cbc18f;
         --color-table-odd: #ded7bb;
@@ -9284,6 +10280,8 @@ cssPaper =
         --color-external-link: #0000ff;
         --color-subelement-bg: #dbd0bc;
         --color-subelement-text: #111111;
+        --color-subsubelement-bg: #002564;
+        --color-subsubelement-text: #c8c6b7;
         --color-inactive-text: #999999;
         --color-table-even: #ede3c7;
         --color-table-odd: #f4eee0;
@@ -9310,8 +10308,10 @@ cssExtraContrast =
         --color-element-inactive-text: #656148;
         --color-element-text: #cbc18f;
         --color-external-link: #00ffff;
-        --color-subelement-bg: #769477;
-        --color-subelement-text: #111111;
+        --color-subelement-bg: #002564;
+        --color-subelement-text: #ffffff;
+        --color-subsubelement-bg: #769477;
+        --color-subsubelement-text: #0f0f0f;
         --color-inactive-text: #999999;
         --color-table-even: #ffffff;
         --color-table-odd: #cccccc;
@@ -9338,8 +10338,10 @@ cssLavender =
         --color-element-inactive-text: #656148;
         --color-element-text: #cbc18f;
         --color-external-link: #0000ff;
-        --color-subelement-bg: #f0e6ff;
-        --color-subelement-text: #111111;
+        --color-subelement-bg: #b8a0ce;
+        --color-subelement-text: #ffffff;
+        --color-subsubelement-bg: #f0e6ff;
+        --color-subsubelement-text: #0f0f0f;
         --color-inactive-text: #999999;
         --color-table-even: #8471a7;
         --color-table-odd: #6f5f98;
