@@ -5,6 +5,7 @@ import Browser.Dom
 import Browser.Events
 import Data
 import Dict exposing (Dict)
+import Dict.Extra
 import FontAwesome.Attributes
 import FontAwesome.Icon
 import FontAwesome.Regular
@@ -230,6 +231,7 @@ type alias Aggregations =
     , reloads : List String
     , sources : List String
     , traits : List String
+    , traitGroups : Dict String (List String)
     , types : List String
     , weaponGroups : List String
     }
@@ -365,6 +367,7 @@ type Msg
     | GroupField1Changed String
     | GroupField2Changed (Maybe String)
     | GroupField3Changed (Maybe String)
+    | GroupTraitsChanged Bool
     | GroupedDisplayChanged GroupedDisplay
     | GroupedSortChanged GroupedSort
     | HandFilterAdded String
@@ -463,6 +466,9 @@ type Msg
     | ThemeSelected Theme
     | TraditionFilterAdded String
     | TraditionFilterRemoved String
+    | TraitGroupDeselectPressed (List String)
+    | TraitGroupExcludePressed (List String)
+    | TraitGroupIncludePressed (List String)
     | TraitFilterAdded String
     | TraitFilterRemoved String
     | TypeFilterAdded String
@@ -531,6 +537,7 @@ type alias Model =
     , groupField1 : String
     , groupField2 : Maybe String
     , groupField3 : Maybe String
+    , groupTraits : Bool
     , groupedDisplay : GroupedDisplay
     , groupedSort : GroupedSort
     , lastSearchKey : Maybe String
@@ -650,6 +657,7 @@ init flagsValue =
       , groupField1 = "type"
       , groupField2 = Nothing
       , groupField3 = Nothing
+      , groupTraits = False
       , groupedDisplay = Dim
       , groupedSort = Alphanum
       , lastSearchKey = Nothing
@@ -705,6 +713,7 @@ init flagsValue =
     , Cmd.batch
         [ localStorage_get "auto-query-type"
         , localStorage_get "column-configurations"
+        , localStorage_get "group-traits"
         , localStorage_get "grouped-display"
         , localStorage_get "limit-table-width"
         , localStorage_get "page-size"
@@ -974,6 +983,13 @@ update msg model =
         GroupField3Changed field ->
             updateWithNewGroupFields { model | groupField3 = field }
 
+        GroupTraitsChanged enabled ->
+            ( { model | groupTraits = enabled }
+            , saveToLocalStorage
+                "group-traits"
+                (if enabled then "1" else "0")
+            )
+
         GroupedDisplayChanged value ->
             ( { model | groupedDisplay = value }
             , saveToLocalStorage
@@ -1148,6 +1164,17 @@ update msg model =
 
                         Ok "count-total" ->
                             { model | groupedSort = CountTotal }
+
+                        _ ->
+                            model
+
+                Ok "group-traits" ->
+                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
+                        Ok "1" ->
+                            { model | groupTraits = True }
+
+                        Ok "0" ->
+                            { model | groupTraits = False }
 
                         _ ->
                             model
@@ -1828,6 +1855,48 @@ update msg model =
         TraditionFilterRemoved tradition ->
             ( model
             , updateUrl { model | filteredTraditions = Dict.remove tradition model.filteredTraditions }
+            )
+
+        TraitGroupDeselectPressed traits ->
+            ( model
+            , updateUrl
+                { model
+                    | filteredTraits =
+                        List.foldl
+                            (\trait ->
+                                Dict.remove trait
+                            )
+                            model.filteredTraits
+                            traits
+                }
+            )
+
+        TraitGroupExcludePressed traits ->
+            ( model
+            , updateUrl
+                { model
+                    | filteredTraits =
+                        List.foldl
+                            (\trait ->
+                                Dict.insert trait False
+                            )
+                            model.filteredTraits
+                            traits
+                }
+            )
+
+        TraitGroupIncludePressed traits ->
+            ( model
+            , updateUrl
+                { model
+                    | filteredTraits =
+                        List.foldl
+                            (\trait ->
+                                Dict.insert trait True
+                            )
+                            model.filteredTraits
+                            traits
+                }
             )
 
         TraitFilterAdded trait ->
@@ -3157,6 +3226,12 @@ buildAggregationsBody model =
                         [ ( "category", "item_category" )
                         , ( "name", "item_subcategory" )
                         ]
+                    , buildCompositeAggregation
+                        "trait_group"
+                        False
+                        [ ( "group", "trait_group" )
+                        , ( "trait", "name.keyword" )
+                        ]
                     ]
                 )
           )
@@ -3381,6 +3456,18 @@ aggregationsDecoder =
         (aggregationBucketDecoder Decode.string)
         <| \traits ->
     Field.requireAt
+        [ "aggregations", "trait_group" ]
+        (aggregationBucketDecoder
+            (Field.require "group" Decode.string <| \group ->
+             Field.require "trait" Decode.string <| \trait ->
+             Decode.succeed
+                { group = String.toLower group
+                , trait = String.toLower trait
+                }
+            )
+        )
+        <| \traitGroups ->
+    Field.requireAt
         [ "aggregations", "type" ]
         (aggregationBucketDecoder Decode.string)
         <| \types ->
@@ -3397,6 +3484,10 @@ aggregationsDecoder =
         , reloads = reloads
         , sources = sources
         , traits = traits
+        , traitGroups =
+            traitGroups
+                |> Dict.Extra.groupBy .group
+                |> Dict.map (\_ v -> List.map .trait v)
         , types = types
         , weaponGroups = weaponGroups
         }
@@ -5886,7 +5977,12 @@ viewFilterTraditions model =
 
 viewFilterTraits : Model -> List (Html Msg)
 viewFilterTraits model =
-    [ Html.div
+    [ viewCheckbox
+        { checked = model.groupTraits
+        , onCheck = GroupTraitsChanged
+        , text = "Group traits by category"
+        }
+    , Html.div
         [ HA.class "row"
         , HA.class "align-baseline"
         , HA.class "gap-medium"
@@ -5932,40 +6028,133 @@ viewFilterTraits model =
                 [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
         ]
 
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (case model.aggregations of
-            Just (Ok aggregations) ->
-                List.map
-                    (\trait ->
-                        Html.button
-                            [ HA.class "trait"
-                            , getTraitClass trait
-                            , HA.class "row"
-                            , HA.class "align-center"
-                            , HA.class "gap-tiny"
-                            , HE.onClick (TraitFilterAdded trait)
-                            ]
-                            [ Html.text (String.Extra.toTitleCase trait)
-                            , viewFilterIcon (Dict.get trait model.filteredTraits)
-                            ]
-                    )
-                    (aggregations.traits
-                        |> List.filter (\trait -> not (List.member trait (List.map Tuple.first Data.alignments)))
-                        |> List.filter (\trait -> not (List.member trait Data.sizes))
-                        |> List.filter (String.toLower >> String.contains (String.toLower model.searchTraits))
-                        |> List.sort
+    , if model.groupTraits then
+        Html.div
+            [ HA.class "column"
+            , HA.class "gap-small"
+            ]
+            (case model.aggregations of
+                Just (Ok aggregations) ->
+                    let
+                        categorizedTraits : List String
+                        categorizedTraits =
+                            aggregations.traitGroups
+                                |> Dict.values
+                                |> List.concat
+
+                        uncategorizedTraits : List String
+                        uncategorizedTraits =
+                            aggregations.traits
+                                |> List.filter (\trait -> not (List.member trait categorizedTraits))
+                                |> List.filter (\trait -> not (List.member trait (List.map Tuple.first Data.alignments)))
+                                |> List.filter (\trait -> not (List.member trait Data.sizes))
+                    in
+                    (List.map
+                        (\( group, traits ) ->
+                            Html.div
+                                [ HA.class "column"
+                                , HA.class "gap-tiny"
+                                ]
+                                [ Html.div
+                                    [ HA.class "row"
+                                    , HA.class "gap-small"
+                                    , HA.class "align-center"
+                                    ]
+                                    [ Html.h4
+                                        []
+                                        [ Html.text (String.Extra.toTitleCase group) ]
+                                    , Html.button
+                                        [ HE.onClick (TraitGroupIncludePressed traits) ]
+                                        [ Html.text "Include group" ]
+                                    , Html.button
+                                        [ HE.onClick (TraitGroupExcludePressed traits) ]
+                                        [ Html.text "Exclude group" ]
+                                    , Html.button
+                                        [ HE.onClick (TraitGroupDeselectPressed traits) ]
+                                        [ Html.text "Deselect group" ]
+                                    ]
+                                , Html.div
+                                    [ HA.class "row"
+                                    , HA.class "gap-tiny"
+                                    , HA.class "scrollbox"
+                                    ]
+                                    (List.map
+                                        (\trait ->
+                                            Html.button
+                                                [ HA.class "trait"
+                                                , getTraitClass trait
+                                                , HA.class "row"
+                                                , HA.class "align-center"
+                                                , HA.class "gap-tiny"
+                                                , HE.onClick (TraitFilterAdded trait)
+                                                ]
+                                                [ Html.text (String.Extra.toTitleCase trait)
+                                                , viewFilterIcon (Dict.get trait model.filteredTraits)
+                                                ]
+                                        )
+                                        (List.sort traits)
+                                    )
+                                ]
+                        )
+                        (aggregations.traitGroups
+                            |> Dict.filter
+                                (\group traits ->
+                                    not (List.member group [ "half-elf", "half-orc", "aon-special" ])
+                                )
+                            |> Dict.toList
+                            |> (::) ( "uncategorized", uncategorizedTraits )
+                            |> List.map
+                                (Tuple.mapSecond
+                                    (List.filter
+                                        (String.toLower >> String.contains (String.toLower model.searchTraits))
+                                    )
+                                )
+                            |> List.filter (Tuple.second >> List.isEmpty >> not)
+                        )
                     )
 
-            Just (Err _) ->
-                []
+                Just (Err _) ->
+                    []
 
-            Nothing ->
-                [ viewScrollboxLoader ]
-        )
+                Nothing ->
+                    [ viewScrollboxLoader ]
+            )
+
+      else
+        Html.div
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "scrollbox"
+            ]
+            (case model.aggregations of
+                Just (Ok aggregations) ->
+                    List.map
+                        (\trait ->
+                            Html.button
+                                [ HA.class "trait"
+                                , getTraitClass trait
+                                , HA.class "row"
+                                , HA.class "align-center"
+                                , HA.class "gap-tiny"
+                                , HE.onClick (TraitFilterAdded trait)
+                                ]
+                                [ Html.text (String.Extra.toTitleCase trait)
+                                , viewFilterIcon (Dict.get trait model.filteredTraits)
+                                ]
+                        )
+                        (aggregations.traits
+                            |> List.filter (\trait -> not (List.member trait (List.map Tuple.first Data.alignments)))
+                            |> List.filter (\trait -> not (List.member trait Data.sizes))
+                            |> List.filter (String.toLower >> String.contains (String.toLower model.searchTraits))
+                            |> List.sort
+                        )
+
+                Just (Err _) ->
+                    []
+
+                Nothing ->
+                    [ viewScrollboxLoader ]
+            )
     ]
 
 
