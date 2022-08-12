@@ -6181,6 +6181,7 @@ viewFilterTraits model =
                                         (String.toLower >> String.contains (String.toLower model.searchTraits))
                                     )
                                 )
+                            |> List.map (Tuple.mapSecond (List.filter ((/=) "common")))
                             |> List.filter (Tuple.second >> List.isEmpty >> not)
                         )
                     )
