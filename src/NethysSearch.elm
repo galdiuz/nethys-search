@@ -106,10 +106,12 @@ type alias Document =
     , feats : Maybe String
     , followerAlignments : List String
     , fort : Maybe Int
+    , fortitudeProficiency : Maybe String
     , frequency : Maybe String
     , hands : Maybe String
     , hardness : Maybe String
     , heighten : List String
+    , heightenLevels : List Int
     , hp : Maybe String
     , immunities : Maybe String
     , intelligence : Maybe Int
@@ -133,6 +135,7 @@ type alias Document =
     , rangeValue : Maybe Int
     , rarity : Maybe String
     , ref : Maybe Int
+    , reflexProficiency : Maybe String
     , region : Maybe String
     , reload : Maybe String
     , requiredAbilities : Maybe String
@@ -140,7 +143,6 @@ type alias Document =
     , resistanceValues : Maybe DamageTypeValues
     , resistances : Maybe String
     , savingThrow : Maybe String
-    , savingThrowProficiencies : List String
     , school : Maybe String
     , searchMarkdown : ParsedMarkdownResult
     , secondaryCasters : Maybe String
@@ -176,6 +178,7 @@ type alias Document =
     , weaponGroupMarkdown : Maybe String
     , weaponType : Maybe String
     , will : Maybe Int
+    , willProficiency : Maybe String
     , wisdom : Maybe Int
     }
 
@@ -312,6 +315,12 @@ type GroupedDisplay
     | Hide
 
 
+type GroupedLinkLayout
+    = Horizontal
+    | Vertical
+    | VerticalWithSummary
+
+
 type GroupedSort
     = Alphanum
     | CountLoaded
@@ -369,6 +378,8 @@ type Msg
     | GroupField3Changed (Maybe String)
     | GroupTraitsChanged Bool
     | GroupedDisplayChanged GroupedDisplay
+    | GroupedLinkLayoutChanged GroupedLinkLayout
+    | GroupedShowPfsIconChanged Bool
     | GroupedSortChanged GroupedSort
     | HandFilterAdded String
     | HandFilterRemoved String
@@ -539,6 +550,8 @@ type alias Model =
     , groupField3 : Maybe String
     , groupTraits : Bool
     , groupedDisplay : GroupedDisplay
+    , groupedLinkLayout : GroupedLinkLayout
+    , groupedShowPfs : Bool
     , groupedSort : GroupedSort
     , lastSearchKey : Maybe String
     , limitTableWidth : Bool
@@ -659,6 +672,8 @@ init flagsValue =
       , groupField3 = Nothing
       , groupTraits = False
       , groupedDisplay = Dim
+      , groupedLinkLayout = Horizontal
+      , groupedShowPfs = True
       , groupedSort = Alphanum
       , lastSearchKey = Nothing
       , limitTableWidth = False
@@ -715,6 +730,9 @@ init flagsValue =
         , localStorage_get "column-configurations"
         , localStorage_get "group-traits"
         , localStorage_get "grouped-display"
+        , localStorage_get "grouped-link-layout"
+        , localStorage_get "grouped-show-pfs"
+        , localStorage_get "grouped-sort"
         , localStorage_get "limit-table-width"
         , localStorage_get "page-size"
         , localStorage_get "show-additional-info"
@@ -1006,6 +1024,29 @@ update msg model =
                 )
             )
 
+        GroupedLinkLayoutChanged value ->
+            ( { model | groupedLinkLayout = value }
+            , saveToLocalStorage
+                "grouped-link-layout"
+                (case value of
+                    Horizontal ->
+                        "horizontal"
+
+                    Vertical ->
+                        "vertical"
+
+                    VerticalWithSummary ->
+                        "vertical-with-summary"
+                )
+            )
+
+        GroupedShowPfsIconChanged enabled ->
+            ( { model | groupedShowPfs = enabled }
+            , saveToLocalStorage
+                "grouped-show-pfs"
+                (if enabled then "1" else "0")
+            )
+
         GroupedSortChanged value ->
             ( { model | groupedSort = value }
             , saveToLocalStorage
@@ -1150,6 +1191,31 @@ update msg model =
 
                         Ok "hide" ->
                             { model | groupedDisplay = Hide }
+
+                        _ ->
+                            model
+
+                Ok "grouped-link-layout" ->
+                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
+                        Ok "horizontal" ->
+                            { model | groupedLinkLayout = Horizontal }
+
+                        Ok "vertical" ->
+                            { model | groupedLinkLayout = Vertical }
+
+                        Ok "vertical-with-summary" ->
+                            { model | groupedLinkLayout = VerticalWithSummary }
+
+                        _ ->
+                            model
+
+                Ok "grouped-show-pfs" ->
+                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
+                        Ok "1" ->
+                            { model | groupedShowPfs = True }
+
+                        Ok "0" ->
+                            { model | groupedShowPfs = False }
 
                         _ ->
                             model
@@ -3593,11 +3659,13 @@ documentDecoder =
     Field.attempt "favored_weapon_markdown" Decode.string <| \favoredWeapons ->
     Field.attempt "feat_markdown" Decode.string <| \feats ->
     Field.attempt "fortitude_save" Decode.int <| \fort ->
+    Field.attempt "fortitude_proficiency" Decode.string <| \fortitudeProficiency ->
     Field.attempt "follower_alignment" stringListDecoder <| \followerAlignments ->
     Field.attempt "frequency" Decode.string <| \frequency ->
     Field.attempt "hands" Decode.string <| \hands ->
     Field.attempt "hardness_raw" Decode.string <| \hardness ->
     Field.attempt "heighten" (Decode.list Decode.string) <| \heighten ->
+    Field.attempt "heighten_level" (Decode.list Decode.int) <| \heightenLevels ->
     Field.attempt "hp_raw" Decode.string <| \hp ->
     Field.attempt "immunity_markdown" Decode.string <| \immunities ->
     Field.attempt "intelligence" Decode.int <| \intelligence ->
@@ -3622,6 +3690,7 @@ documentDecoder =
     Field.attempt "range_raw" Decode.string <| \range ->
     Field.attempt "rarity" Decode.string <| \rarity ->
     Field.attempt "reflex_save" Decode.int <| \ref ->
+    Field.attempt "reflex_proficiency" Decode.string <| \reflexProficiency ->
     Field.attempt "region" Decode.string <| \region->
     Field.attempt "reload_raw" Decode.string <| \reload ->
     Field.attempt "required_abilities" Decode.string <| \requiredAbilities ->
@@ -3629,7 +3698,6 @@ documentDecoder =
     Field.attempt "resistance" damageTypeValuesDecoder <| \resistanceValues ->
     Field.attempt "resistance_markdown" Decode.string <| \resistances ->
     Field.attempt "saving_throw_markdown" Decode.string <| \savingThrow ->
-    Field.attempt "saving_throw_proficiency" stringListDecoder <| \savingThrowProficiencies ->
     Field.attempt "school" Decode.string <| \school ->
     Field.attempt "secondary_casters_raw" Decode.string <| \secondaryCasters ->
     Field.attempt "secondary_check_markdown" Decode.string <| \secondaryChecks ->
@@ -3664,6 +3732,7 @@ documentDecoder =
     Field.attempt "weapon_group_markdown" Decode.string <| \weaponGroupMarkdown ->
     Field.attempt "weapon_type" Decode.string <| \weaponType ->
     Field.attempt "will_save" Decode.int <| \will ->
+    Field.attempt "will_proficiency" Decode.string <| \willProficiency ->
     Field.attempt "wisdom" Decode.int <| \wisdom ->
     Decode.succeed
         { category = category
@@ -3715,11 +3784,13 @@ documentDecoder =
         , favoredWeapons = favoredWeapons
         , feats = feats
         , fort = fort
+        , fortitudeProficiency = fortitudeProficiency
         , followerAlignments = Maybe.withDefault [] followerAlignments
         , frequency = frequency
         , hands = hands
         , hardness = hardness
         , heighten = Maybe.withDefault [] heighten
+        , heightenLevels = Maybe.withDefault [] heightenLevels
         , hp = hp
         , immunities = immunities
         , intelligence = intelligence
@@ -3743,6 +3814,7 @@ documentDecoder =
         , rangeValue = rangeValue
         , rarity = rarity
         , ref = ref
+        , reflexProficiency = reflexProficiency
         , region = region
         , reload = reload
         , requiredAbilities = requiredAbilities
@@ -3750,7 +3822,6 @@ documentDecoder =
         , resistanceValues = resistanceValues
         , resistances = resistances
         , savingThrow = savingThrow
-        , savingThrowProficiencies = Maybe.withDefault [] savingThrowProficiencies
         , school = school
         , searchMarkdown =
             searchMarkdown
@@ -3791,6 +3862,7 @@ documentDecoder =
         , weaponGroupMarkdown = weaponGroupMarkdown
         , weaponType = weaponType
         , will = will
+        , willProficiency = willProficiency
         , wisdom = wisdom
         }
 
@@ -7252,6 +7324,7 @@ viewResultDisplay model =
                             , "alignment"
                             , "creature_family"
                             , "duration"
+                            , "heighten_level"
                             , "item_category"
                             , "item_subcategory"
                             , "level"
@@ -7262,6 +7335,7 @@ viewResultDisplay model =
                             , "school"
                             , "size"
                             , "source"
+                            , "trait"
                             , "type"
                             , "weapon_category"
                             , "weapon_group"
@@ -7329,6 +7403,40 @@ viewResultDisplay model =
                         , text = "Count (Total)"
                         }
                     ]
+                , Html.h4
+                    []
+                    [ Html.text "Link layout" ]
+                , Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-medium"
+                    ]
+                    [ viewRadioButton
+                        { checked = model.groupedLinkLayout == Horizontal
+                        , enabled = True
+                        , name = "grouped-results"
+                        , onInput = GroupedLinkLayoutChanged Horizontal
+                        , text = "Horizontal"
+                        }
+                    , viewRadioButton
+                        { checked = model.groupedLinkLayout == Vertical
+                        , enabled = True
+                        , name = "grouped-results"
+                        , onInput = GroupedLinkLayoutChanged Vertical
+                        , text = "Vertical"
+                        }
+                    , viewRadioButton
+                        { checked = model.groupedLinkLayout == VerticalWithSummary
+                        , enabled = True
+                        , name = "grouped-results"
+                        , onInput = GroupedLinkLayoutChanged VerticalWithSummary
+                        , text = "Vertical with summary"
+                        }
+                    ]
+                    , viewCheckbox
+                        { checked = model.groupedShowPfs
+                        , onCheck = GroupedShowPfsIconChanged
+                        , text = "Show PFS icon"
+                        }
                 ]
         )
     ]
@@ -7891,7 +7999,11 @@ viewSingleSearchResult model hit =
                 ]
             ]
 
-            , viewMarkdown hit.source.searchMarkdown
+            , Html.div
+                [ HA.class "column"
+                , HA.class "gap-small"
+                ]
+                (viewMarkdown hit.source.searchMarkdown)
         ]
 
 
@@ -8051,496 +8163,377 @@ viewSearchResultGridCell model hit column =
     Html.td
         [ HAE.attributeIf (column == "name") (HA.class "sticky-left")
         ]
-        [ case String.split "." column of
+        (case String.split "." column of
             [ "ability" ] ->
                 hit.source.abilities
                     |> String.join ", "
                     |> Html.text
+                    |> List.singleton
 
             [ "ability_boost" ] ->
                 hit.source.abilities
                     |> String.join ", "
                     |> Html.text
+                    |> List.singleton
 
             [ "ability_flaw" ] ->
                 hit.source.abilityFlaws
                     |> String.join ", "
                     |> Html.text
+                    |> List.singleton
 
             [ "ability_type" ] ->
-                hit.source.abilityType
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.abilityType
 
             [ "ac" ] ->
                 hit.source.ac
                     |> Maybe.map String.fromInt
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             [ "actions" ] ->
                 hit.source.actions
                     |> Maybe.withDefault ""
                     |> viewTextWithActionIcons
+                    |> List.singleton
 
             [ "alignment" ] ->
-                hit.source.alignment
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.alignment
 
             [ "anathema" ] ->
-                hit.source.anathema
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.anathema
 
             [ "archetype" ] ->
-                hit.source.archetype
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.archetype
 
             [ "area" ] ->
-                hit.source.area
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.area
 
             [ "area_of_concern" ] ->
-                hit.source.areasOfConcern
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.areasOfConcern
 
             [ "armor_category" ] ->
-                hit.source.armorCategory
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.armorCategory
 
             [ "armor_group" ] ->
-                hit.source.armorGroup
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.armorGroup
 
             [ "aspect" ] ->
                 hit.source.aspect
-                    |> Maybe.withDefault ""
-                    |> String.Extra.toTitleCase
-                    |> Html.text
+                    |> Maybe.map String.Extra.toTitleCase
+                    |> maybeAsText
 
             [ "attack_proficiency" ] ->
-                Html.div
+                [ Html.div
                     [ HA.class "column"
-                    , HA.class "gap-small"
+                    , HA.class "gap-tiny"
                     ]
                     (List.map
                         (\prof ->
-                            Html.div
+                            Html.p
                                 []
                                 [ Html.text prof ]
                         )
                         hit.source.attackProficiencies
                     )
+                ]
 
             [ "base_item" ] ->
-                hit.source.baseItems
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.baseItems
 
             [ "bloodline" ] ->
-                hit.source.bloodlines
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.bloodlines
 
             [ "bulk" ] ->
-                hit.source.bulk
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.bulk
 
             [ "charisma" ] ->
                 hit.source.charisma
                     |> Maybe.map numberWithSign
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             [ "check_penalty" ] ->
                 hit.source.checkPenalty
                     |> Maybe.map numberWithSign
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             [ "cleric_spell" ] ->
-                hit.source.clericSpells
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.clericSpells
 
             [ "creature_family" ] ->
-                hit.source.creatureFamilyMarkdown
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.creatureFamilyMarkdown
 
             [ "component" ] ->
                 hit.source.components
                     |> List.map String.Extra.toTitleCase
                     |> String.join ", "
                     |> Html.text
+                    |> List.singleton
 
             [ "constitution" ] ->
                 hit.source.constitution
                     |> Maybe.map numberWithSign
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             [ "cost" ] ->
-                hit.source.cost
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.cost
 
             [ "deity" ] ->
-                hit.source.deities
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.deities
 
             [ "deity_category" ] ->
-                hit.source.deityCategory
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.deityCategory
 
             [ "damage" ] ->
-                hit.source.damage
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.damage
 
             [ "defense_proficiency" ] ->
-                Html.div
+                [ Html.div
                     [ HA.class "column"
-                    , HA.class "gap-small"
+                    , HA.class "gap-tiny"
                     ]
                     (List.map
                         (\prof ->
-                            Html.div
+                            Html.p
                                 []
                                 [ Html.text prof ]
                         )
                         hit.source.defenseProficiencies
                     )
+                ]
 
             [ "dexterity" ] ->
                 hit.source.dexterity
                     |> Maybe.map numberWithSign
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             [ "dex_cap" ] ->
                 hit.source.dexCap
                     |> Maybe.map numberWithSign
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             [ "divine_font" ] ->
                 hit.source.divineFonts
                     |> List.map String.Extra.toTitleCase
                     |> String.join " or "
                     |> Html.text
+                    |> List.singleton
 
             [ "domain" ] ->
-                hit.source.domains
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.domains
 
             [ "duration" ] ->
-                hit.source.duration
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.duration
 
             [ "edict" ] ->
-                hit.source.edict
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.edict
 
             [ "favored_weapon" ] ->
-                hit.source.favoredWeapons
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.favoredWeapons
 
             [ "feat" ] ->
-                hit.source.feats
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.feats
 
             [ "follower_alignment" ] ->
                 hit.source.followerAlignments
                     |> String.join ", "
                     |> Html.text
+                    |> List.singleton
 
             [ "fortitude" ] ->
                 hit.source.fort
                     |> Maybe.map numberWithSign
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
+
+            [ "fortitude_proficiency" ] ->
+                maybeAsText hit.source.fortitudeProficiency
 
             [ "frequency" ] ->
-                hit.source.frequency
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.frequency
 
             [ "hands" ] ->
-                hit.source.hands
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.hands
 
             [ "hardness" ] ->
-                hit.source.hardness
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.hardness
 
             [ "heighten" ] ->
                 hit.source.heighten
                     |> String.join ", "
                     |> Html.text
+                    |> List.singleton
 
             [ "hp" ] ->
-                hit.source.hp
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.hp
 
             [ "immunity" ] ->
-                hit.source.immunities
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.immunities
 
             [ "intelligence" ] ->
                 hit.source.intelligence
                     |> Maybe.map numberWithSign
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             [ "item_category" ] ->
-                hit.source.itemCategory
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.itemCategory
 
             [ "item_subcategory" ] ->
-                hit.source.itemSubcategory
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.itemSubcategory
 
             [ "language" ] ->
-                hit.source.languages
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.languages
 
             [ "lesson" ] ->
-                hit.source.lessons
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.lessons
 
             [ "level" ] ->
                 hit.source.level
                     |> Maybe.map String.fromInt
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             [ "mystery" ] ->
-                hit.source.mysteries
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.mysteries
 
             [ "name" ] ->
-                Html.a
+                [ Html.a
                     [ HA.href (getUrl model hit.source)
                     , HA.target "_blank"
                     ]
                     [ Html.text hit.source.name
                     ]
+                ]
 
             [ "onset" ] ->
-                hit.source.onset
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.onset
 
             [ "patron_theme" ] ->
-                hit.source.patronThemes
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.patronThemes
 
             [ "perception" ] ->
                 hit.source.perception
                     |> Maybe.map numberWithSign
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             [ "perception_proficiency" ] ->
-                hit.source.perceptionProficiency
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.perceptionProficiency
 
             [ "pfs" ] ->
                 hit.source.pfs
                     |> Maybe.withDefault ""
                     |> viewPfsIconWithLink 20
+                    |> List.singleton
 
             [ "plane_category" ] ->
-                hit.source.planeCategory
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.planeCategory
 
             [ "prerequisite" ] ->
-                hit.source.prerequisites
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.prerequisites
 
             [ "price" ] ->
-                hit.source.price
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.price
 
             [ "primary_check" ] ->
-                hit.source.primaryCheck
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.primaryCheck
 
             [ "range" ] ->
-                hit.source.range
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.range
 
             [ "rarity" ] ->
                 hit.source.rarity
                     |> Maybe.map (String.Extra.toTitleCase)
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             [ "reflex" ] ->
                 hit.source.ref
                     |> Maybe.map numberWithSign
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
+
+            [ "reflex_proficiency" ] ->
+                maybeAsText hit.source.reflexProficiency
 
             [ "region" ] ->
-                hit.source.region
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.region
 
             [ "reload" ] ->
-                hit.source.reload
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.reload
 
             [ "requirement" ] ->
-                hit.source.requirements
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.requirements
 
             [ "resistance" ] ->
-                hit.source.resistances
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.resistances
 
             [ "resistance", type_ ] ->
                 hit.source.resistanceValues
                     |> Maybe.andThen (getDamageTypeValue type_)
                     |> Maybe.map String.fromInt
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             [ "saving_throw" ] ->
-                hit.source.savingThrow
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
-
-            [ "saving_throw_proficiency" ] ->
-                Html.div
-                    [ HA.class "column"
-                    , HA.class "gap-small"
-                    ]
-                    (List.map
-                        (\prof ->
-                            Html.div
-                                []
-                                [ Html.text prof ]
-                        )
-                        hit.source.savingThrowProficiencies
-                    )
+                maybeAsMarkdown hit.source.savingThrow
 
             [ "school" ] ->
                 hit.source.school
                     |> Maybe.map (String.Extra.toTitleCase)
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             [ "secondary_casters" ] ->
-                hit.source.secondaryCasters
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.secondaryCasters
 
             [ "secondary_check" ] ->
-                hit.source.secondaryChecks
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.secondaryChecks
 
             [ "sense" ] ->
-                hit.source.senses
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.senses
 
             [ "size" ] ->
                 hit.source.sizes
                     |> String.join ", "
                     |> Html.text
+                    |> List.singleton
 
             [ "skill" ] ->
-                hit.source.skills
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.skills
 
             [ "skill_proficiency" ] ->
-                Html.div
+                [ Html.div
                     [ HA.class "column"
-                    , HA.class "gap-small"
+                    , HA.class "gap-tiny"
                     ]
                     (List.map
                         (\prof ->
-                            Html.div
+                            Html.p
                                 []
                                 [ Html.text prof ]
                         )
                         hit.source.skillProficiencies
                     )
+                ]
 
             [ "source" ] ->
-                hit.source.sources
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.sources
 
             [ "speed" ] ->
-                hit.source.speed
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.speed
 
             [ "speed", type_ ] ->
                 hit.source.speedValues
                     |> Maybe.andThen (getSpeedTypeValue type_)
                     |> Maybe.map String.fromInt
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             [ "speed_penalty" ] ->
-                hit.source.speedPenalty
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.speedPenalty
 
             [ "spoilers" ] ->
-                hit.source.spoilers
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.spoilers
 
             [ "stage" ] ->
-                hit.source.stages
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.stages
 
             [ "strength" ] ->
                 hit.source.strength
                     |> Maybe.map numberWithSign
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             [ "strongest_save" ] ->
                 hit.source.strongestSaves
@@ -8548,54 +8541,37 @@ viewSearchResultGridCell model hit column =
                     |> List.map String.Extra.toTitleCase
                     |> String.join ", "
                     |> Html.text
+                    |> List.singleton
 
             [ "summary" ] ->
-                hit.source.summary
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.summary
 
             [ "target" ] ->
-                hit.source.targets
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.targets
 
             [ "tradition" ] ->
-                hit.source.traditions
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.traditions
 
             [ "trait" ] ->
-                hit.source.traits
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.traits
 
             [ "trigger" ] ->
-                hit.source.trigger
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.trigger
 
             [ "type" ] ->
-                Html.text hit.source.type_
+                [ Html.text hit.source.type_ ]
 
             [ "vision" ] ->
-                hit.source.vision
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.vision
 
             [ "weapon_category" ] ->
-                hit.source.weaponCategory
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.weaponCategory
 
             [ "weapon_group" ] ->
-                hit.source.weaponGroupMarkdown
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.weaponGroupMarkdown
 
             [ "weapon_type" ] ->
-                hit.source.weaponType
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                maybeAsText hit.source.weaponType
 
             [ "weakest_save" ] ->
                 hit.source.weakestSaves
@@ -8603,34 +8579,48 @@ viewSearchResultGridCell model hit column =
                     |> List.map String.Extra.toTitleCase
                     |> String.join ", "
                     |> Html.text
+                    |> List.singleton
 
             [ "weakness" ] ->
-                hit.source.weaknesses
-                    |> Maybe.withDefault ""
-                    |> parseAndViewAsMarkdown
+                maybeAsMarkdown hit.source.weaknesses
 
             [ "weakness", type_ ] ->
                 hit.source.weaknessValues
                     |> Maybe.andThen (getDamageTypeValue type_)
                     |> Maybe.map String.fromInt
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             [ "will" ] ->
                 hit.source.will
                     |> Maybe.map numberWithSign
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
+
+            [ "will_proficiency" ] ->
+                maybeAsText hit.source.willProficiency
 
             [ "wisdom" ] ->
                 hit.source.wisdom
                     |> Maybe.map numberWithSign
-                    |> Maybe.withDefault ""
-                    |> Html.text
+                    |> maybeAsText
 
             _ ->
-                Html.text ""
-        ]
+                []
+        )
+
+
+maybeAsText : Maybe String -> List (Html msg)
+maybeAsText maybeString =
+    maybeString
+        |> Maybe.withDefault ""
+        |> Html.text
+        |> List.singleton
+
+
+maybeAsMarkdown : Maybe String -> List (Html msg)
+maybeAsMarkdown maybeString =
+    maybeString
+        |> Maybe.withDefault ""
+        |> parseAndViewAsMarkdown
 
 
 viewSearchResultsGrouped : Model -> Int -> List (Html Msg)
@@ -8870,20 +8860,112 @@ viewSearchResultsGroupedLevel3 model key1 key2 field3 hits2 =
         )
 
 
+viewSearchResultsGroupedLinkList : Model -> List (Hit Document) -> Html msg
 viewSearchResultsGroupedLinkList model hits =
-    Html.div
-        [ HA.class "row"
-        , HA.class "gap-small"
-        ]
-        (hits
-            |> List.sortBy (.source >> .name)
-            |> List.map
-                (\hit ->
-                    Html.a
-                        [ HA.href (getUrl model hit.source) ]
-                        [ Html.text hit.source.name ]
+    let
+        sortedHits : List (Hit Document)
+        sortedHits =
+            List.sortBy (.source >> .name) hits
+    in
+    case model.groupedLinkLayout of
+        Horizontal ->
+            Html.div
+                [ HA.class "row"
+                , HA.class "gap-small"
+                ]
+                (List.map
+                    (\hit ->
+                        if model.groupedShowPfs then
+                            Html.div
+                                [ HA.class "row"
+                                , HA.class "gap-tiny"
+                                ]
+                                [ hit.source.pfs
+                                    |> Maybe.withDefault ""
+                                    |> viewPfsIcon 0
+                                , Html.a
+                                    [ HA.href (getUrl model hit.source) ]
+                                    [ Html.text hit.source.name ]
+                                ]
+
+                        else
+                            Html.a
+                                [ HA.href (getUrl model hit.source) ]
+                                [ Html.text hit.source.name ]
+                    )
+                    sortedHits
                 )
-        )
+
+        Vertical ->
+            Html.div
+                [ HA.class "column"
+                , HA.class "gap-small"
+                ]
+                (List.map
+                    (\hit ->
+                        if model.groupedShowPfs then
+                            Html.div
+                                [ HA.class "row"
+                                , HA.class "gap-tiny"
+                                ]
+                                [ hit.source.pfs
+                                    |> Maybe.withDefault ""
+                                    |> viewPfsIcon 0
+                                , Html.a
+                                    [ HA.href (getUrl model hit.source) ]
+                                    [ Html.text hit.source.name ]
+                                ]
+
+                        else
+                            Html.a
+                                [ HA.href (getUrl model hit.source) ]
+                                [ Html.text hit.source.name ]
+                    )
+                    sortedHits
+                )
+
+        VerticalWithSummary ->
+            Html.div
+                [ HA.class "column"
+                , HA.class "gap-small"
+                ]
+                (List.map
+                    (\hit ->
+                        Html.div
+                            [ HA.class "inline" ]
+                            (List.append
+                                (if model.groupedShowPfs then
+                                    [ hit.source.pfs
+                                        |> Maybe.withDefault ""
+                                        |> viewPfsIcon 0
+                                    , Html.text " "
+                                    , Html.a
+                                        [ HA.href (getUrl model hit.source) ]
+                                        [ Html.text hit.source.name ]
+                                    ]
+
+                                else
+                                    [ Html.a
+                                        [ HA.href (getUrl model hit.source) ]
+                                        [ Html.text hit.source.name ]
+                                    ]
+
+                                )
+                                (case hit.source.summary of
+                                    Just summary ->
+                                        List.append
+                                            [ Html.text " - " ]
+                                            (parseAndViewAsMarkdown summary)
+
+                                    Nothing ->
+                                        []
+                                )
+                            )
+                    )
+                    sortedHits
+                )
+
+
 
 
 groupedDisplayAttribute : Model -> Html.Attribute msg
@@ -8951,6 +9033,18 @@ groupDocumentsByField keys field hits =
                         )
                         hit
                         dict
+
+                "heighten_level" ->
+                    if List.isEmpty hit.source.heightenLevels then
+                        insertToListDict "" hit dict
+
+                    else
+                        List.foldl
+                            (\level ->
+                                insertToListDict (String.fromInt level) hit
+                            )
+                            dict
+                            hit.source.heightenLevels
 
                 "item_category" ->
                     insertToListDict
@@ -9099,6 +9193,7 @@ groupDocumentsByField keys field hits =
         hits
 
 
+sortGroupedList : Model -> String -> Dict String Int -> List ( String, List a ) -> List ( String, List a )
 sortGroupedList model keyPrefix counts list =
     List.sortWith
         (\( k1, v1 ) ( k2, v2 ) ->
@@ -9106,8 +9201,16 @@ sortGroupedList model keyPrefix counts list =
                 Alphanum ->
                     case ( List.length v1, List.length v2 ) of
                         ( 0, 0 ) ->
-                            Maybe.map2 compare (String.toInt k1) (String.toInt k2)
-                                |> Maybe.withDefault (compare k1 k2)
+                            case ( k1, k2 ) of
+                                ( "", _ ) ->
+                                    GT
+
+                                ( _, "" ) ->
+                                    LT
+
+                                _ ->
+                                    Maybe.map2 compare (String.toInt k1) (String.toInt k2)
+                                        |> Maybe.withDefault (compare k1 k2)
 
                         ( 0, _ ) ->
                             GT
@@ -9115,9 +9218,17 @@ sortGroupedList model keyPrefix counts list =
                         ( _, 0 ) ->
                             LT
 
-                        ( _, _ ) ->
-                            Maybe.map2 compare (String.toInt k1) (String.toInt k2)
-                                |> Maybe.withDefault (compare k1 k2)
+                        _ ->
+                            case ( k1, k2 ) of
+                                ( "", _ ) ->
+                                    GT
+
+                                ( _, "" ) ->
+                                    LT
+
+                                _ ->
+                                    Maybe.map2 compare (String.toInt k1) (String.toInt k2)
+                                        |> Maybe.withDefault (compare k1 k2)
 
                 CountLoaded ->
                     compare (List.length v2) (List.length v1)
@@ -9157,6 +9268,9 @@ viewGroupedTitle field value =
 
             Nothing ->
                 Html.text value
+
+    else if field == "heighten_level" then
+        Html.text ("Level " ++ value)
 
     else if field == "level" then
         Html.text ("Level " ++ value)
@@ -9247,10 +9361,10 @@ rangeToString range =
         String.fromInt range ++ " feet"
 
 
-parseAndViewAsMarkdown : String -> Html msg
+parseAndViewAsMarkdown : String -> List (Html msg)
 parseAndViewAsMarkdown string =
     if String.isEmpty string then
-        Html.text ""
+        []
 
     else
         string
@@ -9260,25 +9374,22 @@ parseAndViewAsMarkdown string =
             |> viewMarkdown
 
 
-viewMarkdown : ParsedMarkdownResult -> Html msg
+viewMarkdown : ParsedMarkdownResult -> List (Html msg)
 viewMarkdown markdown =
     case markdown of
         Ok blocks ->
             case Markdown.Renderer.render markdownRenderer blocks of
                 Ok v ->
-                    Html.div
-                        [ HA.class "column"
-                        , HA.class "gap-small"
-                        ]
                         v
 
                 Err err ->
-                    Html.text err
+                    [ Html.text err ]
 
         Err errors ->
-            Html.div
+            [ Html.div
                 [ HA.style "color" "red" ]
                 (List.map Html.text errors)
+            ]
 
 
 markdownRenderer : Markdown.Renderer.Renderer (Html msg)
@@ -9909,6 +10020,14 @@ css =
 
     sup > p {
         display: inline-block;
+    }
+
+    .inline p {
+        display: inline;
+    }
+
+    .inline div {
+        display: inline;
     }
 
     select {

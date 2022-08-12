@@ -157,7 +157,6 @@ fields =
     , ( "resistance.<type>", "[n] Resistance to <type>. See list of valid types below. Use resistance.\\* to match any type." )
     , ( "resistance_raw", "Resistances exactly as written" )
     , ( "saving_throw", "Saving throw for a disease, poison, or spell (Fortitude / Reflex / Will)" )
-    , ( "saving_throw_proficiency", "A class's saving throw proficiencies" )
     , ( "school", "Magical school" )
     , ( "secondary_casters", "[n] Secondary casters for a ritual" )
     , ( "secondary_check", "Secondary checks for a ritual" )
@@ -228,7 +227,7 @@ predefinedColumnConfigurations =
     , { columns = [ "ability", "skill", "feat", "rarity", "pfs", "source" ]
       , label = "Backgrounds"
       }
-    , { columns = [ "ability", "hp", "attack_proficiency", "defense_proficiency", "saving_throw_proficiency", "perception_proficiency", "skill_proficiency", "rarity", "pfs" ]
+    , { columns = [ "ability", "hp", "attack_proficiency", "defense_proficiency", "fortitude_proficiency", "reflex_proficiency",  "will_proficiency", "perception_proficiency", "skill_proficiency", "rarity", "pfs" ]
       , label = "Classes"
       }
     , { columns = [ "level", "hp", "ac", "fortitude", "reflex", "will", "strongest_save", "weakest_save", "perception", "sense", "size", "alignment", "rarity", "speed", "immunity", "resistance", "weakness", "trait", "creature_family", "language" ]
@@ -344,6 +343,7 @@ sortFields =
     , ( "duration", "duration", True )
     , ( "favored_weapon", "favored_weapon", False )
     , ( "fortitude", "fortitude", False )
+    , ( "fortitude_proficiency", "fortitude_proficiency", False )
     , ( "frequency", "frequency.keyword", False )
     , ( "hands", "hands.keyword", False )
     , ( "hardness", "hardness", False )
@@ -358,6 +358,7 @@ sortFields =
     , ( "onset", "onset", True )
     , ( "patron_theme", "patron_theme", False )
     , ( "perception", "perception", True )
+    , ( "perception_proficiency", "perception_proficiency", False )
     , ( "pfs", "pfs", False )
     , ( "plane_category", "plane_category", False )
     , ( "prerequisite", "prerequisite.keyword", False )
@@ -366,6 +367,7 @@ sortFields =
     , ( "range", "range", True )
     , ( "rarity", "rarity", False )
     , ( "reflex", "reflex", True )
+    , ( "reflex_proficiency", "reflex_proficiency", False )
     , ( "region", "region", False )
     , ( "requirement", "requirement.keyword", False )
     , ( "saving_throw", "saving_throw.keyword", False )
@@ -388,6 +390,7 @@ sortFields =
     , ( "weapon_group", "weapon_group", False )
     , ( "weapon_type", "weapon_type", False )
     , ( "will", "will", True )
+    , ( "will_proficiency", "will_proficiency", False )
     , ( "wisdom", "wisdom", True )
     ]
         |> List.append
@@ -515,7 +518,6 @@ tableColumns =
     , "requirement"
     , "resistance"
     , "saving_throw"
-    , "saving_throw_proficiency"
     , "school"
     , "secondary_casters"
     , "secondary_check"
