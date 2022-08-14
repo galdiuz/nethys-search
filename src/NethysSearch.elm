@@ -2957,7 +2957,7 @@ queryToParamsDict query =
             (\part ->
                 case String.split "=" part of
                     [ key, value ] ->
-                        Just ( key, Maybe.withDefault value (Url.percentDecode value) )
+                        Just ( key, Maybe.withDefault value (Url.percentDecode (String.replace "+" " " value)) )
 
                     _ ->
                         Nothing
