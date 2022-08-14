@@ -17,6 +17,7 @@ import Html.Attributes.Extra as HAE
 import Html.Events as HE
 import Http
 import Json.Decode as Decode
+import Json.Decode.Extra as DecodeE
 import Json.Decode.Field as Field
 import Json.Encode as Encode
 import List.Extra
@@ -203,7 +204,10 @@ type alias Flags =
     , currentUrl : String
     , defaultQuery : String
     , elasticUrl : String
+    , fixedParams : Dict String String
     , fixedQueryString : String
+    , pageDefaultDisplays : Dict String (Dict String String)
+    , pageId : String
     , removeFilters : List String
     , resultBaseUrl : String
     , showFilters : List String
@@ -217,7 +221,10 @@ defaultFlags =
     , currentUrl = "/"
     , defaultQuery = ""
     , elasticUrl = ""
+    , fixedParams = Dict.empty
     , fixedQueryString = ""
+    , pageDefaultDisplays = Dict.empty
+    , pageId = ""
     , removeFilters = []
     , resultBaseUrl = "https://2e.aonprd.com/"
     , showFilters = [ "numbers", "pfs", "rarities", "traits", "types" ]
@@ -389,6 +396,7 @@ type Msg
     | ItemSubcategoryFilterRemoved String
     | LimitTableWidthChanged Bool
     | LoadMorePressed
+    | LoadPageDefaultDisplayPressed
     | LoadRemainingPressed
     | LocalStorageValueReceived Decode.Value
     | MenuOpenDelayPassed
@@ -431,6 +439,7 @@ type Msg
     | RemoveAllWeaponTypeFiltersPressed
     | ResultDisplayChanged ResultDisplay
     | SaveColumnConfigurationPressed
+    | SavePageDefaultDisplayPressed
     | SavedColumnConfigurationNameChanged String
     | SavedColumnConfigurationSelected String
     | SavingThrowFilterAdded String
@@ -544,6 +553,7 @@ type alias Model =
     , filterSpoilers : Bool
     , filterTraditionsOperator : Bool
     , filterTraitsOperator : Bool
+    , fixedParams : Dict String String
     , fixedQueryString : String
     , groupField1 : String
     , groupField2 : Maybe String
@@ -557,6 +567,8 @@ type alias Model =
     , limitTableWidth : Bool
     , menuOpen : Bool
     , overlayActive : Bool
+    , pageDefaultDisplays : Dict String (Dict String String)
+    , pageId : String
     , pageSize : Int
     , query : String
     , queryType : QueryType
@@ -666,6 +678,7 @@ init flagsValue =
       , filterSpoilers = False
       , filterTraditionsOperator = True
       , filterTraitsOperator = True
+      , fixedParams = flags.fixedParams
       , fixedQueryString = flags.fixedQueryString
       , groupField1 = "type"
       , groupField2 = Nothing
@@ -679,6 +692,8 @@ init flagsValue =
       , limitTableWidth = False
       , menuOpen = False
       , overlayActive = False
+      , pageDefaultDisplays = flags.pageDefaultDisplays
+      , pageId = flags.pageId
       , pageSize = 50
       , query = ""
       , queryType = Standard
@@ -721,9 +736,11 @@ init flagsValue =
       , visibleFilterBoxes = Set.empty
       }
         |> updateModelFromParams
-            (url.query
-                |> Maybe.withDefault flags.defaultQuery
-                |> queryToParamsDict
+            (getQueryParamsDictFromUrl
+                flags.fixedParams
+                (Dict.get flags.pageId flags.pageDefaultDisplays)
+                flags.defaultQuery
+                url
             )
     , Cmd.batch
         [ localStorage_get "auto-query-type"
@@ -1148,6 +1165,17 @@ update msg model =
             , Cmd.none
             )
                 |> searchWithCurrentQuery LoadMore
+
+        LoadPageDefaultDisplayPressed ->
+            ( model
+            , updateUrl
+                (updateModelFromDisplayParams
+                    (Dict.get model.pageId model.pageDefaultDisplays
+                        |> Maybe.withDefault Dict.empty
+                    )
+                    model
+                )
+            )
 
         LoadRemainingPressed ->
             ( model
@@ -1577,6 +1605,28 @@ update msg model =
             )
                 |> saveColumnConfigurationsToLocalStorage
 
+        SavePageDefaultDisplayPressed ->
+            let
+                newDefaults =
+                    Dict.insert
+                        model.pageId
+                        (Dict.fromList (getDisplayParamsList model))
+                        model.pageDefaultDisplays
+            in
+            ( { model | pageDefaultDisplays = newDefaults }
+            , saveToLocalStorage
+                "page-default-displays"
+                (Encode.dict
+                    identity
+                    (Encode.dict
+                        identity
+                        Encode.string
+                    )
+                    newDefaults
+                    |> Encode.encode 0
+                )
+            )
+
         SavedColumnConfigurationNameChanged value ->
             ( { model | savedColumnConfigurationName = value }
             , Cmd.none
@@ -1993,9 +2043,11 @@ update msg model =
             in
             ( { model | url = url }
                 |> updateModelFromParams
-                    (url.query
-                        |> Maybe.withDefault ""
-                        |> queryToParamsDict
+                    (getQueryParamsDictFromUrl
+                        model.fixedParams
+                        (Dict.get model.pageId model.pageDefaultDisplays)
+                        model.defaultQuery
+                        url
                     )
             , Cmd.none
             )
@@ -2387,45 +2439,6 @@ updateUrl ({ url } as model) =
                 else
                     ""
               )
-            , ( "display"
-              , case model.resultDisplay of
-                    Grouped ->
-                        "grouped"
-
-                    List ->
-                        ""
-
-                    Table ->
-                        "table"
-              )
-            , ( "columns"
-              , if model.resultDisplay == Table then
-                    String.join "," model.tableColumns
-
-                else
-                    ""
-              )
-            , ( "group-field-1"
-              , if model.resultDisplay == Grouped then
-                    model.groupField1
-
-                else
-                    ""
-              )
-            , ( "group-field-2"
-              , if model.resultDisplay == Grouped then
-                    Maybe.withDefault "" model.groupField2
-
-                else
-                    ""
-              )
-            , ( "group-field-3"
-              , if model.resultDisplay == Grouped then
-                    Maybe.withDefault "" model.groupField3
-
-                else
-                    ""
-              )
             , ( "sort"
               , model.sort
                     |> List.map
@@ -2435,6 +2448,8 @@ updateUrl ({ url } as model) =
                     |> String.join ","
               )
             ]
+                |> List.append (Dict.toList model.fixedParams)
+                |> \list -> List.append list (getDisplayParamsList model)
                 |> List.filter (Tuple.second >> String.isEmpty >> not)
                 |> List.map (\(key, val) -> Url.Builder.string key val)
                 |> Url.Builder.toQuery
@@ -2443,6 +2458,51 @@ updateUrl ({ url } as model) =
     }
         |> Url.toString
         |> navigation_pushUrl
+
+
+getDisplayParamsList : Model -> List ( String, String )
+getDisplayParamsList model =
+    [ ( "display"
+      , case model.resultDisplay of
+            Grouped ->
+                "grouped"
+
+            List ->
+                "list"
+
+            Table ->
+                "table"
+      )
+    , ( "columns"
+      , if model.resultDisplay == Table then
+            String.join "," model.tableColumns
+
+        else
+            ""
+      )
+    , ( "group-field-1"
+      , if model.resultDisplay == Grouped then
+            model.groupField1
+
+        else
+            ""
+      )
+    , ( "group-field-2"
+      , if model.resultDisplay == Grouped then
+            Maybe.withDefault "" model.groupField2
+
+        else
+            ""
+      )
+    , ( "group-field-3"
+      , if model.resultDisplay == Grouped then
+            Maybe.withDefault "" model.groupField3
+
+        else
+            ""
+      )
+    ]
+        |> List.filter (Tuple.second >> String.isEmpty >> not)
 
 
 searchFields : List String
@@ -2949,6 +3009,39 @@ buildElasticsearchQueryStringQueryBody queryString =
     ]
 
 
+getQueryParamsDictFromUrl : Dict String String -> Maybe (Dict String String) -> String -> Url -> Dict String String
+getQueryParamsDictFromUrl fixedParams pageDefaultDisplay defaultQuery url =
+    case url.query of
+        Just query ->
+            let
+                urlDict : Dict String String
+                urlDict =
+                    queryToParamsDict query
+                        |> Dict.filter
+                            (\key _ ->
+                                not (Dict.member key fixedParams)
+                            )
+            in
+            if Dict.isEmpty urlDict then
+                Dict.union
+                    (Maybe.withDefault Dict.empty pageDefaultDisplay)
+                    (queryToParamsDict defaultQuery)
+
+            else
+                if Dict.member "display" urlDict then
+                    urlDict
+
+                else
+                    Dict.union
+                        (Maybe.withDefault Dict.empty pageDefaultDisplay)
+                        urlDict
+
+        Nothing ->
+            Dict.union
+                (Maybe.withDefault Dict.empty pageDefaultDisplay)
+                (queryToParamsDict defaultQuery)
+
+
 queryToParamsDict : String -> Dict String String
 queryToParamsDict query =
     query
@@ -3036,16 +3129,6 @@ updateModelFromParams params model =
                                 Nothing
                     )
                 |> Dict.fromList
-        , resultDisplay =
-            case Dict.get "display" params of
-                Just "grouped" ->
-                    Grouped
-
-                Just "table" ->
-                    Table
-
-                _ ->
-                    List
         , sort =
             Dict.get "sort" params
                 |> Maybe.map (String.split ",")
@@ -3067,6 +3150,23 @@ updateModelFromParams params model =
                         )
                     )
                 |> Maybe.withDefault []
+    }
+        |> updateModelFromDisplayParams params
+
+
+updateModelFromDisplayParams : Dict String String -> Model -> Model
+updateModelFromDisplayParams params model =
+    { model
+        | resultDisplay =
+            case Dict.get "display" params of
+                Just "grouped" ->
+                    Grouped
+
+                Just "table" ->
+                    Table
+
+                _ ->
+                    List
         , tableColumns =
             if Dict.get "display" params == Just "table" then
                 Dict.get "columns" params
@@ -3403,7 +3503,10 @@ flagsDecoder =
     Field.attempt "resultBaseUrl" Decode.string <| \resultBaseUrl ->
     Field.attempt "showHeader" Decode.bool <| \showHeader ->
     Field.attempt "defaultQuery" Decode.string <| \defaultQuery ->
+    Field.attempt "fixedParams" Decode.string <| \fixedParams ->
     Field.attempt "fixedQueryString" Decode.string <| \fixedQueryString ->
+    Field.attempt "pageDefaultDisplays" (DecodeE.doubleEncoded (Decode.dict (Decode.dict Decode.string))) <| \pageDefaultDisplays ->
+    Field.attempt "pageId" Decode.string <| \pageId ->
     Field.attempt "removeFilters" (Decode.list Decode.string) <| \removeFilters ->
     Field.attempt "showFilters" (Decode.list Decode.string) <| \showFilters ->
     Decode.succeed
@@ -3411,7 +3514,13 @@ flagsDecoder =
         , currentUrl = currentUrl
         , defaultQuery = Maybe.withDefault defaultFlags.defaultQuery defaultQuery
         , elasticUrl = elasticUrl
+        , fixedParams =
+            fixedParams
+                |> Maybe.map queryToParamsDict
+                |> Maybe.withDefault defaultFlags.fixedParams
         , fixedQueryString = Maybe.withDefault defaultFlags.fixedQueryString fixedQueryString
+        , pageDefaultDisplays = Maybe.withDefault defaultFlags.pageDefaultDisplays pageDefaultDisplays
+        , pageId = Maybe.withDefault defaultFlags.pageId pageId
         , removeFilters = Maybe.withDefault defaultFlags.removeFilters removeFilters
         , resultBaseUrl = Maybe.withDefault defaultFlags.resultBaseUrl resultBaseUrl
         , showFilters = Maybe.withDefault defaultFlags.showFilters showFilters
@@ -3715,7 +3824,7 @@ documentDecoder =
     Field.attempt "stage_markdown" Decode.string <| \stages ->
     Field.attempt "strength" Decode.int <| \strength ->
     Field.attempt "strongest_save" stringListDecoder <| \strongestSaves ->
-    Field.attempt "summary" Decode.string <| \summary ->
+    Field.attempt "summary_markdown" Decode.string <| \summary ->
     Field.attempt "target_markdown" Decode.string <| \targets ->
     Field.attempt "tradition" stringListDecoder <| \traditionList ->
     Field.attempt "tradition_markdown" Decode.string <| \traditions ->
@@ -7061,6 +7170,13 @@ viewResultPageSize model =
 
 viewResultDisplay : Model -> List (Html Msg)
 viewResultDisplay model =
+    let
+        pageDefaultDisplayIsCurrent : Bool
+        pageDefaultDisplayIsCurrent =
+            Dict.get model.pageId model.pageDefaultDisplays
+                |> Maybe.withDefault Dict.empty
+                |> (==) (Dict.fromList (getDisplayParamsList model))
+    in
     [ Html.div
         [ HA.class "row"
         , HA.class "align-baseline"
@@ -7088,363 +7204,222 @@ viewResultDisplay model =
             , text = "Grouped"
             }
         ]
+    , Html.h4
+        []
+        [ Html.text "Page default display" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-small"
+        ]
+        [ Html.button
+            [ HE.onClick SavePageDefaultDisplayPressed
+            , HA.disabled
+                (Dict.member model.pageId model.pageDefaultDisplays
+                    && pageDefaultDisplayIsCurrent
+                )
+            ]
+            [ Html.text "Save current as default" ]
+        , Html.button
+            [ HE.onClick LoadPageDefaultDisplayPressed
+            , HA.disabled
+                (not (Dict.member model.pageId model.pageDefaultDisplays)
+                    || pageDefaultDisplayIsCurrent
+                )
+            ]
+            [ Html.text "Load default" ]
+        ]
     , Html.div
         [ HA.class "column"
         , HA.class "gap-small"
         ]
         (case model.resultDisplay of
             List ->
-                [ Html.h4
-                    []
-                    [ Html.text "List configuration" ]
-                , viewCheckbox
-                    { checked = model.showResultSpoilers
-                    , onCheck = ShowSpoilersChanged
-                    , text = "Show spoiler warning"
-                    }
-                , viewCheckbox
-                    { checked = model.showResultTraits
-                    , onCheck = ShowTraitsChanged
-                    , text = "Show traits"
-                    }
-                , viewCheckbox
-                    { checked = model.showResultAdditionalInfo
-                    , onCheck = ShowAdditionalInfoChanged
-                    , text = "Show additional info"
-                    }
-                , viewCheckbox
-                    { checked = model.showResultSummary
-                    , onCheck = ShowSummaryChanged
-                    , text = "Show summary"
-                    }
-                ]
+                viewResultDisplayList model
 
             Table ->
-                [ Html.h4
-                    []
-                    [ Html.text "Table configuration" ]
-                , viewCheckbox
-                    { checked = model.limitTableWidth
-                    , onCheck = LimitTableWidthChanged
-                    , text = "Limit table width"
-                    }
-                , Html.div
-                    [ HA.class "row"
-                    , HA.class "gap-small"
-                    ]
-                    [ Html.div
-                        [ HA.class "column"
-                        , HA.class "gap-tiny"
-                        , HA.class "grow"
-                        , HA.style "flex-basis" "300px"
-                        ]
-                        [ Html.div
-                            []
-                            [ Html.text "Selected columns" ]
-                        , Html.div
-                            [ HA.class "scrollbox"
-                            , HA.class "column"
-                            , HA.class "gap-small"
-                            ]
-                            (List.indexedMap
-                                (\index column ->
-                                    Html.div
-                                        [ HA.class "row"
-                                        , HA.class "gap-small"
-                                        , HA.class "align-center"
-                                        ]
-                                        [ Html.button
-                                            [ HE.onClick (TableColumnRemoved column)
-                                            ]
-                                            [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times
-                                            ]
-                                        , Html.button
-                                            [ HA.disabled (index == 0)
-                                            , HE.onClick (TableColumnMoved index (index - 1))
-                                            ]
-                                            [ FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronUp
-                                            ]
-                                        , Html.button
-                                            [ HA.disabled (index + 1 == List.length model.tableColumns)
-                                            , HE.onClick (TableColumnMoved index (index + 1))
-                                            ]
-                                            [ FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronDown
-                                            ]
-                                        , Html.text (sortFieldToLabel column)
-                                        ]
-                                )
-                                model.tableColumns
-                            )
-                        ]
-                    , Html.div
-                        [ HA.class "column"
-                        , HA.class "gap-tiny"
-                        , HA.class "grow"
-                        , HA.style "flex-basis" "300px"
-                        ]
-                        [ Html.div
-                            []
-                            [ Html.text "Available columns" ]
-                        , Html.div
-                            [ HA.class "scrollbox"
-                            , HA.class "column"
-                            , HA.class "gap-small"
-                            ]
-                            (List.concatMap
-                                (viewResultDisplayColumn model)
-                                Data.tableColumns
-                            )
-                        ]
-                    ]
-                , Html.h4
-                    []
-                    [ Html.text "Predefined column configurations" ]
-                , Html.div
-                    [ HA.class "row"
-                    , HA.class "gap-medium"
-                    ]
-                    (List.map
-                        (\{ columns, label } ->
-                            Html.button
-                                [ HE.onClick (TableColumnSetChosen columns)
-                                ]
-                                [ Html.text label ]
-                        )
-                        Data.predefinedColumnConfigurations
-                    )
-
-                , Html.h4
-                    []
-                    [ Html.text "User-defined column configurations" ]
-                , Html.div
-                    [ HA.class "row"
-                    , HA.class "gap-small"
-                    ]
-                    [ Html.div
-                        [ HA.class "input-container" ]
-                        [ Html.input
-                            [ HA.placeholder "Name"
-                            , HA.type_ "text"
-                            , HA.value model.savedColumnConfigurationName
-                            , HE.onInput SavedColumnConfigurationNameChanged
-                            ]
-                            []
-                        ]
-                    , Html.button
-                        [ HA.disabled
-                            (String.isEmpty model.savedColumnConfigurationName
-                                || Dict.get model.savedColumnConfigurationName model.savedColumnConfigurations
-                                    == Just model.tableColumns
-                            )
-                        , HE.onClick SaveColumnConfigurationPressed ]
-                        [ Html.text "Save" ]
-                    , Html.button
-                        [ HA.disabled
-                            (not (Dict.member
-                                model.savedColumnConfigurationName
-                                model.savedColumnConfigurations
-                            ))
-                        , HE.onClick (DeleteColumnConfigurationPressed)
-                        ]
-                        [ Html.text "Delete" ]
-                    ]
-                , Html.div
-                    [ HA.class "row"
-                    , HA.class "gap-medium"
-                    ]
-                    (List.map
-                        (\name ->
-                            Html.button
-                                [ HE.onClick (SavedColumnConfigurationSelected name) ]
-                                [ Html.text name ]
-                        )
-                        (Dict.keys model.savedColumnConfigurations)
-                    )
-                ]
+                viewResultDisplayTable model
 
             Grouped ->
-                [ Html.h4
-                    []
-                    [ Html.text "Group by" ]
-                , Html.div
-                    [ HA.class "column"
-                    , HA.class "gap-tiny"
-                    ]
-                    [ Html.div
-                        [ HA.class "scrollbox"
-                        , HA.class "column"
-                        , HA.class "gap-small"
-                        ]
-                        (List.map
-                            (\field ->
-                                Html.div
-                                    [ HA.class "row"
-                                    , HA.class "gap-small"
-                                    , HA.class "align-center"
-                                    ]
-                                    [ Html.button
-                                        [ HE.onClick (GroupField1Changed field)
-                                        , HA.disabled (model.groupField1 == field)
-                                        , HAE.attributeIf
-                                            (model.groupField1 == field)
-                                            (HA.class "active")
-                                        ]
-                                        [ Html.text "1st" ]
-                                    , Html.button
-                                        [ HE.onClick
-                                            (if model.groupField2 == Just field then
-                                                GroupField2Changed Nothing
-
-                                             else
-                                                GroupField2Changed (Just field)
-                                            )
-                                        , HAE.attributeIf
-                                            (model.groupField2 == Just field)
-                                            (HA.class "active")
-                                        ]
-                                        [ Html.text "2nd" ]
-                                    , Html.button
-                                        [ HE.onClick
-                                            (if model.groupField3 == Just field then
-                                                GroupField3Changed Nothing
-
-                                             else
-                                                GroupField3Changed (Just field)
-                                            )
-                                        , HA.disabled (model.groupField2 == Nothing)
-                                        , HAE.attributeIf
-                                            (model.groupField3 == Just field)
-                                            (HA.class "active")
-                                        ]
-                                        [ Html.text "3rd" ]
-                                    , Html.text (toTitleCase (String.Extra.humanize field))
-                                    ]
-                            )
-                            [ "ability"
-                            , "actions"
-                            , "alignment"
-                            , "creature_family"
-                            , "duration"
-                            , "heighten_level"
-                            , "item_category"
-                            , "item_subcategory"
-                            , "level"
-                            , "hands"
-                            , "pfs"
-                            , "range"
-                            , "rarity"
-                            , "school"
-                            , "size"
-                            , "source"
-                            , "trait"
-                            , "type"
-                            , "weapon_category"
-                            , "weapon_group"
-                            , "weapon_type"
-                            ]
-                        )
-                    ]
-
-                , Html.h4
-                    []
-                    [ Html.text "Groups with 0 loaded results" ]
-                , Html.div
-                    [ HA.class "row"
-                    , HA.class "gap-medium"
-                    ]
-                    [ viewRadioButton
-                        { checked = model.groupedDisplay == Show
-                        , enabled = True
-                        , name = "grouped-display"
-                        , onInput = GroupedDisplayChanged Show
-                        , text = "Show"
-                        }
-                    , viewRadioButton
-                        { checked = model.groupedDisplay == Dim
-                        , enabled = True
-                        , name = "grouped-display"
-                        , onInput = GroupedDisplayChanged Dim
-                        , text = "Dim"
-                        }
-                    , viewRadioButton
-                        { checked = model.groupedDisplay == Hide
-                        , enabled = True
-                        , name = "grouped-display"
-                        , onInput = GroupedDisplayChanged Hide
-                        , text = "Hide"
-                        }
-                    ]
-
-                , Html.h4
-                    []
-                    [ Html.text "Group sort order" ]
-                , Html.div
-                    [ HA.class "row"
-                    , HA.class "gap-medium"
-                    ]
-                    [ viewRadioButton
-                        { checked = model.groupedSort == Alphanum
-                        , enabled = True
-                        , name = "grouped-sort"
-                        , onInput = GroupedSortChanged Alphanum
-                        , text = "Alphanumeric"
-                        }
-                    , viewRadioButton
-                        { checked = model.groupedSort == CountLoaded
-                        , enabled = True
-                        , name = "grouped-sort"
-                        , onInput = GroupedSortChanged CountLoaded
-                        , text = "Count (Loaded)"
-                        }
-                    , viewRadioButton
-                        { checked = model.groupedSort == CountTotal
-                        , enabled = True
-                        , name = "grouped-sort"
-                        , onInput = GroupedSortChanged CountTotal
-                        , text = "Count (Total)"
-                        }
-                    ]
-                , Html.h4
-                    []
-                    [ Html.text "Link layout" ]
-                , Html.div
-                    [ HA.class "row"
-                    , HA.class "gap-medium"
-                    ]
-                    [ viewRadioButton
-                        { checked = model.groupedLinkLayout == Horizontal
-                        , enabled = True
-                        , name = "grouped-results"
-                        , onInput = GroupedLinkLayoutChanged Horizontal
-                        , text = "Horizontal"
-                        }
-                    , viewRadioButton
-                        { checked = model.groupedLinkLayout == Vertical
-                        , enabled = True
-                        , name = "grouped-results"
-                        , onInput = GroupedLinkLayoutChanged Vertical
-                        , text = "Vertical"
-                        }
-                    , viewRadioButton
-                        { checked = model.groupedLinkLayout == VerticalWithSummary
-                        , enabled = True
-                        , name = "grouped-results"
-                        , onInput = GroupedLinkLayoutChanged VerticalWithSummary
-                        , text = "Vertical with summary"
-                        }
-                    ]
-                    , viewCheckbox
-                        { checked = model.groupedShowPfs
-                        , onCheck = GroupedShowPfsIconChanged
-                        , text = "Show PFS icon"
-                        }
-                ]
+                viewResultDisplayGrouped model
         )
     ]
 
 
-viewResultDisplayColumn : Model -> String -> List (Html Msg)
-viewResultDisplayColumn model column =
+viewResultDisplayList : Model -> List (Html Msg)
+viewResultDisplayList model =
+    [ Html.h4
+        []
+        [ Html.text "List configuration" ]
+    , viewCheckbox
+        { checked = model.showResultSpoilers
+        , onCheck = ShowSpoilersChanged
+        , text = "Show spoiler warning"
+        }
+    , viewCheckbox
+        { checked = model.showResultTraits
+        , onCheck = ShowTraitsChanged
+        , text = "Show traits"
+        }
+    , viewCheckbox
+        { checked = model.showResultAdditionalInfo
+        , onCheck = ShowAdditionalInfoChanged
+        , text = "Show additional info"
+        }
+    , viewCheckbox
+        { checked = model.showResultSummary
+        , onCheck = ShowSummaryChanged
+        , text = "Show summary"
+        }
+    ]
+
+
+viewResultDisplayTable : Model -> List (Html Msg)
+viewResultDisplayTable model =
+    [ Html.h4
+        []
+        [ Html.text "Table configuration" ]
+    , viewCheckbox
+        { checked = model.limitTableWidth
+        , onCheck = LimitTableWidthChanged
+        , text = "Limit table width"
+        }
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-small"
+        ]
+        [ Html.div
+            [ HA.class "column"
+            , HA.class "gap-tiny"
+            , HA.class "grow"
+            , HA.style "flex-basis" "300px"
+            ]
+            [ Html.div
+                []
+                [ Html.text "Selected columns" ]
+            , Html.div
+                [ HA.class "scrollbox"
+                , HA.class "column"
+                , HA.class "gap-small"
+                ]
+                (List.indexedMap
+                    (\index column ->
+                        Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-small"
+                            , HA.class "align-center"
+                            ]
+                            [ Html.button
+                                [ HE.onClick (TableColumnRemoved column)
+                                ]
+                                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times
+                                ]
+                            , Html.button
+                                [ HA.disabled (index == 0)
+                                , HE.onClick (TableColumnMoved index (index - 1))
+                                ]
+                                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronUp
+                                ]
+                            , Html.button
+                                [ HA.disabled (index + 1 == List.length model.tableColumns)
+                                , HE.onClick (TableColumnMoved index (index + 1))
+                                ]
+                                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronDown
+                                ]
+                            , Html.text (sortFieldToLabel column)
+                            ]
+                    )
+                    model.tableColumns
+                )
+            ]
+        , Html.div
+            [ HA.class "column"
+            , HA.class "gap-tiny"
+            , HA.class "grow"
+            , HA.style "flex-basis" "300px"
+            ]
+            [ Html.div
+                []
+                [ Html.text "Available columns" ]
+            , Html.div
+                [ HA.class "scrollbox"
+                , HA.class "column"
+                , HA.class "gap-small"
+                ]
+                (List.concatMap
+                    (viewResultDisplayTableColumn model)
+                    Data.tableColumns
+                )
+            ]
+        ]
+    , Html.h4
+        []
+        [ Html.text "Predefined column configurations" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        ]
+        (List.map
+            (\{ columns, label } ->
+                Html.button
+                    [ HE.onClick (TableColumnSetChosen columns)
+                    ]
+                    [ Html.text label ]
+            )
+            Data.predefinedColumnConfigurations
+        )
+
+    , Html.h4
+        []
+        [ Html.text "User-defined column configurations" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-small"
+        ]
+        [ Html.div
+            [ HA.class "input-container" ]
+            [ Html.input
+                [ HA.placeholder "Name"
+                , HA.type_ "text"
+                , HA.value model.savedColumnConfigurationName
+                , HE.onInput SavedColumnConfigurationNameChanged
+                ]
+                []
+            ]
+        , Html.button
+            [ HA.disabled
+                (String.isEmpty model.savedColumnConfigurationName
+                    || Dict.get model.savedColumnConfigurationName model.savedColumnConfigurations
+                        == Just model.tableColumns
+                )
+            , HE.onClick SaveColumnConfigurationPressed ]
+            [ Html.text "Save" ]
+        , Html.button
+            [ HA.disabled
+                (not (Dict.member
+                    model.savedColumnConfigurationName
+                    model.savedColumnConfigurations
+                ))
+            , HE.onClick (DeleteColumnConfigurationPressed)
+            ]
+            [ Html.text "Delete" ]
+        ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        ]
+        (List.map
+            (\name ->
+                Html.button
+                    [ HE.onClick (SavedColumnConfigurationSelected name) ]
+                    [ Html.text name ]
+            )
+            (Dict.keys model.savedColumnConfigurations)
+        )
+    ]
+
+
+viewResultDisplayTableColumn : Model -> String -> List (Html Msg)
+viewResultDisplayTableColumn model column =
     [ Html.div
         [ HA.class "row"
         , HA.class "gap-small"
@@ -7466,7 +7441,7 @@ viewResultDisplayColumn model column =
 
     , case column of
         "resistance" ->
-            viewResultDisplayColumnWithSelect
+            viewResultDisplayTableColumnWithSelect
                 model
                 { column = column
                 , onInput = ColumnResistanceChanged
@@ -7475,7 +7450,7 @@ viewResultDisplayColumn model column =
                 }
 
         "speed" ->
-            viewResultDisplayColumnWithSelect
+            viewResultDisplayTableColumnWithSelect
                 model
                 { column = column
                 , onInput = ColumnSpeedChanged
@@ -7484,7 +7459,7 @@ viewResultDisplayColumn model column =
                 }
 
         "weakness" ->
-            viewResultDisplayColumnWithSelect
+            viewResultDisplayTableColumnWithSelect
                 model
                 { column = column
                 , onInput = ColumnWeaknessChanged
@@ -7497,7 +7472,7 @@ viewResultDisplayColumn model column =
     ]
 
 
-viewResultDisplayColumnWithSelect :
+viewResultDisplayTableColumnWithSelect :
     Model
     -> { column : String
        , onInput : String -> Msg
@@ -7505,7 +7480,7 @@ viewResultDisplayColumnWithSelect :
        , types : List String
        }
     -> Html Msg
-viewResultDisplayColumnWithSelect model { column, onInput, selected, types } =
+viewResultDisplayTableColumnWithSelect model { column, onInput, selected, types } =
     let
         columnWithType : String
         columnWithType =
@@ -7537,6 +7512,186 @@ viewResultDisplayColumnWithSelect model { column, onInput, selected, types } =
             )
         , Html.text column
         ]
+
+
+viewResultDisplayGrouped : Model -> List (Html Msg)
+viewResultDisplayGrouped model =
+    [ Html.h4
+        []
+        [ Html.text "Group by" ]
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-tiny"
+        ]
+        [ Html.div
+            [ HA.class "scrollbox"
+            , HA.class "column"
+            , HA.class "gap-small"
+            ]
+            (List.map
+                (\field ->
+                    Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-small"
+                        , HA.class "align-center"
+                        ]
+                        [ Html.button
+                            [ HE.onClick (GroupField1Changed field)
+                            , HA.disabled (model.groupField1 == field)
+                            , HAE.attributeIf
+                                (model.groupField1 == field)
+                                (HA.class "active")
+                            ]
+                            [ Html.text "1st" ]
+                        , Html.button
+                            [ HE.onClick
+                                (if model.groupField2 == Just field then
+                                    GroupField2Changed Nothing
+
+                                 else
+                                    GroupField2Changed (Just field)
+                                )
+                            , HAE.attributeIf
+                                (model.groupField2 == Just field)
+                                (HA.class "active")
+                            ]
+                            [ Html.text "2nd" ]
+                        , Html.button
+                            [ HE.onClick
+                                (if model.groupField3 == Just field then
+                                    GroupField3Changed Nothing
+
+                                 else
+                                    GroupField3Changed (Just field)
+                                )
+                            , HA.disabled (model.groupField2 == Nothing)
+                            , HAE.attributeIf
+                                (model.groupField3 == Just field)
+                                (HA.class "active")
+                            ]
+                            [ Html.text "3rd" ]
+                        , Html.text (toTitleCase (String.Extra.humanize field))
+                        ]
+                )
+                [ "ability"
+                , "actions"
+                , "alignment"
+                , "creature_family"
+                , "duration"
+                , "heighten_level"
+                , "item_category"
+                , "item_subcategory"
+                , "level"
+                , "hands"
+                , "pfs"
+                , "range"
+                , "rarity"
+                , "school"
+                , "size"
+                , "source"
+                , "trait"
+                , "type"
+                , "weapon_category"
+                , "weapon_group"
+                , "weapon_type"
+                ]
+            )
+        ]
+
+    , Html.h4
+        []
+        [ Html.text "Groups with 0 loaded results" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        ]
+        [ viewRadioButton
+            { checked = model.groupedDisplay == Show
+            , enabled = True
+            , name = "grouped-display"
+            , onInput = GroupedDisplayChanged Show
+            , text = "Show"
+            }
+        , viewRadioButton
+            { checked = model.groupedDisplay == Dim
+            , enabled = True
+            , name = "grouped-display"
+            , onInput = GroupedDisplayChanged Dim
+            , text = "Dim"
+            }
+        , viewRadioButton
+            { checked = model.groupedDisplay == Hide
+            , enabled = True
+            , name = "grouped-display"
+            , onInput = GroupedDisplayChanged Hide
+            , text = "Hide"
+            }
+        ]
+
+    , Html.h4
+        []
+        [ Html.text "Group sort order" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        ]
+        [ viewRadioButton
+            { checked = model.groupedSort == Alphanum
+            , enabled = True
+            , name = "grouped-sort"
+            , onInput = GroupedSortChanged Alphanum
+            , text = "Alphanumeric"
+            }
+        , viewRadioButton
+            { checked = model.groupedSort == CountLoaded
+            , enabled = True
+            , name = "grouped-sort"
+            , onInput = GroupedSortChanged CountLoaded
+            , text = "Count (Loaded)"
+            }
+        , viewRadioButton
+            { checked = model.groupedSort == CountTotal
+            , enabled = True
+            , name = "grouped-sort"
+            , onInput = GroupedSortChanged CountTotal
+            , text = "Count (Total)"
+            }
+        ]
+    , Html.h4
+        []
+        [ Html.text "Link layout" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        ]
+        [ viewRadioButton
+            { checked = model.groupedLinkLayout == Horizontal
+            , enabled = True
+            , name = "grouped-results"
+            , onInput = GroupedLinkLayoutChanged Horizontal
+            , text = "Horizontal"
+            }
+        , viewRadioButton
+            { checked = model.groupedLinkLayout == Vertical
+            , enabled = True
+            , name = "grouped-results"
+            , onInput = GroupedLinkLayoutChanged Vertical
+            , text = "Vertical"
+            }
+        , viewRadioButton
+            { checked = model.groupedLinkLayout == VerticalWithSummary
+            , enabled = True
+            , name = "grouped-results"
+            , onInput = GroupedLinkLayoutChanged VerticalWithSummary
+            , text = "Vertical with summary"
+            }
+        ]
+        , viewCheckbox
+            { checked = model.groupedShowPfs
+            , onCheck = GroupedShowPfsIconChanged
+            , text = "Show PFS icons"
+            }
+    ]
 
 
 viewSortResults : Model -> List (Html Msg)

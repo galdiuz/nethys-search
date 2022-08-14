@@ -224,7 +224,7 @@ predefinedColumnConfigurations =
     , { columns = [ "armor_category", "ac", "dex_cap", "check_penalty", "speed_penalty", "strength", "bulk", "armor_group", "trait" ]
       , label = "Armor"
       }
-    , { columns = [ "ability", "skill", "feat", "rarity", "pfs", "source" ]
+    , { columns = [ "pfs", "ability", "skill", "feat", "rarity", "source" ]
       , label = "Backgrounds"
       }
     , { columns = [ "ability", "hp", "attack_proficiency", "defense_proficiency", "fortitude_proficiency", "reflex_proficiency",  "will_proficiency", "perception_proficiency", "skill_proficiency", "rarity", "pfs" ]
