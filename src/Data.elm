@@ -335,13 +335,13 @@ sortFields =
     , ( "cost", "cost.keyword", False )
     , ( "creature_family", "creature_family", False )
     , ( "deity", "deity", False )
-    , ( "deity_category", "deity_category", False )
+    , ( "deity_category", "deity_category.keyword", False )
     , ( "dex_cap", "dex_cap", True )
     , ( "dexterity", "dexterity", True )
     , ( "divine_font", "divine_font", False )
-    , ( "domain", "domain.keyword", False )
+    , ( "domain", "domain", False )
     , ( "duration", "duration", True )
-    , ( "favored_weapon", "favored_weapon", False )
+    , ( "favored_weapon", "favored_weapon.keyword", False )
     , ( "fortitude", "fortitude", False )
     , ( "fortitude_proficiency", "fortitude_proficiency", False )
     , ( "frequency", "frequency.keyword", False )
@@ -456,8 +456,11 @@ tableColumns =
     , "ability_type"
     , "ac"
     , "actions"
+    , "advanced_apocryphal_spell"
+    , "advanced_domain_spell"
     , "alignment"
     , "anathema"
+    , "apocryphal_spell"
     , "archetype"
     , "area"
     , "area_of_concern"
@@ -483,6 +486,7 @@ tableColumns =
     , "dexterity"
     , "divine_font"
     , "domain"
+    , "domain_spell"
     , "duration"
     , "edict"
     , "favored_weapon"

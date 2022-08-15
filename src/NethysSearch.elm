@@ -67,10 +67,12 @@ type alias Document =
     , ac : Maybe Int
     , actions : Maybe String
     , activate : Maybe String
+    , advancedApocryphalSpell : Maybe String
     , advancedDomainSpell : Maybe String
     , alignment : Maybe String
     , ammunition : Maybe String
     , anathema : Maybe String
+    , apocryphalSpell : Maybe String
     , archetype : Maybe String
     , area : Maybe String
     , areasOfConcern : Maybe String
@@ -3729,10 +3731,12 @@ documentDecoder =
     Field.attempt "ac" Decode.int <| \ac ->
     Field.attempt "actions" Decode.string <| \actions ->
     Field.attempt "activate" Decode.string <| \activate ->
+    Field.attempt "advanced_apocryphal_spell_markdown" Decode.string <| \advancedApocryphalSpell ->
     Field.attempt "advanced_domain_spell_markdown" Decode.string <| \advancedDomainSpell ->
     Field.attempt "alignment" Decode.string <| \alignment ->
     Field.attempt "ammunition" Decode.string <| \ammunition ->
     Field.attempt "anathema" Decode.string <| \anathema ->
+    Field.attempt "apocryphal_spell_markdown" Decode.string <| \apocryphalSpell ->
     Field.attempt "archetype" Decode.string <| \archetype ->
     Field.attempt "area" Decode.string <| \area ->
     Field.attempt "area_of_concern" Decode.string <| \areaOfConcern ->
@@ -3854,10 +3858,12 @@ documentDecoder =
         , ac = ac
         , actions = actions
         , activate = activate
+        , advancedApocryphalSpell = advancedApocryphalSpell
         , advancedDomainSpell = advancedDomainSpell
         , alignment = alignment
         , ammunition = ammunition
         , anathema = anathema
+        , apocryphalSpell = apocryphalSpell
         , archetype = archetype
         , area = area
         , areasOfConcern = areaOfConcern
@@ -8349,11 +8355,20 @@ viewSearchResultGridCell model hit column =
                     |> viewTextWithActionIcons
                     |> List.singleton
 
+            [ "advanced_apocryphal_spell" ] ->
+                maybeAsMarkdown hit.source.advancedApocryphalSpell
+
+            [ "advanced_domain_spell" ] ->
+                maybeAsMarkdown hit.source.advancedDomainSpell
+
             [ "alignment" ] ->
                 maybeAsText hit.source.alignment
 
             [ "anathema" ] ->
                 maybeAsText hit.source.anathema
+
+            [ "apocryphal_spell" ] ->
+                maybeAsMarkdown hit.source.apocryphalSpell
 
             [ "archetype" ] ->
                 maybeAsText hit.source.archetype
@@ -8473,6 +8488,9 @@ viewSearchResultGridCell model hit column =
 
             [ "domain" ] ->
                 maybeAsMarkdown hit.source.domains
+
+            [ "domain_spell" ] ->
+                maybeAsMarkdown hit.source.domainSpell
 
             [ "duration" ] ->
                 maybeAsText hit.source.duration
