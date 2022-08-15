@@ -233,7 +233,7 @@ predefinedColumnConfigurations =
     , { columns = [ "level", "hp", "ac", "fortitude", "reflex", "will", "strongest_save", "weakest_save", "perception", "sense", "size", "alignment", "rarity", "speed", "immunity", "resistance", "weakness", "trait", "creature_family", "language" ]
       , label = "Creatures"
       }
-    , { columns = [ "alignment", "ability", "divine_font", "skill", "favored_weapon", "domain", "cleric_spell", "deity_category", "edict", "anathema", "area_of_concern", "follower_alignment", "pfs" ]
+    , { columns = [ "alignment", "ability", "divine_font", "skill", "favored_weapon", "domain", "deity_category", "follower_alignment", "pfs" ]
       , label = "Deities"
       }
     , { columns = [ "level", "saving_throw", "onset", "stage", "trait", "rarity" ]
@@ -459,11 +459,9 @@ tableColumns =
     , "advanced_apocryphal_spell"
     , "advanced_domain_spell"
     , "alignment"
-    , "anathema"
     , "apocryphal_spell"
     , "archetype"
     , "area"
-    , "area_of_concern"
     , "armor_category"
     , "armor_group"
     , "aspect"
@@ -473,7 +471,6 @@ tableColumns =
     , "bulk"
     , "charisma"
     , "check_penalty"
-    , "cleric_spell"
     , "component"
     , "constitution"
     , "cost"
@@ -488,7 +485,6 @@ tableColumns =
     , "domain"
     , "domain_spell"
     , "duration"
-    , "edict"
     , "favored_weapon"
     , "feat"
     , "follower_alignment"

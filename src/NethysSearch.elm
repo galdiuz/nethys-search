@@ -71,11 +71,9 @@ type alias Document =
     , advancedDomainSpell : Maybe String
     , alignment : Maybe String
     , ammunition : Maybe String
-    , anathema : Maybe String
     , apocryphalSpell : Maybe String
     , archetype : Maybe String
     , area : Maybe String
-    , areasOfConcern : Maybe String
     , armorCategory : Maybe String
     , armorGroup : Maybe String
     , attackProficiencies : List String
@@ -86,7 +84,6 @@ type alias Document =
     , bulk : Maybe String
     , charisma : Maybe Int
     , checkPenalty : Maybe Int
-    , clericSpells : Maybe String
     , components : List String
     , constitution : Maybe Int
     , cost : Maybe String
@@ -103,7 +100,6 @@ type alias Document =
     , domainSpell : Maybe String
     , duration : Maybe String
     , durationValue : Maybe Int
-    , edict : Maybe String
     , familiarAbilities : List String
     , favoredWeapons : Maybe String
     , feats : Maybe String
@@ -3735,11 +3731,9 @@ documentDecoder =
     Field.attempt "advanced_domain_spell_markdown" Decode.string <| \advancedDomainSpell ->
     Field.attempt "alignment" Decode.string <| \alignment ->
     Field.attempt "ammunition" Decode.string <| \ammunition ->
-    Field.attempt "anathema" Decode.string <| \anathema ->
     Field.attempt "apocryphal_spell_markdown" Decode.string <| \apocryphalSpell ->
     Field.attempt "archetype" Decode.string <| \archetype ->
     Field.attempt "area" Decode.string <| \area ->
-    Field.attempt "area_of_concern" Decode.string <| \areaOfConcern ->
     Field.attempt "armor_category" Decode.string <| \armorCategory ->
     Field.attempt "armor_group_markdown" Decode.string <| \armorGroup ->
     Field.attempt "aspect" Decode.string <| \aspect ->
@@ -3750,7 +3744,6 @@ documentDecoder =
     Field.attempt "bulk_raw" Decode.string <| \bulk ->
     Field.attempt "charisma" Decode.int <| \charisma ->
     Field.attempt "check_penalty" Decode.int <| \checkPenalty ->
-    Field.attempt "cleric_spell" Decode.string <| \clericSpell ->
     Field.attempt "component" (Decode.list Decode.string) <| \components ->
     Field.attempt "constitution" Decode.int <| \constitution ->
     Field.attempt "cost_markdown" Decode.string <| \cost ->
@@ -3767,7 +3760,6 @@ documentDecoder =
     Field.attempt "domain_spell_markdown" Decode.string <| \domainSpell ->
     Field.attempt "duration" Decode.int <| \durationValue ->
     Field.attempt "duration_raw" Decode.string <| \duration ->
-    Field.attempt "edict" Decode.string <| \edict ->
     Field.attempt "familiar_ability" stringListDecoder <| \familiarAbilities ->
     Field.attempt "favored_weapon_markdown" Decode.string <| \favoredWeapons ->
     Field.attempt "feat_markdown" Decode.string <| \feats ->
@@ -3862,11 +3854,9 @@ documentDecoder =
         , advancedDomainSpell = advancedDomainSpell
         , alignment = alignment
         , ammunition = ammunition
-        , anathema = anathema
         , apocryphalSpell = apocryphalSpell
         , archetype = archetype
         , area = area
-        , areasOfConcern = areaOfConcern
         , armorCategory = armorCategory
         , armorGroup = armorGroup
         , aspect = aspect
@@ -3877,7 +3867,6 @@ documentDecoder =
         , bulk = bulk
         , charisma = charisma
         , checkPenalty = checkPenalty
-        , clericSpells = clericSpell
         , components = Maybe.withDefault [] components
         , constitution = constitution
         , cost = cost
@@ -3894,7 +3883,6 @@ documentDecoder =
         , domainSpell = domainSpell
         , duration = duration
         , durationValue = durationValue
-        , edict = edict
         , familiarAbilities = Maybe.withDefault [] familiarAbilities
         , favoredWeapons = favoredWeapons
         , feats = feats
@@ -8364,9 +8352,6 @@ viewSearchResultGridCell model hit column =
             [ "alignment" ] ->
                 maybeAsText hit.source.alignment
 
-            [ "anathema" ] ->
-                maybeAsText hit.source.anathema
-
             [ "apocryphal_spell" ] ->
                 maybeAsMarkdown hit.source.apocryphalSpell
 
@@ -8375,9 +8360,6 @@ viewSearchResultGridCell model hit column =
 
             [ "area" ] ->
                 maybeAsText hit.source.area
-
-            [ "area_of_concern" ] ->
-                maybeAsText hit.source.areasOfConcern
 
             [ "armor_category" ] ->
                 maybeAsText hit.source.armorCategory
@@ -8423,9 +8405,6 @@ viewSearchResultGridCell model hit column =
                 hit.source.checkPenalty
                     |> Maybe.map numberWithSign
                     |> maybeAsText
-
-            [ "cleric_spell" ] ->
-                maybeAsText hit.source.clericSpells
 
             [ "creature_family" ] ->
                 maybeAsMarkdown hit.source.creatureFamilyMarkdown
@@ -8494,9 +8473,6 @@ viewSearchResultGridCell model hit column =
 
             [ "duration" ] ->
                 maybeAsText hit.source.duration
-
-            [ "edict" ] ->
-                maybeAsText hit.source.edict
 
             [ "favored_weapon" ] ->
                 maybeAsMarkdown hit.source.favoredWeapons
