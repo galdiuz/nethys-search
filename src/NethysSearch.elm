@@ -3260,7 +3260,7 @@ searchWithCurrentQuery load ( model, cmd ) =
 
             , Http.request
                 { method = "POST"
-                , url = model.elasticUrl ++ "/_search"
+                , url = model.elasticUrl ++ "/_search?track_total_hits=true"
                 , headers = []
                 , body = Http.jsonBody (buildSearchBody newModel load)
                 , expect = Http.expectJson GotSearchResult esResultDecoder
@@ -8012,9 +8012,6 @@ viewSearchResults model =
                     , HA.class "fade-in"
                     ]
                     [ case total of
-                        Just 10000 ->
-                            Html.text ("Showing " ++ String.fromInt resultCount ++ " of 10000+ results")
-
                         Just count ->
                             Html.text ("Showing " ++ String.fromInt resultCount ++ " of " ++ String.fromInt count ++ " results")
 
