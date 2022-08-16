@@ -213,7 +213,7 @@ magicSchools =
 
 pageSizes : List Int
 pageSizes =
-    [ 20, 50, 100, 250 ]
+    [ 20, 50, 100, 250, 1000 ]
 
 
 predefinedColumnConfigurations : List { columns : List String, label : String }

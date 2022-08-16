@@ -304,8 +304,7 @@ type QueryType
 type LoadType
     = LoadNew
     | LoadNewForce
-    | LoadMore
-    | LoadRemaining
+    | LoadMore Int
 
 
 type ResultDisplay
@@ -393,9 +392,8 @@ type Msg
     | ItemSubcategoryFilterAdded String
     | ItemSubcategoryFilterRemoved String
     | LimitTableWidthChanged Bool
-    | LoadMorePressed
+    | LoadMorePressed Int
     | LoadPageDefaultDisplayPressed
-    | LoadRemainingPressed
     | LocalStorageValueReceived Decode.Value
     | MenuOpenDelayPassed
     | NoOp
@@ -1142,11 +1140,11 @@ update msg model =
                 (if value then "1" else "0")
             )
 
-        LoadMorePressed ->
+        LoadMorePressed size ->
             ( model
             , Cmd.none
             )
-                |> searchWithCurrentQuery LoadMore
+                |> searchWithCurrentQuery (LoadMore size)
 
         LoadPageDefaultDisplayPressed ->
             ( model
@@ -1158,12 +1156,6 @@ update msg model =
                     model
                 )
             )
-
-        LoadRemainingPressed ->
-            ( model
-            , Cmd.none
-            )
-                |> searchWithCurrentQuery LoadRemaining
 
         LocalStorageValueReceived json ->
             ( case
@@ -2513,11 +2505,12 @@ buildSearchBody model load =
         , Just
             ( "size"
             , Encode.int
-                (if load == LoadRemaining then
-                    10000
+                (case load of
+                    LoadMore size ->
+                        min 10000 size
 
-                 else
-                    model.pageSize
+                    _ ->
+                        model.pageSize
                 )
             )
         , ( "sort"
@@ -8044,16 +8037,16 @@ viewLoadMoreButtons model remaining =
         ]
         [ if remaining > model.pageSize then
             Html.button
-                [ HE.onClick LoadMorePressed
+                [ HE.onClick (LoadMorePressed model.pageSize)
                 ]
                 [ Html.text ("Load " ++ String.fromInt model.pageSize ++ " more") ]
 
           else
             Html.text ""
 
-        , if remaining > 0 && remaining < 1000 then
+        , if remaining > 0 && remaining <= 10000 then
             Html.button
-                [ HE.onClick LoadRemainingPressed
+                [ HE.onClick (LoadMorePressed 10000)
                 ]
                 [ Html.text ("Load remaining " ++ String.fromInt remaining) ]
 
@@ -8220,16 +8213,16 @@ viewSearchResultsTable model remaining =
                     ]
                     [ if remaining > model.pageSize then
                         Html.button
-                            [ HE.onClick LoadMorePressed
+                            [ HE.onClick (LoadMorePressed model.pageSize)
                             ]
                             [ Html.text ("Load " ++ String.fromInt model.pageSize ++ " more") ]
 
                       else
                         Html.text ""
 
-                    , if remaining > 0 && remaining < 1000 then
+                    , if remaining > 0 && remaining < 10000 then
                         Html.button
-                            [ HE.onClick LoadRemainingPressed
+                            [ HE.onClick (LoadMorePressed 10000)
                             ]
                             [ Html.text ("Load remaining " ++ String.fromInt remaining) ]
 
