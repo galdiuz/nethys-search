@@ -4801,13 +4801,9 @@ viewActiveFiltersAndOptions model =
         [ HA.class "column"
         , HA.class "gap-small"
         ]
-        [ if String.isEmpty currentQuery && List.isEmpty model.sort && model.queryType == Standard then
-            Html.text ""
-
-          else
-            Html.h4
-                []
-                [ Html.text "Active filters and options:" ]
+        [ Html.h4
+            []
+            [ Html.text "Active filters and options:" ]
 
         , if String.isEmpty currentQuery then
             Html.text ""
@@ -4848,12 +4844,17 @@ viewActiveFiltersAndOptions model =
                     ]
                 )
 
-        , if model.queryType == ElasticsearchQueryString then
-            Html.div
-                []
-                [ Html.text "Query type: Complex" ]
+        , Html.div
+            []
+            [ case model.queryType of
+                Standard ->
+                    Html.text "Query type: Standard (includes similar results)"
 
-          else if not model.autoQueryType && queryCouldBeComplex model.query then
+                ElasticsearchQueryString ->
+                    Html.text "Query type: Complex"
+            ]
+
+        , if not model.autoQueryType && queryCouldBeComplex model.query then
             Html.div
                 [ HA.class "option-container"
                 , HA.class "row"
@@ -6976,7 +6977,11 @@ viewQueryType model =
         ]
     , Html.div
         []
-        [ Html.text "The standard query type behaves like most search engines, searching on keywords. The complex query type instead allows you to write queries using Elasticsearch Query String syntax. The general idea is that you can search in specific fields by searching "
+        [ Html.text "The standard query type behaves like most search engines, searching on keywords. It includes results that are similar to what you searched for to help catch misspellings (a.k.a. fuzzy matching). Results matching by name are scored higher than results matching in the description."
+        ]
+    , Html.div
+        []
+        [ Html.text "The complex query type allows you to write queries using Elasticsearch Query String syntax. It doesn't do fuzzy matching by default, and allows searching for phrases by surrounding them with quotes. It also allows searching in specific fields by searching "
         , Html.span
             [ HA.class "monospace" ]
             [ Html.text "field:value" ]
