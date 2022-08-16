@@ -204,7 +204,7 @@ type alias Flags =
     , elasticUrl : String
     , fixedParams : Dict String String
     , fixedQueryString : String
-    , pageDefaultDisplays : Dict String (Dict String String)
+    , localStorage : Dict String String
     , pageId : String
     , removeFilters : List String
     , resultBaseUrl : String
@@ -221,7 +221,7 @@ defaultFlags =
     , elasticUrl = ""
     , fixedParams = Dict.empty
     , fixedQueryString = ""
-    , pageDefaultDisplays = Dict.empty
+    , localStorage = Dict.empty
     , pageId = ""
     , removeFilters = []
     , resultBaseUrl = "https://2e.aonprd.com/"
@@ -690,7 +690,7 @@ init flagsValue =
       , limitTableWidth = False
       , menuOpen = False
       , overlayActive = False
-      , pageDefaultDisplays = flags.pageDefaultDisplays
+      , pageDefaultDisplays = Dict.empty
       , pageId = flags.pageId
       , pageSize = 50
       , query = ""
@@ -733,29 +733,13 @@ init flagsValue =
       , url = url
       , visibleFilterBoxes = Set.empty
       }
-        |> updateModelFromParams
-            (getQueryParamsDictFromUrl
-                flags.fixedParams
-                (Dict.get flags.pageId flags.pageDefaultDisplays)
-                flags.defaultQuery
-                url
-            )
-    , Cmd.batch
-        [ localStorage_get "auto-query-type"
-        , localStorage_get "column-configurations"
-        , localStorage_get "group-traits"
-        , localStorage_get "grouped-display"
-        , localStorage_get "grouped-link-layout"
-        , localStorage_get "grouped-show-pfs"
-        , localStorage_get "grouped-sort"
-        , localStorage_get "limit-table-width"
-        , localStorage_get "page-size"
-        , localStorage_get "show-additional-info"
-        , localStorage_get "show-spoilers"
-        , localStorage_get "show-summary"
-        , localStorage_get "show-traits"
-        , localStorage_get "theme"
-        ]
+        |> \model ->
+            List.foldl
+                (updateModelFromLocalStorage)
+                model
+                (Dict.toList flags.localStorage)
+        |> updateModelFromUrl url
+    , Cmd.none
     )
         |> searchWithCurrentQuery LoadNew
         |> updateTitle
@@ -1181,200 +1165,14 @@ update msg model =
             )
                 |> searchWithCurrentQuery LoadRemaining
 
-        LocalStorageValueReceived value ->
-            ( case Decode.decodeValue (Decode.field "key" Decode.string) value of
-                Ok "auto-query-type" ->
-                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
-                        Ok "1" ->
-                            { model | autoQueryType = True }
-
-                        Ok "0" ->
-                            { model | autoQueryType = False }
-
-                        _ ->
-                            model
-
-                Ok "column-configurations" ->
-                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
-                        Ok string ->
-                            case Decode.decodeString (Decode.dict (Decode.list Decode.string)) string of
-                                Ok configurations ->
-                                    { model | savedColumnConfigurations = configurations }
-
-                                Err _ ->
-                                    model
-
-                        Err _ ->
-                            model
-
-                Ok "grouped-display" ->
-                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
-                        Ok "show" ->
-                            { model | groupedDisplay = Show }
-
-                        Ok "dim" ->
-                            { model | groupedDisplay = Dim }
-
-                        Ok "hide" ->
-                            { model | groupedDisplay = Hide }
-
-                        _ ->
-                            model
-
-                Ok "grouped-link-layout" ->
-                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
-                        Ok "horizontal" ->
-                            { model | groupedLinkLayout = Horizontal }
-
-                        Ok "vertical" ->
-                            { model | groupedLinkLayout = Vertical }
-
-                        Ok "vertical-with-summary" ->
-                            { model | groupedLinkLayout = VerticalWithSummary }
-
-                        _ ->
-                            model
-
-                Ok "grouped-show-pfs" ->
-                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
-                        Ok "1" ->
-                            { model | groupedShowPfs = True }
-
-                        Ok "0" ->
-                            { model | groupedShowPfs = False }
-
-                        _ ->
-                            model
-
-                Ok "grouped-sort" ->
-                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
-                        Ok "alphanum" ->
-                            { model | groupedSort = Alphanum }
-
-                        Ok "count-loaded" ->
-                            { model | groupedSort = CountLoaded }
-
-                        Ok "count-total" ->
-                            { model | groupedSort = CountTotal }
-
-                        _ ->
-                            model
-
-                Ok "group-traits" ->
-                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
-                        Ok "1" ->
-                            { model | groupTraits = True }
-
-                        Ok "0" ->
-                            { model | groupTraits = False }
-
-                        _ ->
-                            model
-
-                Ok "theme" ->
-                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
-                        Ok "dark" ->
-                            { model | theme = Dark }
-
-                        Ok "light" ->
-                            { model | theme = Light }
-
-                        Ok "book-print" ->
-                            { model | theme = Paper }
-
-                        Ok "paper" ->
-                            { model | theme = Paper }
-
-                        Ok "extra-contrast" ->
-                            { model | theme = ExtraContrast }
-
-                        Ok "contrast-dark" ->
-                            { model | theme = ExtraContrast }
-
-                        Ok "dead" ->
-                            { model | theme = Dead }
-
-                        Ok "lavender" ->
-                            { model | theme = Lavender }
-
-                        Ok "lavander" ->
-                            { model | theme = Lavender }
-
-                        Ok "blackbird" ->
-                            { model | theme = Blackbird }
-
-                        Ok "jonny" ->
-                            { model | theme = Blackbird }
-
-                        _ ->
-                            model
-
-                Ok "limit-table-width" ->
-                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
-                        Ok "1" ->
-                            { model | limitTableWidth = True }
-
-                        Ok "0" ->
-                            { model | limitTableWidth = False }
-
-                        _ ->
-                            model
-
-                Ok "page-size" ->
-                    case Decode.decodeValue (Decode.field "value" Decode.int) value of
-                        Ok size ->
-                            if List.member size Data.pageSizes then
-                                { model | pageSize = size }
-
-                            else
-                                model
-
-                        Err _ ->
-                            model
-
-                Ok "show-additional-info" ->
-                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
-                        Ok "1" ->
-                            { model | showResultAdditionalInfo = True }
-
-                        Ok "0" ->
-                            { model | showResultAdditionalInfo = False }
-
-                        _ ->
-                            model
-
-                Ok "show-spoilers" ->
-                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
-                        Ok "1" ->
-                            { model | showResultSpoilers = True }
-
-                        Ok "0" ->
-                            { model | showResultSpoilers = False }
-
-                        _ ->
-                            model
-
-                Ok "show-summary" ->
-                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
-                        Ok "1" ->
-                            { model | showResultSummary = True }
-
-                        Ok "0" ->
-                            { model | showResultSummary = False }
-
-                        _ ->
-                            model
-
-                Ok "show-traits" ->
-                    case Decode.decodeValue (Decode.field "value" Decode.string) value of
-                        Ok "1" ->
-                            { model | showResultTraits = True }
-
-                        Ok "0" ->
-                            { model | showResultTraits = False }
-
-                        _ ->
-                            model
+        LocalStorageValueReceived json ->
+            ( case
+                ( Decode.decodeValue (Decode.field "key" Decode.string) json
+                , Decode.decodeValue (Decode.field "value" Decode.string) json
+                )
+              of
+                ( Ok key, Ok value ) ->
+                    updateModelFromLocalStorage ( key, value ) model
 
                 _ ->
                     model
@@ -2040,13 +1838,7 @@ update msg model =
                     parseUrl urlString
             in
             ( { model | url = url }
-                |> updateModelFromParams
-                    (getQueryParamsDictFromUrl
-                        model.fixedParams
-                        (Dict.get model.pageId model.pageDefaultDisplays)
-                        model.defaultQuery
-                        url
-                    )
+                |> updateModelFromUrl url
             , Cmd.none
             )
                 |> searchWithCurrentQuery LoadNew
@@ -2103,6 +1895,208 @@ update msg model =
             ( model
             , updateUrl { model | filteredWeaponTypes = Dict.remove type_ model.filteredWeaponTypes }
             )
+
+
+updateModelFromLocalStorage : ( String, String ) -> Model -> Model
+updateModelFromLocalStorage ( key, value ) model =
+    case key of
+        "auto-query-type" ->
+            case value of
+                "1" ->
+                    { model | autoQueryType = True }
+
+                "0" ->
+                    { model | autoQueryType = False }
+
+                _ ->
+                    model
+
+        "column-configurations" ->
+            case Decode.decodeString (Decode.dict (Decode.list Decode.string)) value of
+                Ok configurations ->
+                    { model | savedColumnConfigurations = configurations }
+
+                Err _ ->
+                    model
+
+        "grouped-display" ->
+            case value of
+                "show" ->
+                    { model | groupedDisplay = Show }
+
+                "dim" ->
+                    { model | groupedDisplay = Dim }
+
+                "hide" ->
+                    { model | groupedDisplay = Hide }
+
+                _ ->
+                    model
+
+        "grouped-link-layout" ->
+            case value of
+                "horizontal" ->
+                    { model | groupedLinkLayout = Horizontal }
+
+                "vertical" ->
+                    { model | groupedLinkLayout = Vertical }
+
+                "vertical-with-summary" ->
+                    { model | groupedLinkLayout = VerticalWithSummary }
+
+                _ ->
+                    model
+
+        "grouped-show-pfs" ->
+            case value of
+                "1" ->
+                    { model | groupedShowPfs = True }
+
+                "0" ->
+                    { model | groupedShowPfs = False }
+
+                _ ->
+                    model
+
+        "grouped-sort" ->
+            case value of
+                "alphanum" ->
+                    { model | groupedSort = Alphanum }
+
+                "count-loaded" ->
+                    { model | groupedSort = CountLoaded }
+
+                "count-total" ->
+                    { model | groupedSort = CountTotal }
+
+                _ ->
+                    model
+
+        "group-traits" ->
+            case value of
+                "1" ->
+                    { model | groupTraits = True }
+
+                "0" ->
+                    { model | groupTraits = False }
+
+                _ ->
+                    model
+
+        "limit-table-width" ->
+            case value of
+                "1" ->
+                    { model | limitTableWidth = True }
+
+                "0" ->
+                    { model | limitTableWidth = False }
+
+                _ ->
+                    model
+
+        "page-default-displays" ->
+            case Decode.decodeString (Decode.dict (Decode.dict Decode.string)) value of
+                Ok configurations ->
+                    { model | pageDefaultDisplays = configurations }
+
+                Err _ ->
+                    model
+
+        "page-size" ->
+            case String.toInt value of
+                Just size ->
+                    if List.member size Data.pageSizes then
+                        { model | pageSize = size }
+
+                    else
+                        model
+
+                Nothing ->
+                    model
+
+        "show-additional-info" ->
+            case value of
+                "1" ->
+                    { model | showResultAdditionalInfo = True }
+
+                "0" ->
+                    { model | showResultAdditionalInfo = False }
+
+                _ ->
+                    model
+
+        "show-spoilers" ->
+            case value of
+                "1" ->
+                    { model | showResultSpoilers = True }
+
+                "0" ->
+                    { model | showResultSpoilers = False }
+
+                _ ->
+                    model
+
+        "show-summary" ->
+            case value of
+                "1" ->
+                    { model | showResultSummary = True }
+
+                "0" ->
+                    { model | showResultSummary = False }
+
+                _ ->
+                    model
+
+        "show-traits" ->
+            case value of
+                "1" ->
+                    { model | showResultTraits = True }
+
+                "0" ->
+                    { model | showResultTraits = False }
+
+                _ ->
+                    model
+
+        "theme" ->
+            case value of
+                "dark" ->
+                    { model | theme = Dark }
+
+                "light" ->
+                    { model | theme = Light }
+
+                "book-print" ->
+                    { model | theme = Paper }
+
+                "paper" ->
+                    { model | theme = Paper }
+
+                "extra-contrast" ->
+                    { model | theme = ExtraContrast }
+
+                "contrast-dark" ->
+                    { model | theme = ExtraContrast }
+
+                "dead" ->
+                    { model | theme = Dead }
+
+                "lavender" ->
+                    { model | theme = Lavender }
+
+                "lavander" ->
+                    { model | theme = Lavender }
+
+                "blackbird" ->
+                    { model | theme = Blackbird }
+
+                "jonny" ->
+                    { model | theme = Blackbird }
+
+                _ ->
+                    model
+        _ ->
+            model
 
 
 toggleBoolDict : comparable -> Dict comparable Bool -> Dict comparable Bool
@@ -3056,8 +3050,17 @@ queryToParamsDict query =
         |> Dict.fromList
 
 
-updateModelFromParams : Dict String String -> Model -> Model
-updateModelFromParams params model =
+updateModelFromUrl : Url -> Model -> Model
+updateModelFromUrl url model =
+    let
+        params : Dict String String
+        params =
+            getQueryParamsDictFromUrl
+                model.fixedParams
+                (Dict.get model.pageId model.pageDefaultDisplays)
+                model.defaultQuery
+                url
+    in
     { model
         | query =
             Dict.get "q" params
@@ -3503,7 +3506,7 @@ flagsDecoder =
     Field.attempt "defaultQuery" Decode.string <| \defaultQuery ->
     Field.attempt "fixedParams" Decode.string <| \fixedParams ->
     Field.attempt "fixedQueryString" Decode.string <| \fixedQueryString ->
-    Field.attempt "pageDefaultDisplays" (DecodeE.doubleEncoded (Decode.dict (Decode.dict Decode.string))) <| \pageDefaultDisplays ->
+    Field.attempt "localStorage" (Decode.dict Decode.string) <| \localStorage ->
     Field.attempt "pageId" Decode.string <| \pageId ->
     Field.attempt "removeFilters" (Decode.list Decode.string) <| \removeFilters ->
     Field.attempt "showFilters" (Decode.list Decode.string) <| \showFilters ->
@@ -3517,7 +3520,7 @@ flagsDecoder =
                 |> Maybe.map queryToParamsDict
                 |> Maybe.withDefault defaultFlags.fixedParams
         , fixedQueryString = Maybe.withDefault defaultFlags.fixedQueryString fixedQueryString
-        , pageDefaultDisplays = Maybe.withDefault defaultFlags.pageDefaultDisplays pageDefaultDisplays
+        , localStorage = Maybe.withDefault defaultFlags.localStorage localStorage
         , pageId = Maybe.withDefault defaultFlags.pageId pageId
         , removeFilters = Maybe.withDefault defaultFlags.removeFilters removeFilters
         , resultBaseUrl = Maybe.withDefault defaultFlags.resultBaseUrl resultBaseUrl

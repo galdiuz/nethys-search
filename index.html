@@ -17,8 +17,8 @@
                 autofocus: true,
                 currentUrl: location.href,
                 elasticUrl: "http://localhost:9200/aon",
+                localStorage: { ...localStorage },
                 showHeader: true,
-                pageDefaultDisplays: localStorage.getItem('page-default-displays'),
             }
         });
 
@@ -30,7 +30,7 @@
             }
         });
 
-        app.ports.localStorage_get.subscribe(key => {
+        app.ports.localStorage_get && app.ports.localStorage_get.subscribe(key => {
             let value = localStorage.getItem(key);
             app.ports.localStorage_receive.send({key: key, value: value});
         });
