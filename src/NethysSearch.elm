@@ -7348,7 +7348,7 @@ viewResultDisplayTable model =
         ]
     , Html.h4
         []
-        [ Html.text "Predefined column configurations" ]
+        [ Html.text "Predefined column sets" ]
     , Html.div
         [ HA.class "row"
         , HA.class "gap-medium"
@@ -7365,7 +7365,7 @@ viewResultDisplayTable model =
 
     , Html.h4
         []
-        [ Html.text "User-defined column configurations" ]
+        [ Html.text "User-defined column sets" ]
     , Html.div
         [ HA.class "row"
         , HA.class "gap-small"
