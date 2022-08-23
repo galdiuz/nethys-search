@@ -8063,16 +8063,10 @@ viewSearchResultsList model remaining resultCount =
                 Ok r ->
                     List.map (viewSingleSearchResult model) r.hits
 
-                Err (Http.BadStatus 400) ->
+                Err err ->
                     [ Html.h2
                         []
-                        [ Html.text "Error: Failed to parse query" ]
-                    ]
-
-                Err _ ->
-                    [ Html.h2
-                        []
-                        [ Html.text "Error: Search failed" ]
+                        [ Html.text (httpErrorToString err) ]
                     ]
         )
         model.searchResults
@@ -8175,15 +8169,10 @@ viewSearchResultsTable model remaining =
             [ viewSearchResultGrid model
 
             , case List.Extra.last model.searchResults of
-                Just (Err (Http.BadStatus 400)) ->
+                Just (Err err) ->
                     Html.h2
                         []
-                        [ Html.text "Error: Failed to parse query" ]
-
-                Just (Err _) ->
-                    Html.h2
-                        []
-                        [ Html.text "Error: Search failed" ]
+                        [ Html.text (httpErrorToString err) ]
 
                 _ ->
                     Html.text ""
@@ -9114,8 +9103,6 @@ viewSearchResultsGroupedLinkList model hits =
                 )
 
 
-
-
 groupedDisplayAttribute : Model -> Html.Attribute msg
 groupedDisplayAttribute model =
     case model.groupedDisplay of
@@ -9507,6 +9494,28 @@ rangeToString range =
 
     else
         String.fromInt range ++ " feet"
+
+
+httpErrorToString : Http.Error -> String
+httpErrorToString error =
+    case error of
+        Http.BadBody _ ->
+            "Error: Failed to parse response"
+
+        Http.BadStatus 400 ->
+            "Error: Failed to parse query"
+
+        Http.BadStatus code ->
+            "Error: Failed with HTTP " ++ String.fromInt code
+
+        Http.BadUrl _ ->
+            "Error: Invalid URL"
+
+        Http.NetworkError ->
+            "Error: Network error"
+
+        Http.Timeout ->
+            "Error: Request timed out"
 
 
 parseAndViewAsMarkdown : String -> List (Html msg)
