@@ -493,6 +493,7 @@ tableColumns =
     , "hands"
     , "hardness"
     , "heighten"
+    , "heighten_level"
     , "hp"
     , "immunity"
     , "intelligence"

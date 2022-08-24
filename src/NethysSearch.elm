@@ -8502,6 +8502,13 @@ viewSearchResultGridCell model hit column =
                     |> Html.text
                     |> List.singleton
 
+            [ "heighten_level" ] ->
+                hit.source.heightenLevels
+                    |> List.map String.fromInt
+                    |> String.join ", "
+                    |> Html.text
+                    |> List.singleton
+
             [ "hp" ] ->
                 maybeAsText hit.source.hp
 
