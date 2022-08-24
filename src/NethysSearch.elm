@@ -7584,6 +7584,7 @@ viewResultDisplayGrouped model =
                 , "school"
                 , "size"
                 , "source"
+                , "tradition"
                 , "trait"
                 , "type"
                 , "weapon_category"
