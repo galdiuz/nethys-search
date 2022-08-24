@@ -4404,6 +4404,7 @@ viewQuery model =
             [ Html.input
                 [ HA.autofocus model.autofocus
                 , HA.class "query-input"
+                , HA.maxlength 8192
                 , HA.placeholder "Enter search query"
                 , HA.type_ "text"
                 , HA.value model.query
@@ -7376,6 +7377,7 @@ viewResultDisplayTable model =
                 [ HA.placeholder "Name"
                 , HA.type_ "text"
                 , HA.value model.savedColumnConfigurationName
+                , HA.maxlength 100
                 , HE.onInput SavedColumnConfigurationNameChanged
                 ]
                 []
