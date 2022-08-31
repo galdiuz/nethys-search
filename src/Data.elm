@@ -336,6 +336,7 @@ sortFields =
     , ( "creature_family", "creature_family", False )
     , ( "deity", "deity", False )
     , ( "deity_category", "deity_category.keyword", False )
+    , ( "deity_category_order", "deity_category_order", False )
     , ( "dex_cap", "dex_cap", True )
     , ( "dexterity", "dexterity", True )
     , ( "divine_font", "divine_font", False )
