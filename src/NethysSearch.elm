@@ -2949,9 +2949,20 @@ buildStandardQueryBody : String -> List (List ( String, Encode.Value ))
 buildStandardQueryBody queryString =
     [ [ ( "match_phrase_prefix"
         , Encode.object
-            [ ( "name"
+            [ ( "name.sayt"
               , Encode.object
                     [ ( "query", Encode.string queryString )
+                    ]
+              )
+            ]
+        )
+      ]
+    , [ ( "match_phrase_prefix"
+        , Encode.object
+            [ ( "text.sayt"
+              , Encode.object
+                    [ ( "query", Encode.string queryString )
+                    , ( "boost", Encode.float 0.1 )
                     ]
               )
             ]
