@@ -23,7 +23,7 @@
             "elm-community/maybe-extra": "5.2.1",
             "elm-community/result-extra": "2.4.0",
             "elm-community/string-extra": "4.0.1",
-            "lattyware/elm-fontawesome": "5.0.0",
+            "lattyware/elm-fontawesome": "6.0.0",
             "webbhuset/elm-json-decode": "1.1.0"
         },
         "indirect": {

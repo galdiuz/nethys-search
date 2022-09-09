@@ -6,8 +6,8 @@ import Browser.Events
 import Data
 import Dict exposing (Dict)
 import Dict.Extra
+import FontAwesome
 import FontAwesome.Attributes
-import FontAwesome.Icon
 import FontAwesome.Regular
 import FontAwesome.Solid
 import FontAwesome.Styles
@@ -4211,7 +4211,7 @@ view model =
                         , HE.onClick (ShowMenuPressed True)
                         , HE.onMouseOver (ShowMenuPressed True)
                         ]
-                        [ FontAwesome.Icon.viewIcon FontAwesome.Solid.bars ]
+                        [ FontAwesome.view FontAwesome.Solid.bars ]
                     , Html.div
                         [ HA.class "menu-overlay"
                         , HAE.attributeIf (not model.menuOpen) (HA.class "menu-overlay-hidden")
@@ -4250,7 +4250,7 @@ viewMenu model =
             , HE.onClick (ShowMenuPressed False)
             , HAE.attributeIf (model.overlayActive) (HE.onMouseOver (ShowMenuPressed False))
             ]
-            [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times
+            [ FontAwesome.view FontAwesome.Solid.times
             ]
         , Html.div
             [ HA.class "column"
@@ -4432,7 +4432,7 @@ viewQuery model =
                     , HA.style "font-size" "24px"
                     , HE.onClick (QueryChanged "")
                     ]
-                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+                    [ FontAwesome.view FontAwesome.Solid.times ]
             ]
 
         , viewFilters model
@@ -4561,7 +4561,7 @@ viewOptionBox model filter =
                 , HA.style "font-size" "var(--font-large)"
                 , HE.onClick (ShowFilterBox filter.id False)
                 ]
-                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+                [ FontAwesome.view FontAwesome.Solid.times ]
             ]
         , Html.div
             [ HA.class "column"
@@ -4874,7 +4874,7 @@ viewActiveFiltersAndOptions model =
                     [ HA.style "font-size" "24px"
                     , HA.style "padding" "4px"
                     ]
-                    [ FontAwesome.Icon.viewIcon FontAwesome.Solid.exclamation ]
+                    [ FontAwesome.view FontAwesome.Solid.exclamation ]
                 , Html.div
                     []
                     [ Html.text "Your query contains characters that can be used with the complex query type, but you are currently using the standard query type. Would you like to "
@@ -5417,7 +5417,7 @@ viewFilterCreatureFamilies model =
                 [ HA.class "input-button"
                 , HE.onClick (SearchCreatureFamiliesChanged "")
                 ]
-                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+                [ FontAwesome.view FontAwesome.Solid.times ]
         ]
     , Html.div
         [ HA.class "row"
@@ -5521,7 +5521,7 @@ viewFilterItemCategories model =
                 [ HA.class "input-button"
                 , HE.onClick (SearchItemCategoriesChanged "")
                 ]
-                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+                [ FontAwesome.view FontAwesome.Solid.times ]
         ]
     , Html.div
         [ HA.class "row"
@@ -5582,7 +5582,7 @@ viewFilterItemCategories model =
                 [ HA.class "input-button"
                 , HE.onClick (SearchItemSubcategoriesChanged "")
                 ]
-                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+                [ FontAwesome.view FontAwesome.Solid.times ]
         ]
     , Html.div
         [ HA.class "row"
@@ -5968,7 +5968,7 @@ viewFilterSources model =
                 [ HA.class "input-button"
                 , HE.onClick (SearchSourcesChanged "")
                 ]
-                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+                [ FontAwesome.view FontAwesome.Solid.times ]
         ]
     , Html.div
         [ HA.class "row"
@@ -6209,7 +6209,7 @@ viewFilterTraits model =
                 [ HA.class "input-button"
                 , HE.onClick (SearchTraitsChanged "")
                 ]
-                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+                [ FontAwesome.view FontAwesome.Solid.times ]
         ]
 
     , if model.groupTraits then
@@ -6374,7 +6374,7 @@ viewFilterTypes model =
                 [ HA.class "input-button"
                 , HE.onClick (SearchTypesChanged "")
                 ]
-                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times ]
+                [ FontAwesome.view FontAwesome.Solid.times ]
         ]
 
     , Html.div
@@ -7318,19 +7318,19 @@ viewResultDisplayTable model =
                             [ Html.button
                                 [ HE.onClick (TableColumnRemoved column)
                                 ]
-                                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times
+                                [ FontAwesome.view FontAwesome.Solid.times
                                 ]
                             , Html.button
                                 [ HA.disabled (index == 0)
                                 , HE.onClick (TableColumnMoved index (index - 1))
                                 ]
-                                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronUp
+                                [ FontAwesome.view FontAwesome.Solid.chevronUp
                                 ]
                             , Html.button
                                 [ HA.disabled (index + 1 == List.length model.tableColumns)
                                 , HE.onClick (TableColumnMoved index (index + 1))
                                 ]
-                                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronDown
+                                [ FontAwesome.view FontAwesome.Solid.chevronDown
                                 ]
                             , Html.text (sortFieldToLabel column)
                             ]
@@ -7441,7 +7441,7 @@ viewResultDisplayTableColumn model column =
               else
                 HE.onClick (TableColumnAdded column)
             ]
-            [ FontAwesome.Icon.viewIcon FontAwesome.Solid.plus
+            [ FontAwesome.view FontAwesome.Solid.plus
             ]
 
         , Html.text (toTitleCase (String.Extra.humanize column))
@@ -7503,7 +7503,7 @@ viewResultDisplayTableColumnWithSelect model { column, onInput, selected, types 
             [ HA.disabled (List.member columnWithType model.tableColumns)
             , HE.onClick (TableColumnAdded columnWithType)
             ]
-            [ FontAwesome.Icon.viewIcon FontAwesome.Solid.plus
+            [ FontAwesome.view FontAwesome.Solid.plus
             ]
         , Html.select
             [ HA.class "input-container"
@@ -7733,7 +7733,7 @@ viewSortResults model =
                             [ Html.button
                                 [ HE.onClick (SortRemoved field)
                                 ]
-                                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.times
+                                [ FontAwesome.view FontAwesome.Solid.times
                                 ]
                             , Html.button
                                 [ HE.onClick (SortAdded field (if dir == Asc then Desc else Asc))
@@ -7744,13 +7744,13 @@ viewSortResults model =
                                 [ HA.disabled (index == 0)
                                 , HE.onClick (SortOrderChanged index (index - 1))
                                 ]
-                                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronUp
+                                [ FontAwesome.view FontAwesome.Solid.chevronUp
                                 ]
                             , Html.button
                                 [ HA.disabled (index + 1 == List.length model.sort)
                                 , HE.onClick (SortOrderChanged index (index + 1))
                                 ]
-                                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.chevronDown
+                                [ FontAwesome.view FontAwesome.Solid.chevronDown
                                 ]
                             , Html.text (sortFieldToLabel field)
                             ]
@@ -7932,18 +7932,18 @@ viewFilterIcon value =
             Html.div
                 [ HA.style "color" "#00cc00"
                 ]
-                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.checkCircle ]
+                [ FontAwesome.view FontAwesome.Solid.checkCircle ]
 
         Just False ->
             Html.div
                 [ HA.style "color" "#dd0000"
                 ]
-                [ FontAwesome.Icon.viewIcon FontAwesome.Solid.minusCircle ]
+                [ FontAwesome.view FontAwesome.Solid.minusCircle ]
 
         Nothing ->
             Html.div
                 []
-                [ FontAwesome.Icon.viewIcon FontAwesome.Regular.circle ]
+                [ FontAwesome.view FontAwesome.Regular.circle ]
 
 
 viewCheckbox : { checked : Bool, onCheck : Bool -> msg, text : String } -> Html msg
@@ -9981,17 +9981,16 @@ getSortIcon : String -> Maybe SortDir -> Html msg
 getSortIcon field dir =
     case ( dir, List.Extra.find (Tuple3.first >> (==) field) Data.sortFields ) of
         ( Just Asc, Just ( _, _, True ) ) ->
-            FontAwesome.Icon.viewIcon FontAwesome.Solid.sortNumericUp
+            FontAwesome.view FontAwesome.Solid.sortNumericDown
 
         ( Just Asc, Just ( _, _, False ) ) ->
-            FontAwesome.Icon.viewIcon FontAwesome.Solid.sortAlphaUp
-
+            FontAwesome.view FontAwesome.Solid.sortAlphaDown
 
         ( Just Desc, Just ( _, _, True ) ) ->
-            FontAwesome.Icon.viewIcon FontAwesome.Solid.sortNumericDownAlt
+            FontAwesome.view FontAwesome.Solid.sortNumericDownAlt
 
         ( Just Desc, Just ( _, _, False ) ) ->
-            FontAwesome.Icon.viewIcon FontAwesome.Solid.sortAlphaDownAlt
+            FontAwesome.view FontAwesome.Solid.sortAlphaDownAlt
 
         _ ->
             Html.text ""
