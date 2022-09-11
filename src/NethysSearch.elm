@@ -2521,7 +2521,7 @@ buildSearchBody model load =
                     ]
 
                  else
-                     List.append
+                    List.append
                         (List.map
                             (\( field, dir ) ->
                                 Encode.object
@@ -8128,6 +8128,7 @@ viewSingleSearchResult model hit =
                 [ HA.class "row"
                 , HA.class "gap-small"
                 , HA.class "align-center"
+                , HA.class "nowrap"
                 ]
                 [ viewPfsIconWithLink 25 (Maybe.withDefault "" hit.source.pfs)
                 , Html.a
@@ -8144,7 +8145,8 @@ viewSingleSearchResult model hit =
                         Html.text ""
                 ]
             , Html.div
-                [ HA.class "title-type" ]
+                [ HA.class "title-type"
+                ]
                 [ Html.text hit.source.type_
                 , case hit.source.level of
                     Just level ->
@@ -10553,6 +10555,8 @@ css =
     }
 
     .title-type {
+        align-items: center;
+        display: flex;
         text-align: right;
     }
 
