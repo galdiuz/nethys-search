@@ -8721,6 +8721,9 @@ viewSearchResultGridCell model hit column =
             [ "type" ] ->
                 [ Html.text hit.source.type_ ]
 
+            [ "usage" ] ->
+                maybeAsText hit.source.usage
+
             [ "vision" ] ->
                 maybeAsText hit.source.vision
 

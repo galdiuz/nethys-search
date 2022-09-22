@@ -540,6 +540,7 @@ tableColumns =
     , "trait"
     , "trigger"
     , "type"
+    , "usage"
     , "vision"
     , "weakest_save"
     , "weakness"
