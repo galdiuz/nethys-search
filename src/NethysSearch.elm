@@ -4862,7 +4862,7 @@ viewActiveFiltersAndOptions model =
                     Html.text "Query type: Complex"
             ]
 
-        , if not model.autoQueryType && queryCouldBeComplex model.query then
+        , if model.queryType == Standard && not model.autoQueryType && queryCouldBeComplex model.query then
             Html.div
                 [ HA.class "option-container"
                 , HA.class "row"
