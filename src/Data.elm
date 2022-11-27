@@ -498,6 +498,8 @@ tableColumns =
     , "heighten"
     , "heighten_level"
     , "hp"
+    , "icon_image"
+    , "image"
     , "immunity"
     , "intelligence"
     , "item_category"

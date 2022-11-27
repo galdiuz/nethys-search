@@ -112,6 +112,8 @@ type alias Document =
     , heighten : List String
     , heightenLevels : List Int
     , hp : Maybe String
+    , iconImage : Maybe String
+    , images : List String
     , immunities : Maybe String
     , intelligence : Maybe Int
     , itemCategory : Maybe String
@@ -3790,6 +3792,8 @@ documentDecoder =
     Field.attempt "heighten" (Decode.list Decode.string) <| \heighten ->
     Field.attempt "heighten_level" (Decode.list Decode.int) <| \heightenLevels ->
     Field.attempt "hp_raw" Decode.string <| \hp ->
+    Field.attempt "icon_image" Decode.string <| \iconImage ->
+    Field.attempt "image" stringListDecoder <| \images ->
     Field.attempt "immunity_markdown" Decode.string <| \immunities ->
     Field.attempt "intelligence" Decode.int <| \intelligence ->
     Field.attempt "item_category" Decode.string <| \itemCategory ->
@@ -3913,6 +3917,8 @@ documentDecoder =
         , heighten = Maybe.withDefault [] heighten
         , heightenLevels = Maybe.withDefault [] heightenLevels
         , hp = hp
+        , iconImage = iconImage
+        , images = Maybe.withDefault [] images
         , immunities = immunities
         , intelligence = intelligence
         , itemCategory = itemCategory
@@ -8538,6 +8544,52 @@ viewSearchResultGridCell model hit column =
 
             [ "hp" ] ->
                 maybeAsText hit.source.hp
+
+            [ "icon_image" ] ->
+                case hit.source.iconImage of
+                    Just image ->
+                        [ Html.div
+                            [ HA.class "column"
+                            , HA.class "align-center"
+                            ]
+                            [ Html.img
+                                [ HA.src image
+                                , HA.width 64
+                                ]
+                                []
+                            ]
+                        ]
+
+                    Nothing ->
+                        []
+
+            [ "image" ] ->
+                case hit.source.images of
+                    [] ->
+                        []
+
+                    images ->
+                        [ Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-small"
+                            , HA.style "justify-content" "center"
+                            ]
+                            (List.map
+                                (\image ->
+                                    Html.a
+                                        [ HA.href image
+                                        , HA.target "_blank"
+                                        ]
+                                        [ Html.img
+                                            [ HA.src image
+                                            , HA.width 96
+                                            ]
+                                            []
+                                        ]
+                                )
+                                images
+                            )
+                        ]
 
             [ "immunity" ] ->
                 maybeAsMarkdown hit.source.immunities
