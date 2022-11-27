@@ -7247,6 +7247,9 @@ viewResultDisplay model =
             [ Html.text "Load default" ]
         ]
     , Html.div
+        []
+        [ Html.text ("Current page ID: " ++ model.pageId) ]
+    , Html.div
         [ HA.class "column"
         , HA.class "gap-small"
         ]
