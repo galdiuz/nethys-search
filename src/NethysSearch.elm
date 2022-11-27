@@ -599,6 +599,7 @@ type alias Model =
     , showResultSummary : Bool
     , showResultTraits : Bool
     , sort : List ( String, SortDir )
+    , sortHasChanged : Bool
     , sourcesAggregation : Maybe (Result Http.Error (List Source))
     , tableColumns : List String
     , theme : Theme
@@ -724,6 +725,7 @@ init flagsValue =
       , showResultSummary = True
       , showResultTraits = True
       , sort = []
+      , sortHasChanged = False
       , sourcesAggregation = Nothing
       , tableColumns = []
       , theme = Dark
@@ -1567,7 +1569,7 @@ update msg model =
             )
 
         SortAdded field dir ->
-            ( model
+            ( { model | sortHasChanged = True }
             , updateUrl
                 { model
                     | sort =
@@ -1583,12 +1585,12 @@ update msg model =
             )
 
         SortOrderChanged oldIndex newIndex ->
-            ( model
+            ( { model | sortHasChanged = True }
             , updateUrl { model | sort = List.Extra.swapAt oldIndex newIndex model.sort }
             )
 
         SortRemoved field ->
-            ( model
+            ( { model | sortHasChanged = True }
             , updateUrl { model | sort = List.filter (Tuple.first >> (/=) field) model.sort }
             )
 
@@ -1598,7 +1600,7 @@ update msg model =
             )
 
         SortSetChosen fields ->
-            ( model
+            ( { model | sortHasChanged = True }
             , updateUrl { model | sort = fields }
             )
 
@@ -1608,22 +1610,31 @@ update msg model =
             )
 
         SortToggled field ->
-            ( model
+            let
+                sort : List ( String, SortDir )
+                sort =
+                    if model.sortHasChanged then
+                        model.sort
+
+                    else
+                        []
+            in
+            ( { model | sortHasChanged = True }
             , updateUrl
                 { model
                     | sort =
                         case List.Extra.find (Tuple.first >> (==) field) model.sort of
                             Just ( _, Asc ) ->
-                                model.sort
+                                sort
                                     |> List.filter (Tuple.first >> (/=) field)
                                     |> (\list -> List.append list [ ( field, Desc ) ])
 
                             Just ( _, Desc ) ->
-                                model.sort
+                                sort
                                     |> List.filter (Tuple.first >> (/=) field)
 
                             Nothing ->
-                                List.append model.sort [ ( field, Asc ) ]
+                                List.append sort [ ( field, Asc ) ]
                 }
             )
 
