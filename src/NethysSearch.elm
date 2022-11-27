@@ -8581,6 +8581,11 @@ viewSearchResultGridCell model hit column =
                     |> Maybe.withDefault ""
                     |> viewPfsIconWithLink 20
                     |> List.singleton
+                    |> Html.div
+                        [ HA.class "column"
+                        , HA.class "align-center"
+                        ]
+                    |> List.singleton
 
             [ "plane_category" ] ->
                 maybeAsText hit.source.planeCategory
