@@ -15,6 +15,7 @@ import Html exposing (Html)
 import Html.Attributes as HA
 import Html.Attributes.Extra as HAE
 import Html.Events as HE
+import Html.Keyed
 import Http
 import Json.Decode as Decode
 import Json.Decode.Extra as DecodeE
@@ -7330,14 +7331,16 @@ viewResultDisplayTable model =
             [ Html.div
                 []
                 [ Html.text "Selected columns" ]
-            , Html.div
+            , Html.Keyed.node
+                "div"
                 [ HA.class "scrollbox"
                 , HA.class "column"
                 , HA.class "gap-small"
                 ]
                 (List.indexedMap
                     (\index column ->
-                        Html.div
+                        ( column
+                        , Html.div
                             [ HA.class "row"
                             , HA.class "gap-small"
                             , HA.class "align-center"
@@ -7361,6 +7364,7 @@ viewResultDisplayTable model =
                                 ]
                             , Html.text (sortFieldToLabel column)
                             ]
+                        )
                     )
                     model.tableColumns
                 )
