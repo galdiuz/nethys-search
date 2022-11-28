@@ -3077,19 +3077,26 @@ updateModelFromUrl url model =
                 (Dict.get model.pageId model.pageDefaultDisplays)
                 model.defaultQuery
                 url
-    in
-    { model
-        | query =
+
+        query : String
+        query =
             Dict.get "q" params
                 |> Maybe.Extra.orElse (Dict.get "query" params)
                 |> Maybe.withDefault ""
+    in
+    { model
+        | query = query
         , queryType =
             case Dict.get "type" params of
                 Just "eqs" ->
                     ElasticsearchQueryString
 
                 _ ->
-                    Standard
+                    if model.autoQueryType && queryCouldBeComplex query then
+                        ElasticsearchQueryString
+
+                    else
+                        Standard
         , filteredAbilities = getBoolDictFromParams params ";" "abilities"
         , filteredActions = getBoolDictFromParams params ";" "actions"
         , filteredAlignments = getBoolDictFromParams params ";" "alignments"
