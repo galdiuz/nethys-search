@@ -42,6 +42,200 @@ import Url.Parser
 import Url.Parser.Query
 
 
+port document_setTitle : String -> Cmd msg
+port localStorage_set : Encode.Value -> Cmd msg
+port localStorage_get : String -> Cmd msg
+port localStorage_receive : (Decode.Value -> msg) -> Sub msg
+port navigation_loadUrl : String -> Cmd msg
+port navigation_pushUrl : String -> Cmd msg
+port navigation_urlChanged : (String -> msg) -> Sub msg
+
+
+type alias Model =
+    { autofocus : Bool
+    , autoQueryType : Bool
+    , elasticUrl : String
+    , fixedParams : Dict String String
+    , groupTraits : Bool
+    , groupedDisplay : GroupedDisplay
+    , groupedLinkLayout : GroupedLinkLayout
+    , groupedShowPfs : Bool
+    , groupedSort : GroupedSort
+    , limitTableWidth : Bool
+    , menuOpen : Bool
+    , openInNewTab : Bool
+    , overlayActive : Bool
+    , pageDefaultDisplays : Dict String (Dict String String)
+    , pageId : String
+    , pageSize : Int
+    , resultBaseUrl : String
+    , savedColumnConfigurations : Dict String (List String)
+    , savedColumnConfigurationName : String
+    , searchModel : SearchModel
+    , showHeader : Bool
+    , showResultAdditionalInfo : Bool
+    , showResultSpoilers : Bool
+    , showResultSummary : Bool
+    , showResultTraits : Bool
+    , sourcesAggregation : Maybe (Result Http.Error (List Source))
+    , theme : Theme
+    , url : Url
+    }
+
+
+type alias SearchModel =
+    { aggregations : Maybe (Result Http.Error Aggregations)
+    , alwaysShowFilters : List String
+    , debounce : Int
+    , defaultQuery : String
+    , filteredAbilities : Dict String Bool
+    , filteredActions : Dict String Bool
+    , filteredAlignments : Dict String Bool
+    , filteredComponents : Dict String Bool
+    , filteredCreatureFamilies : Dict String Bool
+    , filteredFromValues : Dict String String
+    , filteredHands : Dict String Bool
+    , filteredItemCategories : Dict String Bool
+    , filteredItemSubcategories : Dict String Bool
+    , filteredPfs : Dict String Bool
+    , filteredRarities : Dict String Bool
+    , filteredReloads : Dict String Bool
+    , filteredSavingThrows : Dict String Bool
+    , filteredSchools : Dict String Bool
+    , filteredSizes : Dict String Bool
+    , filteredSkills : Dict String Bool
+    , filteredSourceCategories : Dict String Bool
+    , filteredSources : Dict String Bool
+    , filteredStrongestSaves : Dict String Bool
+    , filteredToValues : Dict String String
+    , filteredTraditions : Dict String Bool
+    , filteredTraits : Dict String Bool
+    , filteredTypes : Dict String Bool
+    , filteredWeakestSaves : Dict String Bool
+    , filteredWeaponCategories : Dict String Bool
+    , filteredWeaponGroups : Dict String Bool
+    , filteredWeaponTypes : Dict String Bool
+    , filterComponentsOperator : Bool
+    , filterSpoilers : Bool
+    , filterTraditionsOperator : Bool
+    , filterTraitsOperator : Bool
+    , fixedQueryString : String
+    , groupField1 : String
+    , groupField2 : Maybe String
+    , groupField3 : Maybe String
+    , lastSearchHash : Maybe String
+    , query : String
+    , queryType : QueryType
+    , removeFilters : List String
+    , resultDisplay : ResultDisplay
+    , searchCreatureFamilies : String
+    , searchItemCategories : String
+    , searchItemSubcategories : String
+    , searchResultGroupAggs : Maybe GroupAggregations
+    , searchResults : List (Result Http.Error SearchResult)
+    , searchSources : String
+    , searchTraits : String
+    , searchTypes : String
+    , selectedColumnResistance : String
+    , selectedColumnSpeed : String
+    , selectedColumnWeakness : String
+    , selectedFilterAbility : String
+    , selectedFilterResistance : String
+    , selectedFilterSpeed : String
+    , selectedFilterWeakness : String
+    , selectedSortAbility : String
+    , selectedSortResistance : String
+    , selectedSortSpeed : String
+    , selectedSortWeakness : String
+    , showAllFilters : Bool
+    , sort : List ( String, SortDir )
+    , sortHasChanged : Bool
+    , tableColumns : List String
+    , tracker : Maybe Int
+    , visibleFilterBoxes : Set String
+    }
+
+
+emptySearchModel :
+   { alwaysShowFilters : List String
+   , defaultQuery : String
+   , removeFilters : List String
+   , fixedQueryString : String
+   }
+   -> SearchModel
+emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilters }=
+    { aggregations = Nothing
+    , alwaysShowFilters = alwaysShowFilters
+    , debounce = 0
+    , defaultQuery = defaultQuery
+    , filteredAbilities = Dict.empty
+    , filteredActions = Dict.empty
+    , filteredAlignments = Dict.empty
+    , filteredComponents = Dict.empty
+    , filteredCreatureFamilies = Dict.empty
+    , filteredFromValues = Dict.empty
+    , filteredHands = Dict.empty
+    , filteredItemCategories = Dict.empty
+    , filteredItemSubcategories = Dict.empty
+    , filteredRarities = Dict.empty
+    , filteredReloads = Dict.empty
+    , filteredSavingThrows = Dict.empty
+    , filteredSchools = Dict.empty
+    , filteredPfs = Dict.empty
+    , filteredSizes = Dict.empty
+    , filteredSkills = Dict.empty
+    , filteredSourceCategories = Dict.empty
+    , filteredSources = Dict.empty
+    , filteredStrongestSaves = Dict.empty
+    , filteredToValues = Dict.empty
+    , filteredTraditions = Dict.empty
+    , filteredTraits = Dict.empty
+    , filteredTypes = Dict.empty
+    , filteredWeakestSaves = Dict.empty
+    , filteredWeaponCategories = Dict.empty
+    , filteredWeaponGroups = Dict.empty
+    , filteredWeaponTypes = Dict.empty
+    , filterComponentsOperator = True
+    , filterSpoilers = False
+    , filterTraditionsOperator = True
+    , filterTraitsOperator = True
+    , fixedQueryString = fixedQueryString
+    , groupField1 = "type"
+    , groupField2 = Nothing
+    , groupField3 = Nothing
+    , lastSearchHash = Nothing
+    , query = ""
+    , queryType = Standard
+    , removeFilters = removeFilters
+    , resultDisplay = List
+    , searchResultGroupAggs = Nothing
+    , searchCreatureFamilies = ""
+    , searchItemCategories = ""
+    , searchItemSubcategories = ""
+    , searchResults = []
+    , searchSources = ""
+    , searchTraits = ""
+    , searchTypes = ""
+    , selectedColumnResistance = "acid"
+    , selectedColumnSpeed = "land"
+    , selectedColumnWeakness = "acid"
+    , selectedFilterAbility = "strength"
+    , selectedFilterResistance = "acid"
+    , selectedFilterSpeed = "land"
+    , selectedFilterWeakness = "acid"
+    , selectedSortAbility = "strength"
+    , selectedSortResistance = "acid"
+    , selectedSortSpeed = "land"
+    , selectedSortWeakness = "acid"
+    , showAllFilters = False
+    , sort = []
+    , sortHasChanged = False
+    , tableColumns = []
+    , tracker = Nothing
+    , visibleFilterBoxes = Set.empty
+    }
+
+
 type alias SearchResult =
     { hits : List (Hit Document)
     , total : Int
@@ -296,7 +490,7 @@ type alias SpeedTypeValues =
 type alias FilterBox =
     { id : String
     , label : String
-    , view : Model -> List (Html Msg)
+    , view : Model -> SearchModel -> List (Html Msg)
     }
 
 
@@ -511,115 +705,6 @@ type Msg
     | WeaponTypeFilterRemoved String
 
 
-port document_setTitle : String -> Cmd msg
-port localStorage_set : Encode.Value -> Cmd msg
-port localStorage_get : String -> Cmd msg
-port localStorage_receive : (Decode.Value -> msg) -> Sub msg
-port navigation_loadUrl : String -> Cmd msg
-port navigation_pushUrl : String -> Cmd msg
-port navigation_urlChanged : (String -> msg) -> Sub msg
-
-
-type alias Model =
-    { aggregations : Maybe (Result Http.Error Aggregations)
-    , alwaysShowFilters : List String
-    , autofocus : Bool
-    , autoQueryType : Bool
-    , debounce : Int
-    , defaultQuery : String
-    , elasticUrl : String
-    , filteredAbilities : Dict String Bool
-    , filteredActions : Dict String Bool
-    , filteredAlignments : Dict String Bool
-    , filteredComponents : Dict String Bool
-    , filteredCreatureFamilies : Dict String Bool
-    , filteredFromValues : Dict String String
-    , filteredHands : Dict String Bool
-    , filteredItemCategories : Dict String Bool
-    , filteredItemSubcategories : Dict String Bool
-    , filteredPfs : Dict String Bool
-    , filteredRarities : Dict String Bool
-    , filteredReloads : Dict String Bool
-    , filteredSavingThrows : Dict String Bool
-    , filteredSchools : Dict String Bool
-    , filteredSizes : Dict String Bool
-    , filteredSkills : Dict String Bool
-    , filteredSourceCategories : Dict String Bool
-    , filteredSources : Dict String Bool
-    , filteredStrongestSaves : Dict String Bool
-    , filteredToValues : Dict String String
-    , filteredTraditions : Dict String Bool
-    , filteredTraits : Dict String Bool
-    , filteredTypes : Dict String Bool
-    , filteredWeakestSaves : Dict String Bool
-    , filteredWeaponCategories : Dict String Bool
-    , filteredWeaponGroups : Dict String Bool
-    , filteredWeaponTypes : Dict String Bool
-    , filterComponentsOperator : Bool
-    , filterSpoilers : Bool
-    , filterTraditionsOperator : Bool
-    , filterTraitsOperator : Bool
-    , fixedParams : Dict String String
-    , fixedQueryString : String
-    , groupField1 : String
-    , groupField2 : Maybe String
-    , groupField3 : Maybe String
-    , groupTraits : Bool
-    , groupedDisplay : GroupedDisplay
-    , groupedLinkLayout : GroupedLinkLayout
-    , groupedShowPfs : Bool
-    , groupedSort : GroupedSort
-    , lastSearchKey : Maybe String
-    , limitTableWidth : Bool
-    , menuOpen : Bool
-    , openInNewTab : Bool
-    , overlayActive : Bool
-    , pageDefaultDisplays : Dict String (Dict String String)
-    , pageId : String
-    , pageSize : Int
-    , query : String
-    , queryType : QueryType
-    , removeFilters : List String
-    , resultBaseUrl : String
-    , resultDisplay : ResultDisplay
-    , savedColumnConfigurations : Dict String (List String)
-    , savedColumnConfigurationName : String
-    , searchCreatureFamilies : String
-    , searchItemCategories : String
-    , searchItemSubcategories : String
-    , searchResultGroupAggs : Maybe GroupAggregations
-    , searchResults : List (Result Http.Error SearchResult)
-    , searchSources : String
-    , searchTraits : String
-    , searchTypes : String
-    , selectedColumnResistance : String
-    , selectedColumnSpeed : String
-    , selectedColumnWeakness : String
-    , selectedFilterAbility : String
-    , selectedFilterResistance : String
-    , selectedFilterSpeed : String
-    , selectedFilterWeakness : String
-    , selectedSortAbility : String
-    , selectedSortResistance : String
-    , selectedSortSpeed : String
-    , selectedSortWeakness : String
-    , showAllFilters : Bool
-    , showHeader : Bool
-    , showResultAdditionalInfo : Bool
-    , showResultSpoilers : Bool
-    , showResultSummary : Bool
-    , showResultTraits : Bool
-    , sort : List ( String, SortDir )
-    , sortHasChanged : Bool
-    , sourcesAggregation : Maybe (Result Http.Error (List Source))
-    , tableColumns : List String
-    , theme : Theme
-    , tracker : Maybe Int
-    , url : Url
-    , visibleFilterBoxes : Set String
-    }
-
-
 type alias Source =
     { category : String
     , name : String
@@ -648,55 +733,15 @@ init flagsValue =
         url =
             parseUrl flags.currentUrl
     in
-    ( { aggregations = Nothing
-      , alwaysShowFilters = flags.showFilters
-      , autofocus = flags.autofocus
+    ( { autofocus = flags.autofocus
       , autoQueryType = False
-      , debounce = 0
-      , defaultQuery = flags.defaultQuery
       , elasticUrl = flags.elasticUrl
-      , filteredAbilities = Dict.empty
-      , filteredActions = Dict.empty
-      , filteredAlignments = Dict.empty
-      , filteredComponents = Dict.empty
-      , filteredCreatureFamilies = Dict.empty
-      , filteredFromValues = Dict.empty
-      , filteredHands = Dict.empty
-      , filteredItemCategories = Dict.empty
-      , filteredItemSubcategories = Dict.empty
-      , filteredRarities = Dict.empty
-      , filteredReloads = Dict.empty
-      , filteredSavingThrows = Dict.empty
-      , filteredSchools = Dict.empty
-      , filteredPfs = Dict.empty
-      , filteredSizes = Dict.empty
-      , filteredSkills = Dict.empty
-      , filteredSourceCategories = Dict.empty
-      , filteredSources = Dict.empty
-      , filteredStrongestSaves = Dict.empty
-      , filteredToValues = Dict.empty
-      , filteredTraditions = Dict.empty
-      , filteredTraits = Dict.empty
-      , filteredTypes = Dict.empty
-      , filteredWeakestSaves = Dict.empty
-      , filteredWeaponCategories = Dict.empty
-      , filteredWeaponGroups = Dict.empty
-      , filteredWeaponTypes = Dict.empty
-      , filterComponentsOperator = True
-      , filterSpoilers = False
-      , filterTraditionsOperator = True
-      , filterTraitsOperator = True
       , fixedParams = flags.fixedParams
-      , fixedQueryString = flags.fixedQueryString
-      , groupField1 = "type"
-      , groupField2 = Nothing
-      , groupField3 = Nothing
       , groupTraits = False
       , groupedDisplay = Dim
       , groupedLinkLayout = Horizontal
       , groupedShowPfs = True
       , groupedSort = Alphanum
-      , lastSearchKey = Nothing
       , limitTableWidth = False
       , menuOpen = False
       , openInNewTab = False
@@ -704,46 +749,24 @@ init flagsValue =
       , pageDefaultDisplays = Dict.empty
       , pageId = flags.pageId
       , pageSize = 50
-      , query = ""
-      , queryType = Standard
-      , removeFilters = flags.removeFilters
       , resultBaseUrl = flags.resultBaseUrl
-      , resultDisplay = List
       , savedColumnConfigurations = Dict.empty
       , savedColumnConfigurationName = ""
-      , searchCreatureFamilies = ""
-      , searchItemCategories = ""
-      , searchItemSubcategories = ""
-      , searchResultGroupAggs = Nothing
-      , searchResults = []
-      , searchSources = ""
-      , searchTraits = ""
-      , searchTypes = ""
-      , selectedColumnResistance = "acid"
-      , selectedColumnSpeed = "land"
-      , selectedColumnWeakness = "acid"
-      , selectedFilterAbility = "strength"
-      , selectedFilterResistance = "acid"
-      , selectedFilterSpeed = "land"
-      , selectedFilterWeakness = "acid"
-      , selectedSortAbility = "strength"
-      , selectedSortResistance = "acid"
-      , selectedSortSpeed = "land"
-      , selectedSortWeakness = "acid"
-      , showAllFilters = False
+      , searchModel =
+            emptySearchModel
+                { alwaysShowFilters = flags.showFilters
+                , defaultQuery = flags.defaultQuery
+                , fixedQueryString = flags.fixedQueryString
+                , removeFilters = flags.removeFilters
+                }
       , showHeader = flags.showHeader
       , showResultAdditionalInfo = True
       , showResultSpoilers = True
       , showResultSummary = True
       , showResultTraits = True
-      , sort = []
-      , sortHasChanged = False
       , sourcesAggregation = Nothing
-      , tableColumns = []
       , theme = Dark
-      , tracker = Nothing
       , url = url
-      , visibleFilterBoxes = Set.empty
       }
         |> \model ->
             List.foldl
@@ -772,32 +795,62 @@ update msg model =
     case msg of
         AbilityFilterAdded abilities ->
             ( model
-            , updateUrl { model | filteredAbilities = toggleBoolDict abilities model.filteredAbilities }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredAbilities = toggleBoolDict abilities searchModel.filteredAbilities }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         AbilityFilterRemoved abilities ->
             ( model
-            , updateUrl { model | filteredAbilities = Dict.remove abilities model.filteredAbilities }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredAbilities = Dict.remove abilities searchModel.filteredAbilities }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         ActionsFilterAdded actions ->
             ( model
-            , updateUrl { model | filteredActions = toggleBoolDict actions model.filteredActions }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredActions = toggleBoolDict actions searchModel.filteredActions }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         ActionsFilterRemoved actions ->
             ( model
-            , updateUrl { model | filteredActions = Dict.remove actions model.filteredActions }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredActions = Dict.remove actions searchModel.filteredActions }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         AlignmentFilterAdded alignment ->
             ( model
-            , updateUrl { model | filteredAlignments = toggleBoolDict alignment model.filteredAlignments }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredAlignments = toggleBoolDict alignment searchModel.filteredAlignments }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         AlignmentFilterRemoved alignment ->
             ( model
-            , updateUrl { model | filteredAlignments = Dict.remove alignment model.filteredAlignments }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredAlignments = Dict.remove alignment searchModel.filteredAlignments }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         AutoQueryTypeChanged enabled ->
@@ -806,49 +859,81 @@ update msg model =
                 [ saveToLocalStorage
                     "auto-query-type"
                     (if enabled then "1" else "0")
-                , updateUrl { model | autoQueryType = enabled }
+                , updateUrlWithSearchParams { model | autoQueryType = enabled }
                 ]
             )
 
         ColumnResistanceChanged resistance ->
-            ( { model | selectedColumnResistance = resistance }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | selectedColumnResistance = resistance }
+                )
+                model
             , Cmd.none
             )
 
         ColumnSpeedChanged speed ->
-            ( { model | selectedColumnSpeed = speed }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | selectedColumnSpeed = speed }
+                )
+                model
             , Cmd.none
             )
 
         ColumnWeaknessChanged weakness ->
-            ( { model | selectedColumnWeakness = weakness }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | selectedColumnWeakness = weakness }
+                )
+                model
             , Cmd.none
             )
 
         ComponentFilterAdded component ->
             ( model
-            , updateUrl { model | filteredComponents = toggleBoolDict component model.filteredComponents }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredComponents = toggleBoolDict component searchModel.filteredComponents }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         ComponentFilterRemoved component ->
             ( model
-            , updateUrl { model | filteredComponents = Dict.remove component model.filteredComponents }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredComponents = Dict.remove component searchModel.filteredComponents }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         CreatureFamilyFilterAdded creatureFamily ->
             ( model
-            , updateUrl { model | filteredCreatureFamilies = toggleBoolDict creatureFamily model.filteredCreatureFamilies }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredCreatureFamilies = toggleBoolDict creatureFamily searchModel.filteredCreatureFamilies }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         CreatureFamilyFilterRemoved creatureFamily ->
             ( model
-            , updateUrl { model | filteredCreatureFamilies = Dict.remove creatureFamily model.filteredCreatureFamilies }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredCreatureFamilies = Dict.remove creatureFamily searchModel.filteredCreatureFamilies }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         DebouncePassed debounce ->
-            if model.debounce == debounce then
+            if model.searchModel.debounce == debounce then
                 ( model
-                , updateUrl model
+                , updateUrlWithSearchParams model
                 )
 
             else
@@ -866,17 +951,25 @@ update msg model =
                 |> saveColumnConfigurationsToLocalStorage
 
         GotAggregationsResult result ->
-            ( { model | aggregations = Just result }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | aggregations = Just result }
+                )
+                model
             , Cmd.none
             )
 
         GotGroupAggregationsResult result ->
-            ( { model
-                | searchResultGroupAggs =
-                    result
-                        |> Result.toMaybe
-                        |> Maybe.andThen .groupAggs
-              }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | searchResultGroupAggs =
+                            result
+                                |> Result.toMaybe
+                                |> Maybe.andThen .groupAggs
+                    }
+                )
+                model
             , Cmd.none
             )
 
@@ -897,18 +990,22 @@ update msg model =
                         |> Maybe.map .source
                         |> Maybe.map (getUrl model)
             in
-            ( { model
-                | searchResults =
-                    List.append
-                        (List.filter Result.Extra.isOk model.searchResults)
-                        [ result ]
-                , searchResultGroupAggs =
-                    result
-                        |> Result.toMaybe
-                        |> Maybe.andThen .groupAggs
-                        |> Maybe.Extra.orElse model.searchResultGroupAggs
-                , tracker = Nothing
-              }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | searchResults =
+                            List.append
+                                (List.filter Result.Extra.isOk searchModel.searchResults)
+                                [ result ]
+                        , searchResultGroupAggs =
+                            result
+                                |> Result.toMaybe
+                                |> Maybe.andThen .groupAggs
+                                |> Maybe.Extra.orElse searchModel.searchResultGroupAggs
+                        , tracker = Nothing
+                    }
+                )
+                model
             , case ( containsTeleport, firstResultUrl ) of
                 ( True, Just url ) ->
                     navigation_loadUrl url
@@ -923,94 +1020,154 @@ update msg model =
             )
 
         FilterAbilityChanged value ->
-            ( { model | selectedFilterAbility = value }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | selectedFilterAbility = value }
+                )
+                model
             , Cmd.none
             )
 
         FilterComponentsOperatorChanged value ->
             ( model
-            , updateUrl { model | filterComponentsOperator = value }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filterComponentsOperator = value }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         FilterResistanceChanged value ->
-            ( { model | selectedFilterResistance = value }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | selectedFilterResistance = value }
+                )
+                model
             , Cmd.none
             )
 
         FilterSpeedChanged value ->
-            ( { model | selectedFilterSpeed = value }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | selectedFilterSpeed = value }
+                )
+                model
             , Cmd.none
             )
 
         FilterSpoilersChanged value ->
             ( model
-            , updateUrl { model | filterSpoilers = value }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filterSpoilers = value }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         FilterTraditionsOperatorChanged value ->
             ( model
-            , updateUrl { model | filterTraditionsOperator = value }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filterTraditionsOperator = value }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         FilterTraitsOperatorChanged value ->
             ( model
-            , updateUrl { model | filterTraitsOperator = value }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filterTraitsOperator = value }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         FilterWeaknessChanged value ->
-            ( { model | selectedFilterWeakness = value }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | selectedFilterWeakness = value }
+                )
+                model
             , Cmd.none
             )
 
         FilteredFromValueChanged key value ->
             let
+                updatedModel : Model
                 updatedModel =
-                    { model
-                        | filteredFromValues =
-                            if String.isEmpty value then
-                                Dict.remove key model.filteredFromValues
+                    updateCurrentSearchModel
+                        (\searchModel ->
+                            { searchModel
+                                | filteredFromValues =
+                                    if String.isEmpty value then
+                                        Dict.remove key searchModel.filteredFromValues
 
-                            else
-                                Dict.insert key value model.filteredFromValues
-                    }
+                                    else
+                                        Dict.insert key value searchModel.filteredFromValues
+                            }
+                        )
+                        model
             in
             ( updatedModel
-            , updateUrl updatedModel
+            , updateUrlWithSearchParams updatedModel
             )
 
         FilteredToValueChanged key value ->
             let
+                updatedModel : Model
                 updatedModel =
-                    { model
-                        | filteredToValues =
-                            if String.isEmpty value then
-                                Dict.remove key model.filteredToValues
+                    updateCurrentSearchModel
+                        (\searchModel ->
+                            { searchModel
+                                | filteredToValues =
+                                    if String.isEmpty value then
+                                        Dict.remove key searchModel.filteredToValues
 
-                            else
-                                Dict.insert key value model.filteredToValues
-                    }
+                                    else
+                                        Dict.insert key value searchModel.filteredToValues
+                            }
+                        )
+                        model
             in
             ( updatedModel
-            , updateUrl updatedModel
+            , updateUrlWithSearchParams updatedModel
             )
 
         GroupField1Changed field ->
-            updateWithNewGroupFields { model | groupField1 = field }
+            updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | groupField1 = field }
+                )
+                model
+                |> updateWithNewGroupFields
 
         GroupField2Changed field ->
-            updateWithNewGroupFields
-                { model
-                    | groupField2 = field
-                    , groupField3 =
-                        if field == Nothing then
-                            Nothing
+            updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | groupField2 = field
+                        , groupField3 =
+                            if field == Nothing then
+                                Nothing
 
-                        else
-                            model.groupField3
-                }
+                            else
+                                searchModel.groupField3
+                    }
+                )
+                model
+                |> updateWithNewGroupFields
 
         GroupField3Changed field ->
-            updateWithNewGroupFields { model | groupField3 = field }
+            updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | groupField3 = field }
+                )
+                model
+                |> updateWithNewGroupFields
 
         GroupTraitsChanged enabled ->
             ( { model | groupTraits = enabled }
@@ -1076,75 +1233,104 @@ update msg model =
 
         HandFilterAdded subcategory ->
             ( model
-            , updateUrl { model | filteredHands = toggleBoolDict subcategory model.filteredHands }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredHands = toggleBoolDict subcategory searchModel.filteredHands }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         HandFilterRemoved subcategory ->
             ( model
-            , updateUrl { model | filteredHands = Dict.remove subcategory model.filteredHands }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredHands = Dict.remove subcategory searchModel.filteredHands }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         ItemCategoryFilterAdded category ->
-            let
-                newFilteredItemCategories : Dict String Bool
-                newFilteredItemCategories =
-                    toggleBoolDict category model.filteredItemCategories
-            in
             ( model
-            , updateUrl
-                { model
-                    | filteredItemCategories = newFilteredItemCategories
-                    , filteredItemSubcategories =
-                        case Dict.get category newFilteredItemCategories of
-                            Just True ->
-                                Dict.filter
-                                    (\source _ ->
-                                        model.aggregations
-                                            |> Maybe.andThen Result.toMaybe
-                                            |> Maybe.map .itemSubcategories
-                                            |> Maybe.withDefault []
-                                            |> List.filter
-                                                (\sc ->
-                                                    List.member
-                                                        sc.category
-                                                        (boolDictIncluded newFilteredItemCategories)
-                                                )
-                                            |> List.map .name
-                                            |> List.member source
-                                    )
-                                    model.filteredItemSubcategories
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    let
+                        newFilteredItemCategories : Dict String Bool
+                        newFilteredItemCategories =
+                            toggleBoolDict category searchModel.filteredItemCategories
+                    in
+                    { searchModel
+                        | filteredItemCategories = newFilteredItemCategories
+                        , filteredItemSubcategories =
+                            case Dict.get category newFilteredItemCategories of
+                                Just True ->
+                                    Dict.filter
+                                        (\source _ ->
+                                            searchModel.aggregations
+                                                |> Maybe.andThen Result.toMaybe
+                                                |> Maybe.map .itemSubcategories
+                                                |> Maybe.withDefault []
+                                                |> List.filter
+                                                    (\sc ->
+                                                        List.member
+                                                            sc.category
+                                                            (boolDictIncluded newFilteredItemCategories)
+                                                    )
+                                                |> List.map .name
+                                                |> List.member source
+                                        )
+                                        searchModel.filteredItemSubcategories
 
-                            Just False ->
-                                Dict.filter
-                                    (\source _ ->
-                                        model.aggregations
-                                            |> Maybe.andThen Result.toMaybe
-                                            |> Maybe.map .itemSubcategories
-                                            |> Maybe.andThen (List.Extra.find (.name >> ((==) source)))
-                                            |> Maybe.map .category
-                                            |> Maybe.map String.toLower
-                                            |> (/=) (Just category)
-                                    )
-                                    model.filteredItemSubcategories
+                                Just False ->
+                                    Dict.filter
+                                        (\source _ ->
+                                            searchModel.aggregations
+                                                |> Maybe.andThen Result.toMaybe
+                                                |> Maybe.map .itemSubcategories
+                                                |> Maybe.andThen (List.Extra.find (.name >> ((==) source)))
+                                                |> Maybe.map .category
+                                                |> Maybe.map String.toLower
+                                                |> (/=) (Just category)
+                                        )
+                                        searchModel.filteredItemSubcategories
 
-                            Nothing ->
-                                model.filteredItemSubcategories
-                }
+                                Nothing ->
+                                    searchModel.filteredItemSubcategories
+                    }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         ItemCategoryFilterRemoved category ->
             ( model
-            , updateUrl { model | filteredItemCategories = Dict.remove category model.filteredItemCategories }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredItemCategories = Dict.remove category searchModel.filteredItemCategories }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         ItemSubcategoryFilterAdded subcategory ->
             ( model
-            , updateUrl { model | filteredItemSubcategories = toggleBoolDict subcategory model.filteredItemSubcategories }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredItemSubcategories = toggleBoolDict subcategory searchModel.filteredItemSubcategories }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         ItemSubcategoryFilterRemoved subcategory ->
             ( model
-            , updateUrl { model | filteredItemSubcategories = Dict.remove subcategory model.filteredItemSubcategories }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredItemSubcategories = Dict.remove subcategory searchModel.filteredItemSubcategories }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         LimitTableWidthChanged value ->
@@ -1162,7 +1348,7 @@ update msg model =
 
         LoadPageDefaultDisplayPressed ->
             ( model
-            , updateUrl
+            , updateUrlWithSearchParams
                 (updateModelFromDisplayParams
                     (Dict.get model.pageId model.pageDefaultDisplays
                         |> Maybe.withDefault Dict.empty
@@ -1212,190 +1398,368 @@ update msg model =
 
         PfsFilterAdded pfs ->
             ( model
-            , updateUrl { model | filteredPfs = toggleBoolDict pfs model.filteredPfs }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredPfs = toggleBoolDict pfs searchModel.filteredPfs }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         PfsFilterRemoved pfs ->
             ( model
-            , updateUrl { model | filteredPfs = Dict.remove pfs model.filteredPfs }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredPfs = Dict.remove pfs searchModel.filteredPfs }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         QueryChanged str ->
-            ( { model
-                | query = str
-                , debounce = model.debounce + 1
-              }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | debounce = searchModel.debounce + 1
+                        , query = str
+                    }
+                )
+                model
             , Process.sleep 250
-                |> Task.perform (\_ -> DebouncePassed (model.debounce + 1))
+                |> Task.perform (\_ -> DebouncePassed (model.searchModel.debounce + 1))
             )
 
         QueryTypeSelected queryType ->
             ( model
-            , updateUrl { model | queryType = queryType }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | queryType = queryType }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RarityFilterAdded rarity ->
             ( model
-            , updateUrl { model | filteredRarities = toggleBoolDict rarity model.filteredRarities }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredRarities = toggleBoolDict rarity searchModel.filteredRarities }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RarityFilterRemoved rarity ->
             ( model
-            , updateUrl { model | filteredRarities = Dict.remove rarity model.filteredRarities }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredRarities = Dict.remove rarity searchModel.filteredRarities }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         ReloadFilterAdded reload ->
             ( model
-            , updateUrl { model | filteredReloads = toggleBoolDict reload model.filteredReloads }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredReloads = toggleBoolDict reload searchModel.filteredReloads }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         ReloadFilterRemoved reload ->
             ( model
-            , updateUrl { model | filteredReloads = Dict.remove reload model.filteredReloads }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredReloads = Dict.remove reload searchModel.filteredReloads }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllSortsPressed ->
             ( model
-            , updateUrl { model | sort = [] }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | sort = [] }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllAbilityFiltersPressed ->
             ( model
-            , updateUrl { model | filteredAbilities = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredAbilities = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllActionsFiltersPressed ->
             ( model
-            , updateUrl { model | filteredActions = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredActions = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllAlignmentFiltersPressed ->
             ( model
-            , updateUrl { model | filteredAlignments = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredAlignments = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllComponentFiltersPressed ->
             ( model
-            , updateUrl { model | filteredComponents = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredComponents = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllCreatureFamilyFiltersPressed ->
             ( model
-            , updateUrl { model | filteredCreatureFamilies = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredCreatureFamilies = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllHandFiltersPressed ->
             ( model
-            , updateUrl { model | filteredHands = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredHands = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllItemCategoryFiltersPressed ->
             ( model
-            , updateUrl { model | filteredItemCategories = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredItemCategories = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllItemSubcategoryFiltersPressed ->
             ( model
-            , updateUrl { model | filteredItemSubcategories = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredItemSubcategories = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllPfsFiltersPressed ->
             ( model
-            , updateUrl { model | filteredPfs = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredPfs = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllRarityFiltersPressed ->
             ( model
-            , updateUrl { model | filteredRarities = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredRarities = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllReloadFiltersPressed ->
             ( model
-            , updateUrl { model | filteredReloads = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredReloads = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllSavingThrowFiltersPressed ->
             ( model
-            , updateUrl { model | filteredSavingThrows = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSavingThrows = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllSchoolFiltersPressed ->
             ( model
-            , updateUrl { model | filteredSchools = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSchools = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllSizeFiltersPressed ->
             ( model
-            , updateUrl { model | filteredSizes = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSizes = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllSkillFiltersPressed ->
             ( model
-            , updateUrl { model | filteredSkills = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSkills = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllSourceCategoryFiltersPressed ->
             ( model
-            , updateUrl { model | filteredSourceCategories = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSourceCategories = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllSourceFiltersPressed ->
             ( model
-            , updateUrl { model | filteredSources = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSources = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllStrongestSaveFiltersPressed ->
             ( model
-            , updateUrl { model | filteredStrongestSaves = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredStrongestSaves = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllTraditionFiltersPressed ->
             ( model
-            , updateUrl { model | filteredTraditions = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredTraditions = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllTraitFiltersPressed ->
             ( model
-            , updateUrl { model | filteredTraits = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredTraits = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllTypeFiltersPressed ->
             ( model
-            , updateUrl { model | filteredTypes = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredTypes = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllValueFiltersPressed ->
             ( model
-            , updateUrl
-                { model
-                    | filteredFromValues = Dict.empty
-                    , filteredToValues = Dict.empty
-                }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | filteredFromValues = Dict.empty
+                        , filteredToValues = Dict.empty
+                    }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllWeakestSaveFiltersPressed ->
             ( model
-            , updateUrl { model | filteredWeakestSaves = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredWeakestSaves = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllWeaponCategoryFiltersPressed ->
             ( model
-            , updateUrl { model | filteredWeaponCategories = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredWeaponCategories = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllWeaponGroupFiltersPressed ->
             ( model
-            , updateUrl { model | filteredWeaponGroups = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredWeaponGroups = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         RemoveAllWeaponTypeFiltersPressed ->
             ( model
-            , updateUrl { model | filteredWeaponTypes = Dict.empty }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredWeaponTypes = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         ResultDisplayChanged value ->
             ( model
-            , updateUrl { model | resultDisplay = value }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | resultDisplay = value }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SaveColumnConfigurationPressed ->
@@ -1407,7 +1771,7 @@ update msg model =
                     else
                         Dict.insert
                             model.savedColumnConfigurationName
-                            model.tableColumns
+                            model.searchModel.tableColumns
                             model.savedColumnConfigurations
               }
             , Cmd.none
@@ -1419,7 +1783,7 @@ update msg model =
                 newDefaults =
                     Dict.insert
                         model.pageId
-                        (Dict.fromList (getDisplayParamsList model))
+                        (Dict.fromList (getDisplayParamsList model model.searchModel))
                         model.pageDefaultDisplays
             in
             ( { model | pageDefaultDisplays = newDefaults }
@@ -1442,33 +1806,57 @@ update msg model =
             )
 
         SavedColumnConfigurationSelected name ->
-            ( { model
-                | savedColumnConfigurationName = name
-                , tableColumns =
-                    Dict.get name model.savedColumnConfigurations
-                        |> Maybe.withDefault model.tableColumns
-              }
-            , Cmd.none
+            ( { model | savedColumnConfigurationName = name }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | tableColumns =
+                            Dict.get name model.savedColumnConfigurations
+                                |> Maybe.withDefault searchModel.tableColumns
+                    }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SavingThrowFilterAdded savingThrow ->
             ( model
-            , updateUrl { model | filteredSavingThrows = toggleBoolDict savingThrow model.filteredSavingThrows }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSavingThrows = toggleBoolDict savingThrow searchModel.filteredSavingThrows }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SavingThrowFilterRemoved savingThrow ->
             ( model
-            , updateUrl { model | filteredSavingThrows = Dict.remove savingThrow model.filteredSavingThrows }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSavingThrows = Dict.remove savingThrow searchModel.filteredSavingThrows }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SchoolFilterAdded school ->
             ( model
-            , updateUrl { model | filteredSchools = toggleBoolDict school model.filteredSchools }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSchools = toggleBoolDict school searchModel.filteredSchools }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SchoolFilterRemoved school ->
             ( model
-            , updateUrl { model | filteredSchools = Dict.remove school model.filteredSchools }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSchools = Dict.remove school searchModel.filteredSchools }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         ScrollToTopPressed  ->
@@ -1477,32 +1865,56 @@ update msg model =
             )
 
         SearchCreatureFamiliesChanged value ->
-            ( { model | searchCreatureFamilies = value }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | searchCreatureFamilies = value }
+                )
+                model
             , Cmd.none
             )
 
         SearchItemCategoriesChanged value ->
-            ( { model | searchItemCategories = value }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | searchItemCategories = value }
+                )
+                model
             , Cmd.none
             )
 
         SearchItemSubcategoriesChanged value ->
-            ( { model | searchItemSubcategories = value }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | searchItemSubcategories = value }
+                )
+                model
             , Cmd.none
             )
 
         SearchSourcesChanged value ->
-            ( { model | searchSources = value }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | searchSources = value }
+                )
+                model
             , Cmd.none
             )
 
         SearchTraitsChanged value ->
-            ( { model | searchTraits = value }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | searchTraits = value }
+                )
+                model
             , Cmd.none
             )
 
         SearchTypesChanged value ->
-            ( { model | searchTypes = value }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | searchTypes = value }
+                )
+                model
             , Cmd.none
             )
 
@@ -1514,18 +1926,27 @@ update msg model =
             )
 
         ShowAllFilters ->
-            ( { model | showAllFilters = True }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | showAllFilters = True }
+                )
+                model
             , Cmd.none
             )
 
         ShowFilterBox id show ->
-            ( { model | visibleFilterBoxes =
-                    if show then
-                        Set.insert id model.visibleFilterBoxes
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | visibleFilterBoxes =
+                            if show then
+                                Set.insert id searchModel.visibleFilterBoxes
 
-                    else
-                        Set.remove id model.visibleFilterBoxes
-              }
+                            else
+                                Set.remove id searchModel.visibleFilterBoxes
+                    }
+                )
+                model
             , Cmd.none
             )
 
@@ -1564,193 +1985,321 @@ update msg model =
 
         SizeFilterAdded size ->
             ( model
-            , updateUrl { model | filteredSizes = toggleBoolDict size model.filteredSizes }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSizes = toggleBoolDict size searchModel.filteredSizes }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SizeFilterRemoved size ->
             ( model
-            , updateUrl { model | filteredSizes = Dict.remove size model.filteredSizes }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSizes = Dict.remove size searchModel.filteredSizes }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SkillFilterAdded skill ->
             ( model
-            , updateUrl { model | filteredSkills = toggleBoolDict skill model.filteredSkills }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSkills = toggleBoolDict skill searchModel.filteredSkills }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SkillFilterRemoved skill ->
             ( model
-            , updateUrl { model | filteredSkills = Dict.remove skill model.filteredSkills }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSkills = Dict.remove skill searchModel.filteredSkills }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SortAbilityChanged value ->
-            ( { model | selectedSortAbility = value }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | selectedSortAbility = value }
+                )
+                model
             , Cmd.none
             )
 
         SortAdded field dir ->
-            ( { model | sortHasChanged = True }
-            , updateUrl
-                { model
-                    | sort =
-                        if List.any (Tuple.first >> (==) field) model.sort then
-                            List.Extra.updateIf
-                                (Tuple.first >> (==) field)
-                                (Tuple.mapSecond (\_ -> dir))
-                                model.sort
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | sortHasChanged = True }
+                )
+                model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | sort =
+                            if List.any (Tuple.first >> (==) field) searchModel.sort then
+                                List.Extra.updateIf
+                                    (Tuple.first >> (==) field)
+                                    (Tuple.mapSecond (\_ -> dir))
+                                    searchModel.sort
 
-                        else
-                            List.append model.sort [ ( field, dir ) ]
-                }
+                            else
+                                List.append searchModel.sort [ ( field, dir ) ]
+                    }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SortOrderChanged oldIndex newIndex ->
-            ( { model | sortHasChanged = True }
-            , updateUrl { model | sort = List.Extra.swapAt oldIndex newIndex model.sort }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | sortHasChanged = True }
+                )
+                model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | sort = List.Extra.swapAt oldIndex newIndex searchModel.sort }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SortRemoved field ->
-            ( { model | sortHasChanged = True }
-            , updateUrl { model | sort = List.filter (Tuple.first >> (/=) field) model.sort }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | sortHasChanged = True }
+                )
+                model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | sort = List.filter (Tuple.first >> (/=) field) searchModel.sort }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SortResistanceChanged value ->
-            ( { model | selectedSortResistance = value }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | selectedSortResistance = value }
+                )
+                model
             , Cmd.none
             )
 
         SortSetChosen fields ->
-            ( { model | sortHasChanged = True }
-            , updateUrl { model | sort = fields }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | sortHasChanged = True }
+                )
+                model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | sort = fields }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SortSpeedChanged value ->
-            ( { model | selectedSortSpeed = value }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | selectedSortSpeed = value }
+                )
+                model
             , Cmd.none
             )
 
         SortToggled field ->
-            let
-                sort : List ( String, SortDir )
-                sort =
-                    if model.sortHasChanged then
-                        model.sort
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | sortHasChanged = True }
+                )
+                model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    let
+                        sort : List ( String, SortDir )
+                        sort =
+                            if searchModel.sortHasChanged then
+                                searchModel.sort
 
-                    else
-                        []
-            in
-            ( { model | sortHasChanged = True }
-            , updateUrl
-                { model
-                    | sort =
-                        case List.Extra.find (Tuple.first >> (==) field) model.sort of
-                            Just ( _, Asc ) ->
-                                sort
-                                    |> List.filter (Tuple.first >> (/=) field)
-                                    |> (\list -> List.append list [ ( field, Desc ) ])
+                            else
+                                []
+                    in
+                    { searchModel
+                        | sort =
+                            case List.Extra.find (Tuple.first >> (==) field) sort of
+                                Just ( _, Asc ) ->
+                                    sort
+                                        |> List.filter (Tuple.first >> (/=) field)
+                                        |> (\list -> List.append list [ ( field, Desc ) ])
 
-                            Just ( _, Desc ) ->
-                                sort
-                                    |> List.filter (Tuple.first >> (/=) field)
+                                Just ( _, Desc ) ->
+                                    sort
+                                        |> List.filter (Tuple.first >> (/=) field)
 
-                            Nothing ->
-                                List.append sort [ ( field, Asc ) ]
-                }
+                                Nothing ->
+                                    List.append sort [ ( field, Asc ) ]
+                    }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SortWeaknessChanged value ->
-            ( { model | selectedSortWeakness = value }
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | selectedSortWeakness = value }
+                )
+                model
             , Cmd.none
             )
 
         SourceCategoryFilterAdded category ->
-            let
-                newFilteredSourceCategories : Dict String Bool
-                newFilteredSourceCategories =
-                    toggleBoolDict category model.filteredSourceCategories
-            in
             ( model
-            , updateUrl
-                { model
-                    | filteredSourceCategories = newFilteredSourceCategories
-                    , filteredSources =
-                        case Dict.get category newFilteredSourceCategories of
-                            Just True ->
-                                Dict.filter
-                                    (\source _ ->
-                                        model.sourcesAggregation
-                                            |> Maybe.andThen Result.toMaybe
-                                            |> Maybe.withDefault []
-                                            |> List.filter
-                                                (\s ->
-                                                    List.member
-                                                        s.category
-                                                        (boolDictIncluded newFilteredSourceCategories)
-                                                )
-                                            |> List.map .name
-                                            |> List.member source
-                                    )
-                                    model.filteredSources
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    let
+                        newFilteredSourceCategories : Dict String Bool
+                        newFilteredSourceCategories =
+                            toggleBoolDict category searchModel.filteredSourceCategories
+                    in
+                    { searchModel
+                        | filteredSourceCategories = newFilteredSourceCategories
+                        , filteredSources =
+                            case Dict.get category newFilteredSourceCategories of
+                                Just True ->
+                                    Dict.filter
+                                        (\source _ ->
+                                            model.sourcesAggregation
+                                                |> Maybe.andThen Result.toMaybe
+                                                |> Maybe.withDefault []
+                                                |> List.filter
+                                                    (\s ->
+                                                        List.member
+                                                            s.category
+                                                            (boolDictIncluded newFilteredSourceCategories)
+                                                    )
+                                                |> List.map .name
+                                                |> List.member source
+                                        )
+                                        searchModel.filteredSources
 
-                            Just False ->
-                                Dict.filter
-                                    (\source _ ->
-                                        model.sourcesAggregation
-                                            |> Maybe.andThen Result.toMaybe
-                                            |> Maybe.andThen (List.Extra.find (.name >> ((==) source)))
-                                            |> Maybe.map .category
-                                            |> Maybe.map String.toLower
-                                            |> (/=) (Just category)
-                                    )
-                                    model.filteredSources
+                                Just False ->
+                                    Dict.filter
+                                        (\source _ ->
+                                            model.sourcesAggregation
+                                                |> Maybe.andThen Result.toMaybe
+                                                |> Maybe.andThen (List.Extra.find (.name >> ((==) source)))
+                                                |> Maybe.map .category
+                                                |> Maybe.map String.toLower
+                                                |> (/=) (Just category)
+                                        )
+                                        searchModel.filteredSources
 
-                            Nothing ->
-                                model.filteredSources
-                }
+                                Nothing ->
+                                    searchModel.filteredSources
+                    }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SourceCategoryFilterRemoved category ->
             ( model
-            , updateUrl { model | filteredSourceCategories = Dict.remove category model.filteredSourceCategories }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSourceCategories = Dict.remove category searchModel.filteredSourceCategories }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SourceFilterAdded book ->
             ( model
-            , updateUrl { model | filteredSources = toggleBoolDict book model.filteredSources }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSources = toggleBoolDict book searchModel.filteredSources }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SourceFilterRemoved book ->
             ( model
-            , updateUrl { model | filteredSources = Dict.remove book model.filteredSources }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredSources = Dict.remove book searchModel.filteredSources }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         StrongestSaveFilterAdded strongestSave ->
             ( model
-            , updateUrl { model | filteredStrongestSaves = toggleBoolDict strongestSave model.filteredStrongestSaves }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredStrongestSaves = toggleBoolDict strongestSave searchModel.filteredStrongestSaves }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         StrongestSaveFilterRemoved strongestSave ->
             ( model
-            , updateUrl { model | filteredStrongestSaves = Dict.remove strongestSave model.filteredStrongestSaves }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredStrongestSaves = Dict.remove strongestSave searchModel.filteredStrongestSaves }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         TableColumnAdded column ->
             ( model
-            , updateUrl { model | tableColumns = List.append model.tableColumns [ column ] }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | tableColumns = List.append searchModel.tableColumns [ column ] }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         TableColumnMoved oldIndex newIndex ->
             ( model
-            , updateUrl { model | tableColumns = List.Extra.swapAt oldIndex newIndex model.tableColumns }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | tableColumns = List.Extra.swapAt oldIndex newIndex searchModel.tableColumns }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         TableColumnRemoved column ->
             ( model
-            , updateUrl { model | tableColumns = List.filter ((/=) column) model.tableColumns }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | tableColumns = List.filter ((/=) column) searchModel.tableColumns }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         TableColumnSetChosen columns ->
             ( model
-            , updateUrl { model | tableColumns = columns }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | tableColumns = columns }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         ThemeSelected theme ->
@@ -1786,74 +2335,116 @@ update msg model =
 
         TraditionFilterAdded tradition ->
             ( model
-            , updateUrl { model | filteredTraditions = toggleBoolDict tradition model.filteredTraditions }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredTraditions = toggleBoolDict tradition searchModel.filteredTraditions }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         TraditionFilterRemoved tradition ->
             ( model
-            , updateUrl { model | filteredTraditions = Dict.remove tradition model.filteredTraditions }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredTraditions = Dict.remove tradition searchModel.filteredTraditions }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         TraitGroupDeselectPressed traits ->
             ( model
-            , updateUrl
-                { model
-                    | filteredTraits =
-                        List.foldl
-                            (\trait ->
-                                Dict.remove trait
-                            )
-                            model.filteredTraits
-                            traits
-                }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | filteredTraits =
+                            List.foldl
+                                (\trait ->
+                                    Dict.remove trait
+                                )
+                                searchModel.filteredTraits
+                                traits
+                    }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         TraitGroupExcludePressed traits ->
             ( model
-            , updateUrl
-                { model
-                    | filteredTraits =
-                        List.foldl
-                            (\trait ->
-                                Dict.insert trait False
-                            )
-                            model.filteredTraits
-                            traits
-                }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | filteredTraits =
+                            List.foldl
+                                (\trait ->
+                                    Dict.insert trait False
+                                )
+                                searchModel.filteredTraits
+                                traits
+                    }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         TraitGroupIncludePressed traits ->
             ( model
-            , updateUrl
-                { model
-                    | filteredTraits =
-                        List.foldl
-                            (\trait ->
-                                Dict.insert trait True
-                            )
-                            model.filteredTraits
-                            traits
-                }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | filteredTraits =
+                            List.foldl
+                                (\trait ->
+                                    Dict.insert trait True
+                                )
+                                searchModel.filteredTraits
+                                traits
+                    }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         TraitFilterAdded trait ->
             ( model
-            , updateUrl { model | filteredTraits = toggleBoolDict trait model.filteredTraits }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredTraits = toggleBoolDict trait searchModel.filteredTraits }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         TraitFilterRemoved trait ->
             ( model
-            , updateUrl { model | filteredTraits = Dict.remove trait model.filteredTraits }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredTraits = Dict.remove trait searchModel.filteredTraits }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         TypeFilterAdded type_ ->
             ( model
-            , updateUrl { model | filteredTypes = toggleBoolDict type_ model.filteredTypes }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredTypes = toggleBoolDict type_ searchModel.filteredTypes }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         TypeFilterRemoved type_ ->
             ( model
-            , updateUrl { model | filteredTypes = Dict.remove type_ model.filteredTypes }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredTypes = Dict.remove type_ searchModel.filteredTypes }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         UrlChanged urlString ->
@@ -1883,43 +2474,88 @@ update msg model =
 
         WeakestSaveFilterAdded weakestSave ->
             ( model
-            , updateUrl { model | filteredWeakestSaves = toggleBoolDict weakestSave model.filteredWeakestSaves }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredWeakestSaves = toggleBoolDict weakestSave searchModel.filteredWeakestSaves }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         WeakestSaveFilterRemoved weakestSave ->
             ( model
-            , updateUrl { model | filteredWeakestSaves = Dict.remove weakestSave model.filteredWeakestSaves }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredWeakestSaves = Dict.remove weakestSave searchModel.filteredWeakestSaves }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         WeaponCategoryFilterAdded category ->
             ( model
-            , updateUrl { model | filteredWeaponCategories = toggleBoolDict category model.filteredWeaponCategories }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredWeaponCategories = toggleBoolDict category searchModel.filteredWeaponCategories }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         WeaponCategoryFilterRemoved category ->
             ( model
-            , updateUrl { model | filteredWeaponCategories = Dict.remove category model.filteredWeaponCategories }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredWeaponCategories = Dict.remove category searchModel.filteredWeaponCategories }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         WeaponGroupFilterAdded group ->
             ( model
-            , updateUrl { model | filteredWeaponGroups = toggleBoolDict group model.filteredWeaponGroups }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredWeaponGroups = toggleBoolDict group searchModel.filteredWeaponGroups }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         WeaponGroupFilterRemoved group ->
             ( model
-            , updateUrl { model | filteredWeaponGroups = Dict.remove group model.filteredWeaponGroups }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredWeaponGroups = Dict.remove group searchModel.filteredWeaponGroups }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         WeaponTypeFilterAdded type_ ->
             ( model
-            , updateUrl { model | filteredWeaponTypes = toggleBoolDict type_ model.filteredWeaponTypes }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredWeaponTypes = toggleBoolDict type_ searchModel.filteredWeaponTypes }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         WeaponTypeFilterRemoved type_ ->
             ( model
-            , updateUrl { model | filteredWeaponTypes = Dict.remove type_ model.filteredWeaponTypes }
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredWeaponTypes = Dict.remove type_ searchModel.filteredWeaponTypes }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
+
+
+updateCurrentSearchModel : (SearchModel -> SearchModel) -> Model -> Model
+updateCurrentSearchModel updateFun model =
+    { model | searchModel = updateFun model.searchModel }
 
 
 updateModelFromLocalStorage : ( String, String ) -> Model -> Model
@@ -2209,21 +2845,21 @@ saveColumnConfigurationsToLocalStorage ( model, cmd ) =
     )
 
 
-updateUrl : Model -> Cmd Msg
-updateUrl ({ url } as model) =
+updateUrlWithSearchParams : Model -> Cmd Msg
+updateUrlWithSearchParams ({ searchModel, url } as model) =
     { url
         | query =
-            [ ( "q", model.query )
+            [ ( "q", searchModel.query )
             , ( "type"
               , if model.autoQueryType then
-                    if queryCouldBeComplex model.query then
+                    if queryCouldBeComplex searchModel.query then
                         "eqs"
 
                     else
                         ""
 
                 else
-                    case model.queryType of
+                    case searchModel.queryType of
                         Standard ->
                             ""
 
@@ -2231,247 +2867,247 @@ updateUrl ({ url } as model) =
                             "eqs"
               )
             , ( "include-traits"
-              , boolDictIncluded model.filteredTraits
+              , boolDictIncluded searchModel.filteredTraits
                     |> String.join ";"
               )
             , ( "exclude-traits"
-              , boolDictExcluded model.filteredTraits
+              , boolDictExcluded searchModel.filteredTraits
                     |> String.join ";"
               )
             , ( "traits-operator"
-              , if model.filterTraitsOperator then
+              , if searchModel.filterTraitsOperator then
                   ""
 
                 else
                   "or"
               )
             , ( "include-types"
-              , boolDictIncluded model.filteredTypes
+              , boolDictIncluded searchModel.filteredTypes
                     |> String.join ";"
               )
             , ( "exclude-types"
-              , boolDictExcluded model.filteredTypes
+              , boolDictExcluded searchModel.filteredTypes
                     |> String.join ";"
               )
             , ( "include-abilities"
-              , boolDictIncluded model.filteredAbilities
+              , boolDictIncluded searchModel.filteredAbilities
                     |> String.join ";"
               )
             , ( "exclude-abilities"
-              , boolDictExcluded model.filteredAbilities
+              , boolDictExcluded searchModel.filteredAbilities
                     |> String.join ";"
               )
             , ( "include-actions"
-              , boolDictIncluded model.filteredActions
+              , boolDictIncluded searchModel.filteredActions
                     |> String.join ";"
               )
             , ( "exclude-actions"
-              , boolDictExcluded model.filteredActions
+              , boolDictExcluded searchModel.filteredActions
                     |> String.join ";"
               )
             , ( "include-alignments"
-              , boolDictIncluded model.filteredAlignments
+              , boolDictIncluded searchModel.filteredAlignments
                     |> String.join ";"
               )
             , ( "exclude-alignments"
-              , boolDictExcluded model.filteredAlignments
+              , boolDictExcluded searchModel.filteredAlignments
                     |> String.join ";"
               )
             , ( "include-components"
-              , boolDictIncluded model.filteredComponents
+              , boolDictIncluded searchModel.filteredComponents
                     |> String.join ";"
               )
             , ( "exclude-components"
-              , boolDictExcluded model.filteredComponents
+              , boolDictExcluded searchModel.filteredComponents
                     |> String.join ";"
               )
             , ( "components-operator"
-              , if model.filterComponentsOperator then
+              , if searchModel.filterComponentsOperator then
                   ""
 
                 else
                   "or"
               )
             , ( "include-creature-families"
-              , boolDictIncluded model.filteredCreatureFamilies
+              , boolDictIncluded searchModel.filteredCreatureFamilies
                     |> String.join ";"
               )
             , ( "exclude-creature-families"
-              , boolDictExcluded model.filteredCreatureFamilies
+              , boolDictExcluded searchModel.filteredCreatureFamilies
                     |> String.join ";"
               )
             , ( "include-hands"
-              , boolDictIncluded model.filteredHands
+              , boolDictIncluded searchModel.filteredHands
                     |> String.join ";"
               )
             , ( "exclude-hands"
-              , boolDictExcluded model.filteredHands
+              , boolDictExcluded searchModel.filteredHands
                     |> String.join ";"
               )
             , ( "include-item-categories"
-              , boolDictIncluded model.filteredItemCategories
+              , boolDictIncluded searchModel.filteredItemCategories
                     |> String.join ";"
               )
             , ( "exclude-item-categories"
-              , boolDictExcluded model.filteredItemCategories
+              , boolDictExcluded searchModel.filteredItemCategories
                     |> String.join ";"
               )
             , ( "include-item-subcategories"
-              , boolDictIncluded model.filteredItemSubcategories
+              , boolDictIncluded searchModel.filteredItemSubcategories
                     |> String.join ";"
               )
             , ( "exclude-item-subcategories"
-              , boolDictExcluded model.filteredItemSubcategories
+              , boolDictExcluded searchModel.filteredItemSubcategories
                     |> String.join ";"
               )
             , ( "include-pfs"
-              , boolDictIncluded model.filteredPfs
+              , boolDictIncluded searchModel.filteredPfs
                     |> String.join ";"
               )
             , ( "exclude-pfs"
-              , boolDictExcluded model.filteredPfs
+              , boolDictExcluded searchModel.filteredPfs
                     |> String.join ";"
               )
             , ( "include-rarities"
-              , boolDictIncluded model.filteredRarities
+              , boolDictIncluded searchModel.filteredRarities
                     |> String.join ";"
               )
             , ( "exclude-rarities"
-              , boolDictExcluded model.filteredRarities
+              , boolDictExcluded searchModel.filteredRarities
                     |> String.join ";"
               )
             , ( "include-reloads"
-              , boolDictIncluded model.filteredReloads
+              , boolDictIncluded searchModel.filteredReloads
                     |> String.join ";"
               )
             , ( "exclude-reloads"
-              , boolDictExcluded model.filteredReloads
+              , boolDictExcluded searchModel.filteredReloads
                     |> String.join ";"
               )
             , ( "include-saving-throws"
-              , boolDictIncluded model.filteredSavingThrows
+              , boolDictIncluded searchModel.filteredSavingThrows
                     |> String.join ";"
               )
             , ( "exclude-saving-throws"
-              , boolDictExcluded model.filteredSavingThrows
+              , boolDictExcluded searchModel.filteredSavingThrows
                     |> String.join ";"
               )
             , ( "include-schools"
-              , boolDictIncluded model.filteredSchools
+              , boolDictIncluded searchModel.filteredSchools
                     |> String.join ";"
               )
             , ( "exclude-schools"
-              , boolDictExcluded model.filteredSchools
+              , boolDictExcluded searchModel.filteredSchools
                     |> String.join ";"
               )
             , ( "include-sizes"
-              , boolDictIncluded model.filteredSizes
+              , boolDictIncluded searchModel.filteredSizes
                     |> String.join ";"
               )
             , ( "exclude-sizes"
-              , boolDictExcluded model.filteredSizes
+              , boolDictExcluded searchModel.filteredSizes
                     |> String.join ";"
               )
             , ( "include-skills"
-              , boolDictIncluded model.filteredSkills
+              , boolDictIncluded searchModel.filteredSkills
                     |> String.join ";"
               )
             , ( "exclude-skills"
-              , boolDictExcluded model.filteredSkills
+              , boolDictExcluded searchModel.filteredSkills
                     |> String.join ";"
               )
             , ( "include-sources"
-              , boolDictIncluded model.filteredSources
+              , boolDictIncluded searchModel.filteredSources
                     |> String.join ";"
               )
             , ( "exclude-sources"
-              , boolDictExcluded model.filteredSources
+              , boolDictExcluded searchModel.filteredSources
                     |> String.join ";"
               )
             , ( "include-source-categories"
-              , boolDictIncluded model.filteredSourceCategories
+              , boolDictIncluded searchModel.filteredSourceCategories
                     |> String.join ";"
               )
             , ( "exclude-source-categories"
-              , boolDictExcluded model.filteredSourceCategories
+              , boolDictExcluded searchModel.filteredSourceCategories
                     |> String.join ";"
               )
             , ( "include-strongest-saves"
-              , boolDictIncluded model.filteredStrongestSaves
+              , boolDictIncluded searchModel.filteredStrongestSaves
                     |> String.join ";"
               )
             , ( "exclude-strongest-saves"
-              , boolDictExcluded model.filteredStrongestSaves
+              , boolDictExcluded searchModel.filteredStrongestSaves
                     |> String.join ";"
               )
             , ( "include-traditions"
-              , boolDictIncluded model.filteredTraditions
+              , boolDictIncluded searchModel.filteredTraditions
                     |> String.join ";"
               )
             , ( "exclude-traditions"
-              , boolDictExcluded model.filteredTraditions
+              , boolDictExcluded searchModel.filteredTraditions
                     |> String.join ";"
               )
             , ( "traditions-operator"
-              , if model.filterTraditionsOperator then
+              , if searchModel.filterTraditionsOperator then
                     ""
 
                 else
                     "or"
               )
             , ( "include-weakest-saves"
-              , boolDictIncluded model.filteredWeakestSaves
+              , boolDictIncluded searchModel.filteredWeakestSaves
                     |> String.join ";"
               )
             , ( "exclude-weakest-saves"
-              , boolDictExcluded model.filteredWeakestSaves
+              , boolDictExcluded searchModel.filteredWeakestSaves
                     |> String.join ";"
               )
             , ( "include-weapon-categories"
-              , boolDictIncluded model.filteredWeaponCategories
+              , boolDictIncluded searchModel.filteredWeaponCategories
                     |> String.join ";"
               )
             , ( "exclude-weapon-categories"
-              , boolDictExcluded model.filteredWeaponCategories
+              , boolDictExcluded searchModel.filteredWeaponCategories
                     |> String.join ";"
               )
             , ( "include-weapon-groups"
-              , boolDictIncluded model.filteredWeaponGroups
+              , boolDictIncluded searchModel.filteredWeaponGroups
                     |> String.join ";"
               )
             , ( "exclude-weapon-groups"
-              , boolDictExcluded model.filteredWeaponGroups
+              , boolDictExcluded searchModel.filteredWeaponGroups
                     |> String.join ";"
               )
             , ( "include-weapon-types"
-              , boolDictIncluded model.filteredWeaponTypes
+              , boolDictIncluded searchModel.filteredWeaponTypes
                     |> String.join ";"
               )
             , ( "exclude-weapon-types"
-              , boolDictExcluded model.filteredWeaponTypes
+              , boolDictExcluded searchModel.filteredWeaponTypes
                     |> String.join ";"
               )
             , ( "values-from"
-              , model.filteredFromValues
+              , searchModel.filteredFromValues
                     |> Dict.toList
                     |> List.map (\( field, value ) -> field ++ ":" ++ value)
                     |> String.join ";"
               )
             , ( "values-to"
-              , model.filteredToValues
+              , searchModel.filteredToValues
                     |> Dict.toList
                     |> List.map (\( field, value ) -> field ++ ":" ++ value)
                     |> String.join ";"
               )
             , ( "spoilers"
-              , if model.filterSpoilers then
+              , if searchModel.filterSpoilers then
                     "hide"
 
                 else
                     ""
               )
             , ( "sort"
-              , model.sort
+              , searchModel.sort
                     |> List.map
                         (\( field, dir ) ->
                             field ++ "-" ++ sortDirToString dir
@@ -2480,7 +3116,7 @@ updateUrl ({ url } as model) =
               )
             ]
                 |> List.append (Dict.toList model.fixedParams)
-                |> \list -> List.append list (getDisplayParamsList model)
+                |> \list -> List.append list (getDisplayParamsList model searchModel)
                 |> List.filter (Tuple.second >> String.isEmpty >> not)
                 |> List.map (\(key, val) -> Url.Builder.string key val)
                 |> Url.Builder.toQuery
@@ -2491,10 +3127,10 @@ updateUrl ({ url } as model) =
         |> navigation_pushUrl
 
 
-getDisplayParamsList : Model -> List ( String, String )
-getDisplayParamsList model =
+getDisplayParamsList : Model -> SearchModel ->  List ( String, String )
+getDisplayParamsList model searchModel =
     [ ( "display"
-      , case model.resultDisplay of
+      , case searchModel.resultDisplay of
             Grouped ->
                 "grouped"
 
@@ -2505,29 +3141,29 @@ getDisplayParamsList model =
                 "table"
       )
     , ( "columns"
-      , if model.resultDisplay == Table then
-            String.join "," model.tableColumns
+      , if searchModel.resultDisplay == Table then
+            String.join "," searchModel.tableColumns
 
         else
             ""
       )
     , ( "group-field-1"
-      , if model.resultDisplay == Grouped then
-            model.groupField1
+      , if searchModel.resultDisplay == Grouped then
+            searchModel.groupField1
 
         else
             ""
       )
     , ( "group-field-2"
-      , if model.resultDisplay == Grouped then
-            Maybe.withDefault "" model.groupField2
+      , if searchModel.resultDisplay == Grouped then
+            Maybe.withDefault "" searchModel.groupField2
 
         else
             ""
       )
     , ( "group-field-3"
-      , if model.resultDisplay == Grouped then
-            Maybe.withDefault "" model.groupField3
+      , if searchModel.resultDisplay == Grouped then
+            Maybe.withDefault "" searchModel.groupField3
 
         else
             ""
@@ -2545,15 +3181,15 @@ searchFields =
     ]
 
 
-buildSearchBody : Model -> LoadType -> Encode.Value
-buildSearchBody model load =
+buildSearchBody : Model -> SearchModel -> LoadType -> Encode.Value
+buildSearchBody model searchModel load =
     encodeObjectMaybe
         [ Just
             ( "query"
             , Encode.object
                 [ ( "function_score"
                   , Encode.object
-                        [ buildSearchQuery model
+                        [ buildSearchQuery model searchModel
                         , ( "boost_mode", Encode.string "multiply" )
                         , ( "functions"
                           , Encode.list Encode.object
@@ -2604,7 +3240,7 @@ buildSearchBody model load =
             )
         , ( "sort"
           , Encode.list identity
-                (if List.isEmpty (getValidSortFields model.sort) then
+                (if List.isEmpty (getValidSortFields searchModel.sort) then
                     [ Encode.string "_score"
                     , Encode.string "_doc"
                     ]
@@ -2621,7 +3257,7 @@ buildSearchBody model load =
                                       )
                                     ]
                             )
-                            (getValidSortFields model.sort)
+                            (getValidSortFields searchModel.sort)
                         )
                         [ Encode.string "_doc" ]
                 )
@@ -2632,7 +3268,7 @@ buildSearchBody model load =
             [ ( "excludes", Encode.list Encode.string [ "text" ] ) ]
           )
             |> Just
-        , model.searchResults
+        , searchModel.searchResults
             |> List.Extra.last
             |> Maybe.andThen (Result.toMaybe)
             |> Maybe.map .hits
@@ -2640,50 +3276,50 @@ buildSearchBody model load =
             |> Maybe.map .sort
             |> Maybe.map (Tuple.pair "search_after")
         , if load == LoadNew || load == LoadNewForce then
-            Just (buildGroupAggs model)
+            Just (buildGroupAggs searchModel)
 
           else
             Nothing
         ]
 
 
-buildSearchGroupAggregationsBody : Model -> Encode.Value
-buildSearchGroupAggregationsBody model =
+buildSearchGroupAggregationsBody : Model -> SearchModel -> Encode.Value
+buildSearchGroupAggregationsBody model searchModel =
     Encode.object
-        [ buildSearchQuery model
-        , buildGroupAggs model
+        [ buildSearchQuery model searchModel
+        , buildGroupAggs searchModel
         , ( "size", Encode.int 0 )
         ]
 
 
-buildSearchQuery : Model -> ( String, Encode.Value )
-buildSearchQuery model =
+buildSearchQuery : Model -> SearchModel -> ( String, Encode.Value )
+buildSearchQuery model searchModel =
     let
         filters : List (List ( String, Encode.Value ))
         filters =
-            buildSearchFilterTerms model
+            buildSearchFilterTerms model searchModel
 
         mustNots : List (List ( String, Encode.Value ))
         mustNots =
-            buildSearchMustNotTerms model
+            buildSearchMustNotTerms model searchModel
     in
     ( "query"
     , Encode.object
         [ ( "bool"
           , encodeObjectMaybe
-                [ if String.isEmpty model.query then
+                [ if String.isEmpty searchModel.query then
                     Nothing
 
                   else
                     Just
                         ( "should"
                         , Encode.list Encode.object
-                            (case model.queryType of
+                            (case searchModel.queryType of
                                 Standard ->
-                                    buildStandardQueryBody model.query
+                                    buildStandardQueryBody searchModel.query
 
                                 ElasticsearchQueryString ->
-                                    [ buildElasticsearchQueryStringQueryBody model.query ]
+                                    [ buildElasticsearchQueryStringQueryBody searchModel.query ]
                             )
                         )
 
@@ -2705,7 +3341,7 @@ buildSearchQuery model =
                         , Encode.list Encode.object mustNots
                         )
 
-                , if String.isEmpty model.query then
+                , if String.isEmpty searchModel.query then
                     Nothing
 
                   else
@@ -2716,14 +3352,14 @@ buildSearchQuery model =
     )
 
 
-buildGroupAggs : Model -> ( String, Encode.Value )
-buildGroupAggs model =
+buildGroupAggs : SearchModel -> ( String, Encode.Value )
+buildGroupAggs searchModel =
     ( "aggs"
     , encodeObjectMaybe
         [ buildCompositeAggregation
             "group1"
             True
-            [ ( "field1", mapSortFieldToElastic model.groupField1 )
+            [ ( "field1", mapSortFieldToElastic searchModel.groupField1 )
             ]
             |> Just
         , Maybe.map
@@ -2731,23 +3367,23 @@ buildGroupAggs model =
                 buildCompositeAggregation
                     "group2"
                     True
-                    [ ( "field1", mapSortFieldToElastic model.groupField1 )
+                    [ ( "field1", mapSortFieldToElastic searchModel.groupField1 )
                     , ( "field2", mapSortFieldToElastic field2 )
                     ]
             )
-            model.groupField2
+            searchModel.groupField2
         , Maybe.map2
             (\field2 field3 ->
                 buildCompositeAggregation
                     "group3"
                     True
-                    [ ( "field1", mapSortFieldToElastic model.groupField1 )
+                    [ ( "field1", mapSortFieldToElastic searchModel.groupField1 )
                     , ( "field2", mapSortFieldToElastic field2 )
                     , ( "field3", mapSortFieldToElastic field3 )
                     ]
             )
-            model.groupField2
-            model.groupField3
+            searchModel.groupField2
+            searchModel.groupField3
         ]
     )
 
@@ -2813,16 +3449,8 @@ sortDirFromString str =
             Nothing
 
 
-getAggregation : (Aggregations -> List a) -> Model -> List a
-getAggregation fun model =
-    model.aggregations
-        |> Maybe.andThen Result.toMaybe
-        |> Maybe.map fun
-        |> Maybe.withDefault []
-
-
-buildSearchFilterTerms : Model -> List (List ( String, Encode.Value ))
-buildSearchFilterTerms model =
+buildSearchFilterTerms : Model -> SearchModel -> List (List ( String, Encode.Value ))
+buildSearchFilterTerms model searchModel =
     List.concat
         [ List.concatMap
             (\( field, dict, isAnd ) ->
@@ -2897,7 +3525,7 @@ buildSearchFilterTerms model =
                       ]
                     ]
             )
-            (filterFields model)
+            (filterFields searchModel)
 
         , List.map
             (\( field, value ) ->
@@ -2918,7 +3546,7 @@ buildSearchFilterTerms model =
                   )
                 ]
             )
-            (Dict.toList model.filteredFromValues)
+            (Dict.toList searchModel.filteredFromValues)
 
         , List.map
             (\( field, value ) ->
@@ -2939,18 +3567,18 @@ buildSearchFilterTerms model =
                   )
                 ]
             )
-            (Dict.toList model.filteredToValues)
+            (Dict.toList searchModel.filteredToValues)
 
-        , if String.isEmpty model.fixedQueryString then
+        , if String.isEmpty searchModel.fixedQueryString then
             []
 
           else
-            [ buildElasticsearchQueryStringQueryBody model.fixedQueryString ]
+            [ buildElasticsearchQueryStringQueryBody searchModel.fixedQueryString ]
         ]
 
 
-buildSearchMustNotTerms : Model -> List (List ( String, Encode.Value ))
-buildSearchMustNotTerms model =
+buildSearchMustNotTerms : Model -> SearchModel -> List (List ( String, Encode.Value ))
+buildSearchMustNotTerms model searchModel =
     List.concat
         [ List.concatMap
             (\( field, dict, _ ) ->
@@ -3000,7 +3628,7 @@ buildSearchMustNotTerms model =
                             Nothing
                         ]
             )
-            (filterFields model)
+            (filterFields searchModel)
 
         , List.map
             (\category ->
@@ -3026,9 +3654,9 @@ buildSearchMustNotTerms model =
                   )
                 ]
             )
-            (boolDictExcluded model.filteredSourceCategories)
+            (boolDictExcluded searchModel.filteredSourceCategories)
 
-        , if model.filterSpoilers then
+        , if searchModel.filterSpoilers then
             [ ( "exists"
               , Encode.object
                     [ ( "field", Encode.string "spoilers" )
@@ -3165,16 +3793,25 @@ updateModelFromUrl url model =
             getQueryParamsDictFromUrl
                 model.fixedParams
                 (Dict.get model.pageId model.pageDefaultDisplays)
-                model.defaultQuery
+                model.searchModel.defaultQuery
                 url
+    in
+    { model
+        | searchModel = updateSearchModelFromParams params model model.searchModel
+    }
+        |> updateModelFromDisplayParams params
 
+
+updateSearchModelFromParams : Dict String String -> Model -> SearchModel -> SearchModel
+updateSearchModelFromParams params model searchModel =
+    let
         query : String
         query =
             Dict.get "q" params
                 |> Maybe.Extra.orElse (Dict.get "query" params)
                 |> Maybe.withDefault ""
     in
-    { model
+    { searchModel
         | query = query
         , queryType =
             case Dict.get "type" params of
@@ -3266,12 +3903,18 @@ updateModelFromUrl url model =
                     )
                 |> Maybe.withDefault []
     }
-        |> updateModelFromDisplayParams params
 
 
 updateModelFromDisplayParams : Dict String String -> Model -> Model
 updateModelFromDisplayParams params model =
     { model
+        | searchModel = updateSearchModelFromDisplayParams params model.searchModel
+    }
+
+
+updateSearchModelFromDisplayParams : Dict String String -> SearchModel -> SearchModel
+updateSearchModelFromDisplayParams params searchModel =
+    { searchModel
         | resultDisplay =
             case Dict.get "display" params of
                 Just "grouped" ->
@@ -3289,26 +3932,26 @@ updateModelFromDisplayParams params model =
                     |> Maybe.withDefault []
 
             else
-                model.tableColumns
+                searchModel.tableColumns
         , groupField1 =
             if Dict.get "display" params == Just "grouped" then
                 Dict.get "group-field-1" params
-                    |> Maybe.withDefault model.groupField1
+                    |> Maybe.withDefault searchModel.groupField1
 
             else
-                model.groupField1
+                searchModel.groupField1
         , groupField2 =
             if Dict.get "display" params == Just "grouped" then
                 Dict.get "group-field-2" params
 
             else
-                model.groupField2
+                searchModel.groupField2
         , groupField3 =
             if Dict.get "display" params == Just "grouped" then
                 Dict.get "group-field-3" params
 
             else
-                model.groupField3
+                searchModel.groupField3
     }
 
 
@@ -3338,11 +3981,15 @@ getQueryParam url param =
 
 searchWithCurrentQuery : LoadType -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 searchWithCurrentQuery load ( model, cmd ) =
-    if (Just (getSearchKey model.url) /= model.lastSearchKey) || load /= LoadNew then
+    if (Just (getSearchHash model.url) /= model.searchModel.lastSearchHash) || load /= LoadNew then
         let
+            searchModel : SearchModel
+            searchModel =
+                model.searchModel
+
             newTracker : Int
             newTracker =
-                case model.tracker of
+                case searchModel.tracker of
                     Just tracker ->
                         tracker + 1
 
@@ -3352,21 +3999,24 @@ searchWithCurrentQuery load ( model, cmd ) =
             newModel : Model
             newModel =
                 { model
-                    | lastSearchKey = Just (getSearchKey model.url)
-                    , searchResults =
-                        if load /= LoadNew && load /= LoadNewForce then
-                            model.searchResults
+                    | searchModel =
+                        { searchModel
+                            | lastSearchHash = Just (getSearchHash model.url)
+                            , searchResults =
+                                if load /= LoadNew && load /= LoadNewForce then
+                                    searchModel.searchResults
 
-                        else
-                            []
-                    , tracker = Just newTracker
+                                else
+                                    []
+                            , tracker = Just newTracker
+                        }
                 }
         in
         ( newModel
         , Cmd.batch
             [ cmd
 
-            , case model.tracker of
+            , case searchModel.tracker of
                 Just tracker ->
                     Http.cancel ("search-" ++ String.fromInt tracker)
 
@@ -3377,7 +4027,7 @@ searchWithCurrentQuery load ( model, cmd ) =
                 { method = "POST"
                 , url = model.elasticUrl ++ "/_search?track_total_hits=true"
                 , headers = []
-                , body = Http.jsonBody (buildSearchBody newModel load)
+                , body = Http.jsonBody (buildSearchBody newModel newModel.searchModel load)
                 , expect = Http.expectJson GotSearchResult esResultDecoder
                 , timeout = Just 10000
                 , tracker = Just ("search-" ++ String.fromInt newTracker)
@@ -3391,8 +4041,8 @@ searchWithCurrentQuery load ( model, cmd ) =
         )
 
 
-getSearchKey : Url -> String
-getSearchKey url =
+getSearchHash : Url -> String
+getSearchHash url =
     url.query
         |> Maybe.withDefault ""
         |> String.split "&"
@@ -3433,21 +4083,25 @@ updateTitle ( model, cmd ) =
     ( model
     , Cmd.batch
         [ cmd
-        , document_setTitle model.query
+        , document_setTitle model.searchModel.query
         ]
     )
 
 
 updateWithNewGroupFields : Model -> ( Model, Cmd Msg )
 updateWithNewGroupFields model =
-    ( { model | searchResultGroupAggs = Nothing }
+    ( updateCurrentSearchModel
+        (\searchModel ->
+            { searchModel | searchResultGroupAggs = Nothing }
+        )
+        model
     , Cmd.batch
-        [ updateUrl model
+        [ updateUrlWithSearchParams model
         , Http.request
             { method = "POST"
             , url = model.elasticUrl ++ "/_search"
             , headers = []
-            , body = Http.jsonBody (buildSearchGroupAggregationsBody model)
+            , body = Http.jsonBody (buildSearchGroupAggregationsBody model model.searchModel)
             , expect = Http.expectJson GotGroupAggregationsResult esResultDecoder
             , timeout = Just 10000
             , tracker = Nothing
@@ -3465,7 +4119,7 @@ getAggregations ( model, cmd ) =
             { method = "POST"
             , url = model.elasticUrl ++ "/_search"
             , headers = []
-            , body = Http.jsonBody (buildAggregationsBody model)
+            , body = Http.jsonBody (buildAggregationsBody model.searchModel)
             , expect = Http.expectJson GotAggregationsResult aggregationsDecoder
             , timeout = Just 10000
             , tracker = Nothing
@@ -3474,15 +4128,15 @@ getAggregations ( model, cmd ) =
     )
 
 
-buildAggregationsBody : Model -> Encode.Value
-buildAggregationsBody model =
+buildAggregationsBody : SearchModel -> Encode.Value
+buildAggregationsBody searchModel =
     encodeObjectMaybe
-        [ if String.isEmpty model.fixedQueryString then
+        [ if String.isEmpty searchModel.fixedQueryString then
             Nothing
 
           else
             ( "query"
-            , Encode.object (buildElasticsearchQueryStringQueryBody model.fixedQueryString)
+            , Encode.object (buildElasticsearchQueryStringQueryBody searchModel.fixedQueryString)
             )
                 |> Just
         , ( "aggs"
@@ -4358,8 +5012,8 @@ view model =
                   else
                     Html.text ""
 
-                , viewQuery model
-                , viewSearchResults model
+                , viewQuery model model.searchModel
+                , viewSearchResults model model.searchModel
                 ]
             )
         ]
@@ -4533,8 +5187,8 @@ viewTitle =
         ]
 
 
-viewQuery : Model -> Html Msg
-viewQuery model =
+viewQuery : Model -> SearchModel -> Html Msg
+viewQuery model searchModel =
     Html.div
         [ HA.class "column"
         , HA.class "align-stretch"
@@ -4552,12 +5206,12 @@ viewQuery model =
                 , HA.maxlength 8192
                 , HA.placeholder "Enter search query"
                 , HA.type_ "text"
-                , HA.value model.query
+                , HA.value searchModel.query
                 , HA.attribute "autocapitalize" "off"
                 , HE.onInput QueryChanged
                 ]
-                [ Html.text model.query ]
-            , if String.isEmpty model.query then
+                [ Html.text searchModel.query ]
+            , if String.isEmpty searchModel.query then
                 Html.text ""
 
               else
@@ -4569,27 +5223,27 @@ viewQuery model =
                     [ FontAwesome.view FontAwesome.Solid.times ]
             ]
 
-        , viewFilters model
-        , viewActiveFiltersAndOptions model
+        , viewFilters model searchModel
+        , viewActiveFiltersAndOptions model searchModel
         ]
 
 
-viewFilters : Model -> Html Msg
-viewFilters model =
+viewFilters : Model -> SearchModel -> Html Msg
+viewFilters model searchModel =
     let
         availableFilters : List FilterBox
         availableFilters =
             allFilters
-                |> List.filter (\filter -> not (List.member filter.id model.removeFilters))
+                |> List.filter (\filter -> not (List.member filter.id searchModel.removeFilters))
 
         visibleFilters : List FilterBox
         visibleFilters =
-            if model.showAllFilters || List.length availableFilters <= 6 then
+            if searchModel.showAllFilters || List.length availableFilters <= 6 then
                 availableFilters
 
              else
                 availableFilters
-                    |> List.filter (\filter -> List.member filter.id model.alwaysShowFilters)
+                    |> List.filter (\filter -> List.member filter.id searchModel.alwaysShowFilters)
     in
     Html.div
         [ HA.class "column"
@@ -4611,10 +5265,10 @@ viewFilters model =
                             [ HE.onClick
                                 (ShowFilterBox
                                     filter.id
-                                    (not (Set.member filter.id model.visibleFilterBoxes))
+                                    (not (Set.member filter.id searchModel.visibleFilterBoxes))
                                 )
                             , HAE.attributeIf
-                                (Set.member filter.id model.visibleFilterBoxes)
+                                (Set.member filter.id searchModel.visibleFilterBoxes)
                                 (HA.class "active")
                             ]
                             [ Html.text filter.label ]
@@ -4646,10 +5300,10 @@ viewFilters model =
                             [ HE.onClick
                                 (ShowFilterBox
                                     filter.id
-                                    (not (Set.member filter.id model.visibleFilterBoxes))
+                                    (not (Set.member filter.id searchModel.visibleFilterBoxes))
                                 )
                             , HAE.attributeIf
-                                (Set.member filter.id model.visibleFilterBoxes)
+                                (Set.member filter.id searchModel.visibleFilterBoxes)
                                 (HA.class "active")
                             ]
                             [ Html.text filter.label ]
@@ -4663,8 +5317,8 @@ viewFilters model =
             ]
             (List.map
                 (\filter ->
-                    if Set.member filter.id model.visibleFilterBoxes then
-                        viewOptionBox model filter
+                    if Set.member filter.id searchModel.visibleFilterBoxes then
+                        viewOptionBox model searchModel filter
 
                     else
                         Html.text ""
@@ -4674,8 +5328,8 @@ viewFilters model =
         ]
 
 
-viewOptionBox : Model -> { id: String, label : String, view : Model -> List (Html Msg) } -> Html Msg
-viewOptionBox model filter =
+viewOptionBox : Model -> SearchModel -> FilterBox -> Html Msg
+viewOptionBox model searchModel filter =
     Html.div
         [ HA.class "option-container"
         , HA.class "column"
@@ -4701,7 +5355,7 @@ viewOptionBox model filter =
             [ HA.class "column"
             , HA.class "gap-small"
             ]
-            (filter.view model)
+            (filter.view model searchModel)
         ]
 
 
@@ -4815,38 +5469,38 @@ allOptions =
     ]
 
 
-filterFields : Model -> List ( String, Dict String Bool, Bool )
-filterFields model =
-    [ ( "ability", model.filteredAbilities, False )
-    , ( "actions.keyword", model.filteredActions, False )
-    , ( "alignment", model.filteredAlignments, False )
-    , ( "component", model.filteredComponents, model.filterComponentsOperator )
-    , ( "creature_family", model.filteredCreatureFamilies, False )
-    , ( "hands.keyword", model.filteredHands, False )
-    , ( "item_category", model.filteredItemCategories, False )
-    , ( "item_subcategory", model.filteredItemSubcategories, False )
-    , ( "pfs", model.filteredPfs, False )
-    , ( "rarity", model.filteredRarities, False )
-    , ( "reload_raw.keyword", model.filteredReloads, False )
-    , ( "saving_throw", model.filteredSavingThrows, False )
-    , ( "school", model.filteredSchools, False )
-    , ( "size", model.filteredSizes, False )
-    , ( "skill", model.filteredSkills, False )
-    , ( "source", model.filteredSources, False )
-    , ( "source_category", model.filteredSourceCategories, False )
-    , ( "strongest_save", model.filteredStrongestSaves, False )
-    , ( "tradition", model.filteredTraditions, model.filterTraditionsOperator )
-    , ( "trait", model.filteredTraits, model.filterTraitsOperator )
-    , ( "type", model.filteredTypes, False )
-    , ( "weakest_save", model.filteredWeakestSaves, False )
-    , ( "weapon_category", model.filteredWeaponCategories, False )
-    , ( "weapon_group", model.filteredWeaponGroups, False )
-    , ( "weapon_type", model.filteredWeaponTypes, False )
+filterFields : SearchModel -> List ( String, Dict String Bool, Bool )
+filterFields searchModel =
+    [ ( "ability", searchModel.filteredAbilities, False )
+    , ( "actions.keyword", searchModel.filteredActions, False )
+    , ( "alignment", searchModel.filteredAlignments, False )
+    , ( "component", searchModel.filteredComponents, searchModel.filterComponentsOperator )
+    , ( "creature_family", searchModel.filteredCreatureFamilies, False )
+    , ( "hands.keyword", searchModel.filteredHands, False )
+    , ( "item_category", searchModel.filteredItemCategories, False )
+    , ( "item_subcategory", searchModel.filteredItemSubcategories, False )
+    , ( "pfs", searchModel.filteredPfs, False )
+    , ( "rarity", searchModel.filteredRarities, False )
+    , ( "reload_raw.keyword", searchModel.filteredReloads, False )
+    , ( "saving_throw", searchModel.filteredSavingThrows, False )
+    , ( "school", searchModel.filteredSchools, False )
+    , ( "size", searchModel.filteredSizes, False )
+    , ( "skill", searchModel.filteredSkills, False )
+    , ( "source", searchModel.filteredSources, False )
+    , ( "source_category", searchModel.filteredSourceCategories, False )
+    , ( "strongest_save", searchModel.filteredStrongestSaves, False )
+    , ( "tradition", searchModel.filteredTraditions, searchModel.filterTraditionsOperator )
+    , ( "trait", searchModel.filteredTraits, searchModel.filterTraitsOperator )
+    , ( "type", searchModel.filteredTypes, False )
+    , ( "weakest_save", searchModel.filteredWeakestSaves, False )
+    , ( "weapon_category", searchModel.filteredWeaponCategories, False )
+    , ( "weapon_group", searchModel.filteredWeaponGroups, False )
+    , ( "weapon_type", searchModel.filteredWeaponTypes, False )
     ]
 
 
-mergeFromToValues : Model -> List ( String, Maybe String, Maybe String )
-mergeFromToValues model =
+mergeFromToValues : SearchModel -> List ( String, Maybe String, Maybe String )
+mergeFromToValues searchModel =
     Dict.merge
         (\field from ->
             (::) ( field, Just from, Nothing )
@@ -4857,13 +5511,13 @@ mergeFromToValues model =
         (\field to ->
             (::) ( field, Nothing, Just to )
         )
-        model.filteredFromValues
-        model.filteredToValues
+        searchModel.filteredFromValues
+        searchModel.filteredToValues
         []
 
 
-currentQueryAsComplex : Model -> String
-currentQueryAsComplex model =
+currentQueryAsComplex : SearchModel -> String
+currentQueryAsComplex searchModel =
     let
         surroundWithQuotes : String -> String
         surroundWithQuotes s =
@@ -4880,7 +5534,7 @@ currentQueryAsComplex model =
             else
                 s
     in
-    [ filterFields model
+    [ filterFields searchModel
         |> List.filterMap
             (\( field, dict, isAnd ) ->
                 if Dict.isEmpty dict then
@@ -4921,8 +5575,8 @@ currentQueryAsComplex model =
                 ( Nothing, Nothing ) ->
                     ""
         )
-        (mergeFromToValues model)
-    , if model.filterSpoilers then
+        (mergeFromToValues searchModel)
+    , if searchModel.filterSpoilers then
         [ "NOT spoilers:*" ]
 
       else
@@ -4932,12 +5586,12 @@ currentQueryAsComplex model =
         |> String.join " "
 
 
-viewActiveFiltersAndOptions : Model -> Html Msg
-viewActiveFiltersAndOptions model =
+viewActiveFiltersAndOptions : Model -> SearchModel -> Html Msg
+viewActiveFiltersAndOptions model searchModel =
     let
         currentQuery : String
         currentQuery =
-            currentQueryAsComplex model
+            currentQueryAsComplex searchModel
     in
     Html.div
         [ HA.class "column"
@@ -4951,9 +5605,9 @@ viewActiveFiltersAndOptions model =
             Html.text ""
 
           else
-            viewActiveFilters model
+            viewActiveFilters searchModel
 
-        , if List.isEmpty model.sort then
+        , if List.isEmpty searchModel.sort then
             Html.text ""
 
           else
@@ -4982,13 +5636,13 @@ viewActiveFiltersAndOptions model =
                                 , getSortIcon field (Just dir)
                                 ]
                         )
-                        model.sort
+                        searchModel.sort
                     ]
                 )
 
         , Html.div
             []
-            [ case model.queryType of
+            [ case searchModel.queryType of
                 Standard ->
                     Html.text "Query type: Standard (includes similar results)"
 
@@ -4996,7 +5650,7 @@ viewActiveFiltersAndOptions model =
                     Html.text "Query type: Complex"
             ]
 
-        , if model.queryType == Standard && not model.autoQueryType && queryCouldBeComplex model.query then
+        , if searchModel.queryType == Standard && not model.autoQueryType && queryCouldBeComplex searchModel.query then
             Html.div
                 [ HA.class "option-container"
                 , HA.class "row"
@@ -5028,8 +5682,8 @@ viewActiveFiltersAndOptions model =
         ]
 
 
-viewActiveFilters : Model -> Html Msg
-viewActiveFilters model =
+viewActiveFilters : SearchModel -> Html Msg
+viewActiveFilters searchModel =
     Html.div
         [ HA.class "row"
         , HA.class "gap-medium"
@@ -5072,273 +5726,273 @@ viewActiveFilters model =
                 )
                 [ { class = Just "trait"
                   , label =
-                        if model.filterTraitsOperator then
+                        if searchModel.filterTraitsOperator then
                             "Include all traits:"
 
                         else
                             "Include any trait:"
-                  , list = boolDictIncluded model.filteredTraits
+                  , list = boolDictIncluded searchModel.filteredTraits
                   , removeMsg = TraitFilterRemoved
                   }
                 , { class = Just "trait"
                   , label = "Exclude traits:"
-                  , list = boolDictExcluded model.filteredTraits
+                  , list = boolDictExcluded searchModel.filteredTraits
                   , removeMsg = TraitFilterRemoved
                   }
                 , { class = Just "filter-type"
                   , label = "Include types:"
-                  , list = boolDictIncluded model.filteredTypes
+                  , list = boolDictIncluded searchModel.filteredTypes
                   , removeMsg = TypeFilterRemoved
                   }
                 , { class = Just "filter-type"
                   , label = "Exclude types:"
-                  , list = boolDictExcluded model.filteredTypes
+                  , list = boolDictExcluded searchModel.filteredTypes
                   , removeMsg = TypeFilterRemoved
                   }
                 , { class = Nothing
                   , label =
-                        if model.filterTraditionsOperator then
+                        if searchModel.filterTraditionsOperator then
                             "Include all traditions:"
 
                         else
                             "Include any tradition:"
-                  , list = boolDictIncluded model.filteredTraditions
+                  , list = boolDictIncluded searchModel.filteredTraditions
                   , removeMsg = TraditionFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude traditions:"
-                  , list = boolDictExcluded model.filteredTraditions
+                  , list = boolDictExcluded searchModel.filteredTraditions
                   , removeMsg = TraditionFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include actions:"
-                  , list = boolDictIncluded model.filteredActions
+                  , list = boolDictIncluded searchModel.filteredActions
                   , removeMsg = ActionsFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude actions:"
-                  , list = boolDictExcluded model.filteredActions
+                  , list = boolDictExcluded searchModel.filteredActions
                   , removeMsg = ActionsFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include abilities:"
-                  , list = boolDictIncluded model.filteredAbilities
+                  , list = boolDictIncluded searchModel.filteredAbilities
                   , removeMsg = AbilityFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude abilities:"
-                  , list = boolDictExcluded model.filteredAbilities
+                  , list = boolDictExcluded searchModel.filteredAbilities
                   , removeMsg = AbilityFilterRemoved
                   }
                 , { class = Just "trait trait-alignment"
                   , label = "Include alignments:"
-                  , list = boolDictIncluded model.filteredAlignments
+                  , list = boolDictIncluded searchModel.filteredAlignments
                   , removeMsg = AlignmentFilterRemoved
                   }
                 , { class = Just "trait trait-alignment"
                   , label = "Exclude alignments:"
-                  , list = boolDictExcluded model.filteredAlignments
+                  , list = boolDictExcluded searchModel.filteredAlignments
                   , removeMsg = AlignmentFilterRemoved
                   }
                 , { class = Nothing
                   , label =
-                        if model.filterComponentsOperator then
+                        if searchModel.filterComponentsOperator then
                             "Include all components:"
 
                         else
                             "Include any component:"
-                  , list = boolDictIncluded model.filteredComponents
+                  , list = boolDictIncluded searchModel.filteredComponents
                   , removeMsg = ComponentFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude components:"
-                  , list = boolDictExcluded model.filteredComponents
+                  , list = boolDictExcluded searchModel.filteredComponents
                   , removeMsg = ComponentFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include creature families:"
-                  , list = boolDictIncluded model.filteredCreatureFamilies
+                  , list = boolDictIncluded searchModel.filteredCreatureFamilies
                   , removeMsg = CreatureFamilyFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude creature families:"
-                  , list = boolDictExcluded model.filteredCreatureFamilies
+                  , list = boolDictExcluded searchModel.filteredCreatureFamilies
                   , removeMsg = CreatureFamilyFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include hands:"
-                  , list = boolDictIncluded model.filteredHands
+                  , list = boolDictIncluded searchModel.filteredHands
                   , removeMsg = HandFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude hands:"
-                  , list = boolDictExcluded model.filteredHands
+                  , list = boolDictExcluded searchModel.filteredHands
                   , removeMsg = HandFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include item categories:"
-                  , list = boolDictIncluded model.filteredItemCategories
+                  , list = boolDictIncluded searchModel.filteredItemCategories
                   , removeMsg = ItemCategoryFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude item categories:"
-                  , list = boolDictExcluded model.filteredItemCategories
+                  , list = boolDictExcluded searchModel.filteredItemCategories
                   , removeMsg = ItemCategoryFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include item subcategories:"
-                  , list = boolDictIncluded model.filteredItemSubcategories
+                  , list = boolDictIncluded searchModel.filteredItemSubcategories
                   , removeMsg = ItemSubcategoryFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude item subcategories:"
-                  , list = boolDictExcluded model.filteredItemSubcategories
+                  , list = boolDictExcluded searchModel.filteredItemSubcategories
                   , removeMsg = ItemSubcategoryFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include PFS:"
-                  , list = boolDictIncluded model.filteredPfs
+                  , list = boolDictIncluded searchModel.filteredPfs
                   , removeMsg = PfsFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude PFS:"
-                  , list = boolDictExcluded model.filteredPfs
+                  , list = boolDictExcluded searchModel.filteredPfs
                   , removeMsg = PfsFilterRemoved
                   }
                 , { class = Just "trait"
                   , label = "Include rarity:"
-                  , list = boolDictIncluded model.filteredRarities
+                  , list = boolDictIncluded searchModel.filteredRarities
                   , removeMsg = RarityFilterRemoved
                   }
                 , { class = Just "trait"
                   , label = "Exclude rarity:"
-                  , list = boolDictExcluded model.filteredRarities
+                  , list = boolDictExcluded searchModel.filteredRarities
                   , removeMsg = RarityFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include reload:"
-                  , list = boolDictIncluded model.filteredReloads
+                  , list = boolDictIncluded searchModel.filteredReloads
                   , removeMsg = ReloadFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude reload:"
-                  , list = boolDictExcluded model.filteredReloads
+                  , list = boolDictExcluded searchModel.filteredReloads
                   , removeMsg = ReloadFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include saving throws:"
-                  , list = boolDictIncluded model.filteredSavingThrows
+                  , list = boolDictIncluded searchModel.filteredSavingThrows
                   , removeMsg = SavingThrowFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude saving throws:"
-                  , list = boolDictExcluded model.filteredSavingThrows
+                  , list = boolDictExcluded searchModel.filteredSavingThrows
                   , removeMsg = SavingThrowFilterRemoved
                   }
                 , { class = Just "trait"
                   , label = "Include schools:"
-                  , list = boolDictIncluded model.filteredSchools
+                  , list = boolDictIncluded searchModel.filteredSchools
                   , removeMsg = SchoolFilterRemoved
                   }
                 , { class = Just "trait"
                   , label = "Exclude schools:"
-                  , list = boolDictExcluded model.filteredSchools
+                  , list = boolDictExcluded searchModel.filteredSchools
                   , removeMsg = SchoolFilterRemoved
                   }
                 , { class = Just "trait trait-size"
                   , label = "Include sizes:"
-                  , list = boolDictIncluded model.filteredSizes
+                  , list = boolDictIncluded searchModel.filteredSizes
                   , removeMsg = SizeFilterRemoved
                   }
                 , { class = Just "trait trait-size"
                   , label = "Exclude sizes:"
-                  , list = boolDictExcluded model.filteredSizes
+                  , list = boolDictExcluded searchModel.filteredSizes
                   , removeMsg = SizeFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include skills:"
-                  , list = boolDictIncluded model.filteredSkills
+                  , list = boolDictIncluded searchModel.filteredSkills
                   , removeMsg = SkillFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude skills:"
-                  , list = boolDictExcluded model.filteredSkills
+                  , list = boolDictExcluded searchModel.filteredSkills
                   , removeMsg = SkillFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include sources:"
-                  , list = boolDictIncluded model.filteredSources
+                  , list = boolDictIncluded searchModel.filteredSources
                   , removeMsg = SourceFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude sources:"
-                  , list = boolDictExcluded model.filteredSources
+                  , list = boolDictExcluded searchModel.filteredSources
                   , removeMsg = SourceFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include source categories:"
-                  , list = boolDictIncluded model.filteredSourceCategories
+                  , list = boolDictIncluded searchModel.filteredSourceCategories
                   , removeMsg = SourceCategoryFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude source categories:"
-                  , list = boolDictExcluded model.filteredSourceCategories
+                  , list = boolDictExcluded searchModel.filteredSourceCategories
                   , removeMsg = SourceCategoryFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include strongest saves:"
-                  , list = boolDictIncluded model.filteredStrongestSaves
+                  , list = boolDictIncluded searchModel.filteredStrongestSaves
                   , removeMsg = StrongestSaveFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude strongest saves:"
-                  , list = boolDictExcluded model.filteredStrongestSaves
+                  , list = boolDictExcluded searchModel.filteredStrongestSaves
                   , removeMsg = StrongestSaveFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include weakest saves:"
-                  , list = boolDictIncluded model.filteredWeakestSaves
+                  , list = boolDictIncluded searchModel.filteredWeakestSaves
                   , removeMsg = WeakestSaveFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude weakest saves:"
-                  , list = boolDictExcluded model.filteredWeakestSaves
+                  , list = boolDictExcluded searchModel.filteredWeakestSaves
                   , removeMsg = WeakestSaveFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include weapon categories:"
-                  , list = boolDictIncluded model.filteredWeaponCategories
+                  , list = boolDictIncluded searchModel.filteredWeaponCategories
                   , removeMsg = WeaponCategoryFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude weapon categories:"
-                  , list = boolDictExcluded model.filteredWeaponCategories
+                  , list = boolDictExcluded searchModel.filteredWeaponCategories
                   , removeMsg = WeaponCategoryFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include weapon groups:"
-                  , list = boolDictIncluded model.filteredWeaponGroups
+                  , list = boolDictIncluded searchModel.filteredWeaponGroups
                   , removeMsg = WeaponGroupFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude weapon groups:"
-                  , list = boolDictExcluded model.filteredWeaponGroups
+                  , list = boolDictExcluded searchModel.filteredWeaponGroups
                   , removeMsg = WeaponGroupFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include weapon types:"
-                  , list = boolDictIncluded model.filteredWeaponTypes
+                  , list = boolDictIncluded searchModel.filteredWeaponTypes
                   , removeMsg = WeaponTypeFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Exclude weapon types:"
-                  , list = boolDictExcluded model.filteredWeaponTypes
+                  , list = boolDictExcluded searchModel.filteredWeaponTypes
                   , removeMsg = WeaponTypeFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Spoilers:"
                   , list =
-                        if model.filterSpoilers then
+                        if searchModel.filterSpoilers then
                             [ "Hide spoilers" ]
 
                         else
@@ -5353,7 +6007,7 @@ viewActiveFilters model =
             , HA.class "gap-medium"
             , HA.class "align-baseline"
             ]
-            (mergeFromToValues model
+            (mergeFromToValues searchModel
                 |> List.map
                     (\( field, maybeFrom, maybeTo ) ->
                         Html.div
@@ -5386,8 +6040,8 @@ viewActiveFilters model =
         ]
 
 
-viewFilterAbilities : Model -> List (Html Msg)
-viewFilterAbilities model =
+viewFilterAbilities : Model -> SearchModel -> List (Html Msg)
+viewFilterAbilities model searchModel =
     [ Html.div
         [ HA.class "row"
         , HA.class "align-baseline"
@@ -5410,7 +6064,7 @@ viewFilterAbilities model =
                     , HE.onClick (AbilityFilterAdded ability)
                     ]
                     [ Html.text (String.Extra.toTitleCase ability)
-                    , viewFilterIcon (Dict.get ability model.filteredAbilities)
+                    , viewFilterIcon (Dict.get ability searchModel.filteredAbilities)
                     ]
             )
             Data.abilities
@@ -5418,8 +6072,8 @@ viewFilterAbilities model =
     ]
 
 
-viewFilterActions : Model -> List (Html Msg)
-viewFilterActions model =
+viewFilterActions : Model -> SearchModel -> List (Html Msg)
+viewFilterActions model searchModel =
     [ Html.button
         [ HA.style "align-self" "flex-start"
         , HE.onClick RemoveAllActionsFiltersPressed
@@ -5430,7 +6084,7 @@ viewFilterActions model =
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (case model.aggregations of
+        (case searchModel.aggregations of
             Just (Ok aggregations) ->
                 List.map
                     (\actions ->
@@ -5441,7 +6095,7 @@ viewFilterActions model =
                             , HE.onClick (ActionsFilterAdded actions)
                             ]
                             [ viewTextWithActionIcons actions
-                            , viewFilterIcon (Dict.get actions model.filteredActions)
+                            , viewFilterIcon (Dict.get actions searchModel.filteredActions)
                             ]
                     )
                     (List.sort aggregations.actions)
@@ -5455,8 +6109,8 @@ viewFilterActions model =
     ]
 
 
-viewFilterAlignments : Model -> List (Html Msg)
-viewFilterAlignments model =
+viewFilterAlignments : Model -> SearchModel -> List (Html Msg)
+viewFilterAlignments model searchModel =
     [ Html.div
         [ HA.class "row"
         , HA.class "align-baseline"
@@ -5481,7 +6135,7 @@ viewFilterAlignments model =
                     , HE.onClick (AlignmentFilterAdded alignment)
                     ]
                     [ Html.text label
-                    , viewFilterIcon (Dict.get alignment model.filteredAlignments)
+                    , viewFilterIcon (Dict.get alignment searchModel.filteredAlignments)
                     ]
             )
             Data.alignments
@@ -5489,8 +6143,8 @@ viewFilterAlignments model =
     ]
 
 
-viewFilterComponents : Model -> List (Html Msg)
-viewFilterComponents model =
+viewFilterComponents : Model -> SearchModel -> List (Html Msg)
+viewFilterComponents model searchModel =
     [ Html.div
         [ HA.class "row"
         , HA.class "align-baseline"
@@ -5513,7 +6167,7 @@ viewFilterComponents model =
                     , HE.onClick (ComponentFilterAdded component)
                     ]
                     [ Html.text (String.Extra.toTitleCase component)
-                    , viewFilterIcon (Dict.get component model.filteredComponents)
+                    , viewFilterIcon (Dict.get component searchModel.filteredComponents)
                     ]
             )
             [ "focus"
@@ -5525,8 +6179,8 @@ viewFilterComponents model =
     ]
 
 
-viewFilterCreatureFamilies : Model -> List (Html Msg)
-viewFilterCreatureFamilies model =
+viewFilterCreatureFamilies : Model -> SearchModel -> List (Html Msg)
+viewFilterCreatureFamilies model searchModel =
     [ Html.button
         [ HA.style "align-self" "flex-start"
         , HE.onClick RemoveAllCreatureFamilyFiltersPressed
@@ -5538,12 +6192,12 @@ viewFilterCreatureFamilies model =
         ]
         [ Html.input
             [ HA.placeholder "Search among creature families"
-            , HA.value model.searchCreatureFamilies
+            , HA.value searchModel.searchCreatureFamilies
             , HA.type_ "text"
             , HE.onInput SearchCreatureFamiliesChanged
             ]
             []
-        , if String.isEmpty model.searchCreatureFamilies then
+        , if String.isEmpty searchModel.searchCreatureFamilies then
             Html.text ""
 
           else
@@ -5558,7 +6212,7 @@ viewFilterCreatureFamilies model =
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (case model.aggregations of
+        (case searchModel.aggregations of
             Just (Ok aggregations) ->
                 List.map
                     (\creatureFamily ->
@@ -5571,11 +6225,11 @@ viewFilterCreatureFamilies model =
                             , HE.onClick (CreatureFamilyFilterAdded (String.toLower creatureFamily))
                             ]
                             [ Html.text (String.Extra.toTitleCase creatureFamily)
-                            , viewFilterIcon (Dict.get (String.toLower creatureFamily) model.filteredCreatureFamilies)
+                            , viewFilterIcon (Dict.get (String.toLower creatureFamily) searchModel.filteredCreatureFamilies)
                             ]
                     )
                     (aggregations.creatureFamilies
-                        |> List.filter (String.toLower >> String.contains (String.toLower model.searchCreatureFamilies))
+                        |> List.filter (String.toLower >> String.contains (String.toLower searchModel.searchCreatureFamilies))
                         |> List.sort
                     )
 
@@ -5588,8 +6242,8 @@ viewFilterCreatureFamilies model =
     ]
 
 
-viewFilterHands : Model -> List (Html Msg)
-viewFilterHands model =
+viewFilterHands : Model -> SearchModel -> List (Html Msg)
+viewFilterHands model searchModel =
     [ Html.button
         [ HA.style "align-self" "flex-start"
         , HA.style "justify-self" "flex-start"
@@ -5601,7 +6255,7 @@ viewFilterHands model =
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (case model.aggregations of
+        (case searchModel.aggregations of
             Just (Ok { hands })->
                 (List.map
                     (\hand ->
@@ -5611,7 +6265,7 @@ viewFilterHands model =
                             , HE.onClick (HandFilterAdded hand)
                             ]
                             [ Html.text hand
-                            , viewFilterIcon (Dict.get hand model.filteredHands)
+                            , viewFilterIcon (Dict.get hand searchModel.filteredHands)
                             ]
                     )
                     (List.sort hands)
@@ -5626,8 +6280,8 @@ viewFilterHands model =
     ]
 
 
-viewFilterItemCategories : Model -> List (Html Msg)
-viewFilterItemCategories model =
+viewFilterItemCategories : Model -> SearchModel -> List (Html Msg)
+viewFilterItemCategories model searchModel =
     [ Html.h4
         []
         [ Html.text "Item categories" ]
@@ -5642,12 +6296,12 @@ viewFilterItemCategories model =
         ]
         [ Html.input
             [ HA.placeholder "Search among item categories"
-            , HA.value model.searchItemCategories
+            , HA.value searchModel.searchItemCategories
             , HA.type_ "text"
             , HE.onInput SearchItemCategoriesChanged
             ]
             []
-        , if String.isEmpty model.searchItemCategories then
+        , if String.isEmpty searchModel.searchItemCategories then
             Html.text ""
 
           else
@@ -5662,7 +6316,7 @@ viewFilterItemCategories model =
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (case model.aggregations of
+        (case searchModel.aggregations of
             Just (Ok aggregations) ->
                 List.map
                     (\category ->
@@ -5675,11 +6329,11 @@ viewFilterItemCategories model =
                             [ Html.div
                                 []
                                 [ Html.text (String.Extra.toTitleCase category) ]
-                            , viewFilterIcon (Dict.get category model.filteredItemCategories)
+                            , viewFilterIcon (Dict.get category searchModel.filteredItemCategories)
                             ]
                     )
                     (aggregations.itemCategories
-                        |> List.filter (String.toLower >> String.contains (String.toLower model.searchItemCategories))
+                        |> List.filter (String.toLower >> String.contains (String.toLower searchModel.searchItemCategories))
                         |> List.sort
                     )
 
@@ -5703,12 +6357,12 @@ viewFilterItemCategories model =
         ]
         [ Html.input
             [ HA.placeholder "Search among item subcategories"
-            , HA.value model.searchItemSubcategories
+            , HA.value searchModel.searchItemSubcategories
             , HA.type_ "text"
             , HE.onInput SearchItemSubcategoriesChanged
             ]
             []
-        , if String.isEmpty model.searchItemSubcategories then
+        , if String.isEmpty searchModel.searchItemSubcategories then
             Html.text ""
 
           else
@@ -5723,7 +6377,7 @@ viewFilterItemCategories model =
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (case model.aggregations of
+        (case searchModel.aggregations of
             Just (Ok aggregations) ->
                 List.map
                     (\subcategory ->
@@ -5731,7 +6385,7 @@ viewFilterItemCategories model =
                             filteredCategory : Maybe Bool
                             filteredCategory =
                                 Maybe.Extra.or
-                                    (case boolDictIncluded model.filteredItemCategories of
+                                    (case boolDictIncluded searchModel.filteredItemCategories of
                                         [] ->
                                             Nothing
 
@@ -5742,7 +6396,7 @@ viewFilterItemCategories model =
                                             else
                                                 Just False
                                     )
-                                    (case boolDictExcluded model.filteredItemCategories of
+                                    (case boolDictExcluded searchModel.filteredItemCategories of
                                         [] ->
                                             Nothing
 
@@ -5767,7 +6421,7 @@ viewFilterItemCategories model =
                                 [ Html.text (String.Extra.toTitleCase subcategory.name) ]
                             , viewFilterIcon
                                 (Maybe.Extra.or
-                                    (Dict.get subcategory.name model.filteredItemSubcategories)
+                                    (Dict.get subcategory.name searchModel.filteredItemSubcategories)
                                     filteredCategory
                                 )
                             ]
@@ -5776,7 +6430,7 @@ viewFilterItemCategories model =
                         |> List.filter
                             (.name
                                 >> String.toLower
-                                >> String.contains (String.toLower model.searchItemSubcategories)
+                                >> String.contains (String.toLower searchModel.searchItemSubcategories)
                             )
                         |> List.sortBy .name
                     )
@@ -5790,8 +6444,8 @@ viewFilterItemCategories model =
     ]
 
 
-viewFilterMagicSchools : Model -> List (Html Msg)
-viewFilterMagicSchools model =
+viewFilterMagicSchools : Model -> SearchModel -> List (Html Msg)
+viewFilterMagicSchools model searchModel =
     [ Html.button
         [ HA.style "align-self" "flex-start"
         , HE.onClick RemoveAllSchoolFiltersPressed
@@ -5814,7 +6468,7 @@ viewFilterMagicSchools model =
                     , HE.onClick (SchoolFilterAdded school)
                     ]
                     [ Html.text (String.Extra.toTitleCase school)
-                    , viewFilterIcon (Dict.get school model.filteredSchools)
+                    , viewFilterIcon (Dict.get school searchModel.filteredSchools)
                     ]
             )
             Data.magicSchools
@@ -5822,8 +6476,8 @@ viewFilterMagicSchools model =
     ]
 
 
-viewFilterPfs : Model -> List (Html Msg)
-viewFilterPfs model =
+viewFilterPfs : Model -> SearchModel -> List (Html Msg)
+viewFilterPfs model searchModel =
     [ Html.div
         [ HA.class "row"
         , HA.class "align-baseline"
@@ -5847,7 +6501,7 @@ viewFilterPfs model =
                     ]
                     [ viewPfsIcon 16 pfs
                     , Html.text (String.Extra.toTitleCase pfs)
-                    , viewFilterIcon (Dict.get pfs model.filteredPfs)
+                    , viewFilterIcon (Dict.get pfs searchModel.filteredPfs)
                     ]
             )
             [ "none"
@@ -5859,8 +6513,8 @@ viewFilterPfs model =
     ]
 
 
-viewFilterRarities : Model -> List (Html Msg)
-viewFilterRarities model =
+viewFilterRarities : Model -> SearchModel -> List (Html Msg)
+viewFilterRarities model searchModel =
     [ Html.div
         [ HA.class "row"
         , HA.class "align-baseline"
@@ -5875,7 +6529,7 @@ viewFilterRarities model =
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (case model.aggregations of
+        (case searchModel.aggregations of
             Just (Ok aggregations) ->
                 List.map
                     (\rarity ->
@@ -5887,7 +6541,7 @@ viewFilterRarities model =
                             , HE.onClick (RarityFilterAdded rarity)
                             ]
                             [ Html.text (String.Extra.toTitleCase rarity)
-                            , viewFilterIcon (Dict.get rarity model.filteredRarities)
+                            , viewFilterIcon (Dict.get rarity searchModel.filteredRarities)
                             ]
                     )
                     (aggregations.traits
@@ -5905,8 +6559,8 @@ viewFilterRarities model =
     ]
 
 
-viewFilterReload : Model -> List (Html Msg)
-viewFilterReload model =
+viewFilterReload : Model -> SearchModel -> List (Html Msg)
+viewFilterReload model searchModel =
     [ Html.button
         [ HA.style "align-self" "flex-start"
         , HA.style "justify-self" "flex-start"
@@ -5918,7 +6572,7 @@ viewFilterReload model =
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (case model.aggregations of
+        (case searchModel.aggregations of
             Just (Ok { reloads })->
                 (List.map
                     (\reload ->
@@ -5928,7 +6582,7 @@ viewFilterReload model =
                             , HE.onClick (ReloadFilterAdded reload)
                             ]
                             [ Html.text reload
-                            , viewFilterIcon (Dict.get reload model.filteredReloads)
+                            , viewFilterIcon (Dict.get reload searchModel.filteredReloads)
                             ]
                     )
                     (List.sort reloads)
@@ -5943,8 +6597,8 @@ viewFilterReload model =
     ]
 
 
-viewFilterSavingThrows : Model -> List (Html Msg)
-viewFilterSavingThrows model =
+viewFilterSavingThrows : Model -> SearchModel -> List (Html Msg)
+viewFilterSavingThrows model searchModel =
     [ Html.button
         [ HA.style "align-self" "flex-start"
         , HE.onClick RemoveAllSavingThrowFiltersPressed
@@ -5966,7 +6620,7 @@ viewFilterSavingThrows model =
                     , HE.onClick (SavingThrowFilterAdded save)
                     ]
                     [ Html.text (String.Extra.toTitleCase save)
-                    , viewFilterIcon (Dict.get save model.filteredSavingThrows)
+                    , viewFilterIcon (Dict.get save searchModel.filteredSavingThrows)
                     ]
             )
             Data.saves
@@ -5974,8 +6628,8 @@ viewFilterSavingThrows model =
     ]
 
 
-viewFilterSizes : Model -> List (Html Msg)
-viewFilterSizes model =
+viewFilterSizes : Model -> SearchModel -> List (Html Msg)
+viewFilterSizes model searchModel =
     [ Html.div
         [ HA.class "row"
         , HA.class "align-baseline"
@@ -6000,7 +6654,7 @@ viewFilterSizes model =
                     , HE.onClick (SizeFilterAdded size)
                     ]
                     [ Html.text (String.Extra.toTitleCase size)
-                    , viewFilterIcon (Dict.get size model.filteredSizes)
+                    , viewFilterIcon (Dict.get size searchModel.filteredSizes)
                     ]
             )
             Data.sizes
@@ -6008,8 +6662,8 @@ viewFilterSizes model =
     ]
 
 
-viewFilterSkills : Model -> List (Html Msg)
-viewFilterSkills model =
+viewFilterSkills : Model -> SearchModel -> List (Html Msg)
+viewFilterSkills model searchModel =
     [ Html.div
         [ HA.class "row"
         , HA.class "align-baseline"
@@ -6032,7 +6686,7 @@ viewFilterSkills model =
                     , HE.onClick (SkillFilterAdded skill)
                     ]
                     [ Html.text (String.Extra.toTitleCase skill)
-                    , viewFilterIcon (Dict.get skill model.filteredSkills)
+                    , viewFilterIcon (Dict.get skill searchModel.filteredSkills)
                     ]
             )
             Data.skills
@@ -6040,10 +6694,10 @@ viewFilterSkills model =
     ]
 
 
-viewFilterSources : Model -> List (Html Msg)
-viewFilterSources model =
+viewFilterSources : Model -> SearchModel -> List (Html Msg)
+viewFilterSources model searchModel =
     [ viewCheckbox
-        { checked = model.filterSpoilers
+        { checked = searchModel.filterSpoilers
         , onCheck = FilterSpoilersChanged
         , text = "Hide results with spoilers"
         }
@@ -6069,7 +6723,7 @@ viewFilterSources model =
                     , HE.onClick (SourceCategoryFilterAdded category)
                     ]
                     [ Html.text (String.Extra.toTitleCase category)
-                    , viewFilterIcon (Dict.get category model.filteredSourceCategories)
+                    , viewFilterIcon (Dict.get category searchModel.filteredSourceCategories)
                     ]
             )
             Data.sourceCategories
@@ -6089,12 +6743,12 @@ viewFilterSources model =
         ]
         [ Html.input
             [ HA.placeholder "Search among sources"
-            , HA.value model.searchSources
+            , HA.value searchModel.searchSources
             , HA.type_ "text"
             , HE.onInput SearchSourcesChanged
             ]
             []
-        , if String.isEmpty model.searchSources then
+        , if String.isEmpty searchModel.searchSources then
             Html.text ""
 
           else
@@ -6109,7 +6763,7 @@ viewFilterSources model =
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (case ( model.sourcesAggregation, model.aggregations ) of
+        (case ( model.sourcesAggregation, searchModel.aggregations ) of
             ( Just (Ok allSources), Just (Ok { sources }) ) ->
                 (List.map
                     (\source ->
@@ -6117,7 +6771,7 @@ viewFilterSources model =
                             filteredCategory : Maybe Bool
                             filteredCategory =
                                 Maybe.Extra.or
-                                    (case boolDictIncluded model.filteredSourceCategories of
+                                    (case boolDictIncluded searchModel.filteredSourceCategories of
                                         [] ->
                                             Nothing
 
@@ -6128,7 +6782,7 @@ viewFilterSources model =
                                             else
                                                 Just False
                                     )
-                                    (case boolDictExcluded model.filteredSourceCategories of
+                                    (case boolDictExcluded searchModel.filteredSourceCategories of
                                         [] ->
                                             Nothing
 
@@ -6155,7 +6809,7 @@ viewFilterSources model =
                                 [ Html.text source.name ]
                             , viewFilterIcon
                                 (Maybe.Extra.or
-                                    (Dict.get source.name model.filteredSources)
+                                    (Dict.get source.name searchModel.filteredSources)
                                     filteredCategory
                                 )
                             ]
@@ -6164,7 +6818,7 @@ viewFilterSources model =
                         |> List.filter
                             (.name
                                 >> String.toLower
-                                >> String.contains (String.toLower model.searchSources)
+                                >> String.contains (String.toLower searchModel.searchSources)
                             )
                         |> List.filter (\source -> List.member (String.toLower source.name) sources)
                         |> List.sortBy .name
@@ -6183,8 +6837,8 @@ viewFilterSources model =
     ]
 
 
-viewFilterStrongestSaves : Model -> List (Html Msg)
-viewFilterStrongestSaves model =
+viewFilterStrongestSaves : Model -> SearchModel -> List (Html Msg)
+viewFilterStrongestSaves model searchModel =
     [ Html.h4
         []
         [ Html.text "Strongest saves" ]
@@ -6209,7 +6863,7 @@ viewFilterStrongestSaves model =
                     , HE.onClick (StrongestSaveFilterAdded (String.toLower save))
                     ]
                     [ Html.text (String.Extra.toTitleCase save)
-                    , viewFilterIcon (Dict.get (String.toLower save) model.filteredStrongestSaves)
+                    , viewFilterIcon (Dict.get (String.toLower save) searchModel.filteredStrongestSaves)
                     ]
             )
             Data.saves
@@ -6239,7 +6893,7 @@ viewFilterStrongestSaves model =
                     , HE.onClick (WeakestSaveFilterAdded (String.toLower save))
                     ]
                     [ Html.text (String.Extra.toTitleCase save)
-                    , viewFilterIcon (Dict.get (String.toLower save) model.filteredWeakestSaves)
+                    , viewFilterIcon (Dict.get (String.toLower save) searchModel.filteredWeakestSaves)
                     ]
             )
             Data.saves
@@ -6247,8 +6901,8 @@ viewFilterStrongestSaves model =
     ]
 
 
-viewFilterTraditions : Model -> List (Html Msg)
-viewFilterTraditions model =
+viewFilterTraditions : Model -> SearchModel -> List (Html Msg)
+viewFilterTraditions model searchModel =
     [ Html.div
         [ HA.class "row"
         , HA.class "align-baseline"
@@ -6258,14 +6912,14 @@ viewFilterTraditions model =
             [ HE.onClick RemoveAllTraditionFiltersPressed ]
             [ Html.text "Reset selection" ]
         , viewRadioButton
-            { checked = model.filterTraditionsOperator
+            { checked = searchModel.filterTraditionsOperator
             , enabled = True
             , name = "filter-traditions"
             , onInput = FilterTraditionsOperatorChanged True
             , text = "Include all (AND)"
             }
         , viewRadioButton
-            { checked = not model.filterTraditionsOperator
+            { checked = not searchModel.filterTraditionsOperator
             , enabled = True
             , name = "filter-traditions"
             , onInput = FilterTraditionsOperatorChanged False
@@ -6285,7 +6939,7 @@ viewFilterTraditions model =
                     , HE.onClick (TraditionFilterAdded tradition)
                     ]
                     [ Html.text (String.Extra.toTitleCase tradition)
-                    , viewFilterIcon (Dict.get tradition model.filteredTraditions)
+                    , viewFilterIcon (Dict.get tradition searchModel.filteredTraditions)
                     ]
             )
             Data.traditionsAndSpellLists
@@ -6293,8 +6947,8 @@ viewFilterTraditions model =
     ]
 
 
-viewFilterTraits : Model -> List (Html Msg)
-viewFilterTraits model =
+viewFilterTraits : Model -> SearchModel -> List (Html Msg)
+viewFilterTraits model searchModel =
     [ viewCheckbox
         { checked = model.groupTraits
         , onCheck = GroupTraitsChanged
@@ -6309,14 +6963,14 @@ viewFilterTraits model =
             [ HE.onClick RemoveAllTraitFiltersPressed ]
             [ Html.text "Reset selection" ]
         , viewRadioButton
-            { checked = model.filterTraitsOperator
+            { checked = searchModel.filterTraitsOperator
             , enabled = True
             , name = "filter-traits"
             , onInput = FilterTraitsOperatorChanged True
             , text = "Include all (AND)"
             }
         , viewRadioButton
-            { checked = not model.filterTraitsOperator
+            { checked = not searchModel.filterTraitsOperator
             , enabled = True
             , name = "filter-traits"
             , onInput = FilterTraitsOperatorChanged False
@@ -6330,12 +6984,12 @@ viewFilterTraits model =
         ]
         [ Html.input
             [ HA.placeholder "Search among traits"
-            , HA.value model.searchTraits
+            , HA.value searchModel.searchTraits
             , HA.type_ "text"
             , HE.onInput SearchTraitsChanged
             ]
             []
-        , if String.isEmpty model.searchTraits then
+        , if String.isEmpty searchModel.searchTraits then
             Html.text ""
 
           else
@@ -6351,7 +7005,7 @@ viewFilterTraits model =
             [ HA.class "column"
             , HA.class "gap-small"
             ]
-            (case model.aggregations of
+            (case searchModel.aggregations of
                 Just (Ok aggregations) ->
                     let
                         categorizedTraits : List String
@@ -6407,7 +7061,7 @@ viewFilterTraits model =
                                                 , HE.onClick (TraitFilterAdded trait)
                                                 ]
                                                 [ Html.text (String.Extra.toTitleCase trait)
-                                                , viewFilterIcon (Dict.get trait model.filteredTraits)
+                                                , viewFilterIcon (Dict.get trait searchModel.filteredTraits)
                                                 ]
                                         )
                                         (List.sort traits)
@@ -6424,7 +7078,7 @@ viewFilterTraits model =
                             |> List.map
                                 (Tuple.mapSecond
                                     (List.filter
-                                        (String.toLower >> String.contains (String.toLower model.searchTraits))
+                                        (String.toLower >> String.contains (String.toLower searchModel.searchTraits))
                                     )
                                 )
                             |> List.map (Tuple.mapSecond (List.filter ((/=) "common")))
@@ -6445,7 +7099,7 @@ viewFilterTraits model =
             , HA.class "gap-tiny"
             , HA.class "scrollbox"
             ]
-            (case model.aggregations of
+            (case searchModel.aggregations of
                 Just (Ok aggregations) ->
                     List.map
                         (\trait ->
@@ -6458,13 +7112,13 @@ viewFilterTraits model =
                                 , HE.onClick (TraitFilterAdded trait)
                                 ]
                                 [ Html.text (String.Extra.toTitleCase trait)
-                                , viewFilterIcon (Dict.get trait model.filteredTraits)
+                                , viewFilterIcon (Dict.get trait searchModel.filteredTraits)
                                 ]
                         )
                         (aggregations.traits
                             |> List.filter (\trait -> not (List.member trait (List.map Tuple.first Data.alignments)))
                             |> List.filter (\trait -> not (List.member trait Data.sizes))
-                            |> List.filter (String.toLower >> String.contains (String.toLower model.searchTraits))
+                            |> List.filter (String.toLower >> String.contains (String.toLower searchModel.searchTraits))
                             |> List.sort
                         )
 
@@ -6477,8 +7131,8 @@ viewFilterTraits model =
     ]
 
 
-viewFilterTypes : Model -> List (Html Msg)
-viewFilterTypes model =
+viewFilterTypes : Model -> SearchModel -> List (Html Msg)
+viewFilterTypes model searchModel =
     [ Html.div
         [ HA.class "row"
         , HA.class "align-baseline"
@@ -6496,11 +7150,11 @@ viewFilterTypes model =
         [ Html.input
             [ HA.placeholder "Search among types"
             , HA.type_ "text"
-            , HA.value model.searchTypes
+            , HA.value searchModel.searchTypes
             , HE.onInput SearchTypesChanged
             ]
             []
-        , if String.isEmpty model.searchTypes then
+        , if String.isEmpty searchModel.searchTypes then
             Html.text ""
 
           else
@@ -6516,7 +7170,7 @@ viewFilterTypes model =
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (case model.aggregations of
+        (case searchModel.aggregations of
             Just (Ok aggregations) ->
                 List.map
                     (\type_ ->
@@ -6528,11 +7182,11 @@ viewFilterTypes model =
                             , HE.onClick (TypeFilterAdded type_)
                             ]
                             [ Html.text (String.Extra.toTitleCase type_)
-                            , viewFilterIcon (Dict.get type_ model.filteredTypes)
+                            , viewFilterIcon (Dict.get type_ searchModel.filteredTypes)
                             ]
                     )
                     (List.filter
-                        (String.toLower >> String.contains (String.toLower model.searchTypes))
+                        (String.toLower >> String.contains (String.toLower searchModel.searchTypes))
                         (List.sort aggregations.types)
                     )
 
@@ -6545,8 +7199,8 @@ viewFilterTypes model =
     ]
 
 
-viewFilterWeapons : Model -> List (Html Msg)
-viewFilterWeapons model =
+viewFilterWeapons : Model -> SearchModel -> List (Html Msg)
+viewFilterWeapons model searchModel =
     [ Html.h4
         []
         [ Html.text "Weapon categories" ]
@@ -6569,7 +7223,7 @@ viewFilterWeapons model =
                     , HE.onClick (WeaponCategoryFilterAdded category)
                     ]
                     [ Html.text (String.Extra.toTitleCase category)
-                    , viewFilterIcon (Dict.get category model.filteredWeaponCategories)
+                    , viewFilterIcon (Dict.get category searchModel.filteredWeaponCategories)
                     ]
             )
             Data.weaponCategories
@@ -6589,7 +7243,7 @@ viewFilterWeapons model =
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (case model.aggregations of
+        (case searchModel.aggregations of
             Just (Ok { weaponGroups })->
                 (List.map
                     (\group ->
@@ -6599,7 +7253,7 @@ viewFilterWeapons model =
                             , HE.onClick (WeaponGroupFilterAdded group)
                             ]
                             [ Html.text (String.Extra.toTitleCase group)
-                            , viewFilterIcon (Dict.get group model.filteredWeaponGroups)
+                            , viewFilterIcon (Dict.get group searchModel.filteredWeaponGroups)
                             ]
                     )
                     (List.sort weaponGroups)
@@ -6634,7 +7288,7 @@ viewFilterWeapons model =
                     , HE.onClick (WeaponTypeFilterAdded type_)
                     ]
                     [ Html.text (String.Extra.toTitleCase type_)
-                    , viewFilterIcon (Dict.get type_ model.filteredWeaponTypes)
+                    , viewFilterIcon (Dict.get type_ searchModel.filteredWeaponTypes)
                     ]
             )
             Data.weaponTypes
@@ -6642,8 +7296,8 @@ viewFilterWeapons model =
     ]
 
 
-viewFilterNumbers : Model -> List (Html Msg)
-viewFilterNumbers model =
+viewFilterNumbers : Model -> SearchModel -> List (Html Msg)
+viewFilterNumbers model searchModel =
     [ Html.button
         [ HA.style "align-self" "flex-start"
         , HA.style "justify-self" "flex-start"
@@ -6686,7 +7340,7 @@ viewFilterNumbers model =
                                 [ Html.input
                                     [ HA.type_ "number"
                                     , HA.step step
-                                    , HA.value (Maybe.withDefault "" (Dict.get field model.filteredFromValues))
+                                    , HA.value (Maybe.withDefault "" (Dict.get field searchModel.filteredFromValues))
                                     , HE.onInput (FilteredFromValueChanged field)
                                     ]
                                     []
@@ -6708,7 +7362,7 @@ viewFilterNumbers model =
                                 [ Html.input
                                     [ HA.type_ "number"
                                     , HA.step step
-                                    , HA.value (Maybe.withDefault "" (Dict.get field model.filteredToValues))
+                                    , HA.value (Maybe.withDefault "" (Dict.get field searchModel.filteredToValues))
                                     , HE.onInput (FilteredToValueChanged field)
                                     ]
                                     []
@@ -6791,7 +7445,7 @@ viewFilterNumbers model =
                         ]
                         [ Html.select
                             [ HA.class "input-container"
-                            , HA.value model.selectedFilterAbility
+                            , HA.value searchModel.selectedFilterAbility
                             , HE.onInput FilterAbilityChanged
                             ]
                             (List.map
@@ -6824,8 +7478,8 @@ viewFilterNumbers model =
                             [ Html.input
                                 [ HA.type_ "number"
                                 , HA.step "1"
-                                , HA.value (Maybe.withDefault "" (Dict.get model.selectedFilterAbility model.filteredFromValues))
-                                , HE.onInput (FilteredFromValueChanged model.selectedFilterAbility)
+                                , HA.value (Maybe.withDefault "" (Dict.get searchModel.selectedFilterAbility searchModel.filteredFromValues))
+                                , HE.onInput (FilteredFromValueChanged searchModel.selectedFilterAbility)
                                 ]
                                 []
                             ]
@@ -6838,8 +7492,8 @@ viewFilterNumbers model =
                             [ Html.input
                                 [ HA.type_ "number"
                                 , HA.step "1"
-                                , HA.value (Maybe.withDefault "" (Dict.get model.selectedFilterAbility model.filteredToValues))
-                                , HE.onInput (FilteredToValueChanged model.selectedFilterAbility)
+                                , HA.value (Maybe.withDefault "" (Dict.get searchModel.selectedFilterAbility searchModel.filteredToValues))
+                                , HE.onInput (FilteredToValueChanged searchModel.selectedFilterAbility)
                                 ]
                                 []
                             ]
@@ -6856,7 +7510,7 @@ viewFilterNumbers model =
                         ]
                         [ Html.select
                             [ HA.class "input-container"
-                            , HA.value model.selectedFilterSpeed
+                            , HA.value searchModel.selectedFilterSpeed
                             , HE.onInput FilterSpeedChanged
                             ]
                             (List.map
@@ -6887,13 +7541,13 @@ viewFilterNumbers model =
                                     (Maybe.withDefault
                                         ""
                                         (Dict.get
-                                            ("speed." ++ model.selectedFilterSpeed)
-                                            model.filteredFromValues
+                                            ("speed." ++ searchModel.selectedFilterSpeed)
+                                            searchModel.filteredFromValues
                                         )
                                     )
                                 , HE.onInput
                                     (FilteredFromValueChanged
-                                        ("speed." ++ model.selectedFilterSpeed)
+                                        ("speed." ++ searchModel.selectedFilterSpeed)
                                     )
                                 ]
                                 []
@@ -6911,13 +7565,13 @@ viewFilterNumbers model =
                                     (Maybe.withDefault
                                         ""
                                         (Dict.get
-                                            ("speed." ++ model.selectedFilterSpeed)
-                                            model.filteredToValues
+                                            ("speed." ++ searchModel.selectedFilterSpeed)
+                                            searchModel.filteredToValues
                                         )
                                     )
                                 , HE.onInput
                                     (FilteredToValueChanged
-                                        ("speed." ++ model.selectedFilterSpeed)
+                                        ("speed." ++ searchModel.selectedFilterSpeed)
                                     )
                                 ]
                                 []
@@ -6935,7 +7589,7 @@ viewFilterNumbers model =
                         ]
                         [ Html.select
                             [ HA.class "input-container"
-                            , HA.value model.selectedFilterResistance
+                            , HA.value searchModel.selectedFilterResistance
                             , HE.onInput FilterResistanceChanged
                             ]
                             (List.map
@@ -6965,13 +7619,13 @@ viewFilterNumbers model =
                                     (Maybe.withDefault
                                         ""
                                         (Dict.get
-                                            ("resistance." ++ model.selectedFilterResistance)
-                                            model.filteredFromValues
+                                            ("resistance." ++ searchModel.selectedFilterResistance)
+                                            searchModel.filteredFromValues
                                         )
                                     )
                                 , HE.onInput
                                     (FilteredFromValueChanged
-                                        ("resistance." ++ model.selectedFilterResistance)
+                                        ("resistance." ++ searchModel.selectedFilterResistance)
                                     )
                                 ]
                                 []
@@ -6989,13 +7643,13 @@ viewFilterNumbers model =
                                     (Maybe.withDefault
                                         ""
                                         (Dict.get
-                                            ("resistance." ++ model.selectedFilterResistance)
-                                            model.filteredToValues
+                                            ("resistance." ++ searchModel.selectedFilterResistance)
+                                            searchModel.filteredToValues
                                         )
                                     )
                                 , HE.onInput
                                     (FilteredToValueChanged
-                                        ("resistance." ++ model.selectedFilterResistance)
+                                        ("resistance." ++ searchModel.selectedFilterResistance)
                                     )
                                 ]
                                 []
@@ -7013,7 +7667,7 @@ viewFilterNumbers model =
                         ]
                         [ Html.select
                             [ HA.class "input-container"
-                            , HA.value model.selectedFilterWeakness
+                            , HA.value searchModel.selectedFilterWeakness
                             , HE.onInput FilterWeaknessChanged
                             ]
                             (List.map
@@ -7043,13 +7697,13 @@ viewFilterNumbers model =
                                     (Maybe.withDefault
                                         ""
                                         (Dict.get
-                                            ("weakness." ++ model.selectedFilterWeakness)
-                                            model.filteredFromValues
+                                            ("weakness." ++ searchModel.selectedFilterWeakness)
+                                            searchModel.filteredFromValues
                                         )
                                     )
                                 , HE.onInput
                                     (FilteredFromValueChanged
-                                        ("weakness." ++ model.selectedFilterWeakness)
+                                        ("weakness." ++ searchModel.selectedFilterWeakness)
                                     )
                                 ]
                                 []
@@ -7067,13 +7721,13 @@ viewFilterNumbers model =
                                     (Maybe.withDefault
                                         ""
                                         (Dict.get
-                                            ("weakness." ++ model.selectedFilterWeakness)
-                                            model.filteredToValues
+                                            ("weakness." ++ searchModel.selectedFilterWeakness)
+                                            searchModel.filteredToValues
                                         )
                                     )
                                 , HE.onInput
                                     (FilteredToValueChanged
-                                        ("weakness." ++ model.selectedFilterWeakness)
+                                        ("weakness." ++ searchModel.selectedFilterWeakness)
                                     )
                                 ]
                                 []
@@ -7106,7 +7760,7 @@ viewFilterNumbers model =
                             ]
                             [ Html.input
                                 [ HA.type_ "date"
-                                , HA.value (Maybe.withDefault "" (Dict.get "release_date" model.filteredFromValues))
+                                , HA.value (Maybe.withDefault "" (Dict.get "release_date" searchModel.filteredFromValues))
                                 , HE.onInput (FilteredFromValueChanged "release_date")
                                 ]
                                 []
@@ -7119,7 +7773,7 @@ viewFilterNumbers model =
                             ]
                             [ Html.input
                                 [ HA.type_ "date"
-                                , HA.value (Maybe.withDefault "" (Dict.get "release_date" model.filteredToValues))
+                                , HA.value (Maybe.withDefault "" (Dict.get "release_date" searchModel.filteredToValues))
                                 , HE.onInput (FilteredToValueChanged "release_date")
                                 ]
                                 []
@@ -7132,12 +7786,12 @@ viewFilterNumbers model =
     ]
 
 
-viewQueryType : Model -> List (Html Msg)
-viewQueryType model =
+viewQueryType : Model -> SearchModel -> List (Html Msg)
+viewQueryType model searchModel =
     let
         currentQuery : String
         currentQuery =
-            currentQueryAsComplex model
+            currentQueryAsComplex searchModel
     in
     [ Html.div
         [ HA.class "row"
@@ -7145,14 +7799,14 @@ viewQueryType model =
         , HA.class "gap-medium"
         ]
         [ viewRadioButton
-            { checked = model.queryType == Standard
+            { checked = searchModel.queryType == Standard
             , enabled = not model.autoQueryType
             , name = "query-type"
             , onInput = QueryTypeSelected Standard
             , text = "Standard"
             }
         , viewRadioButton
-            { checked = model.queryType == ElasticsearchQueryString
+            { checked = searchModel.queryType == ElasticsearchQueryString
             , enabled = not model.autoQueryType
             , name = "query-type"
             , onInput = QueryTypeSelected ElasticsearchQueryString
@@ -7334,8 +7988,8 @@ viewQueryType model =
     ]
 
 
-viewResultPageSize : Model -> List (Html Msg)
-viewResultPageSize model =
+viewResultPageSize : Model -> SearchModel -> List (Html Msg)
+viewResultPageSize model searchModel =
     [ Html.div
         [ HA.class "row"
         , HA.class "gap-medium"
@@ -7356,14 +8010,14 @@ viewResultPageSize model =
     ]
 
 
-viewResultDisplay : Model -> List (Html Msg)
-viewResultDisplay model =
+viewResultDisplay : Model -> SearchModel -> List (Html Msg)
+viewResultDisplay model searchModel =
     let
         pageDefaultDisplayIsCurrent : Bool
         pageDefaultDisplayIsCurrent =
             Dict.get model.pageId model.pageDefaultDisplays
                 |> Maybe.withDefault Dict.empty
-                |> (==) (Dict.fromList (getDisplayParamsList model))
+                |> (==) (Dict.fromList (getDisplayParamsList model searchModel))
     in
     [ Html.div
         [ HA.class "row"
@@ -7371,21 +8025,21 @@ viewResultDisplay model =
         , HA.class "gap-medium"
         ]
         [ viewRadioButton
-            { checked = model.resultDisplay == List
+            { checked = searchModel.resultDisplay == List
             , enabled = True
             , name = "result-display"
             , onInput = ResultDisplayChanged List
             , text = "List"
             }
         , viewRadioButton
-            { checked = model.resultDisplay == Table
+            { checked = searchModel.resultDisplay == Table
             , enabled = True
             , name = "result-display"
             , onInput = ResultDisplayChanged Table
             , text = "Table"
             }
         , viewRadioButton
-            { checked = model.resultDisplay == Grouped
+            { checked = searchModel.resultDisplay == Grouped
             , enabled = True
             , name = "result-display"
             , onInput = ResultDisplayChanged Grouped
@@ -7431,15 +8085,15 @@ viewResultDisplay model =
         [ HA.class "column"
         , HA.class "gap-small"
         ]
-        (case model.resultDisplay of
+        (case searchModel.resultDisplay of
             List ->
                 viewResultDisplayList model
 
             Table ->
-                viewResultDisplayTable model
+                viewResultDisplayTable model searchModel
 
             Grouped ->
-                viewResultDisplayGrouped model
+                viewResultDisplayGrouped model searchModel
         )
     ]
 
@@ -7472,8 +8126,8 @@ viewResultDisplayList model =
     ]
 
 
-viewResultDisplayTable : Model -> List (Html Msg)
-viewResultDisplayTable model =
+viewResultDisplayTable : Model -> SearchModel -> List (Html Msg)
+viewResultDisplayTable model searchModel =
     [ Html.h4
         []
         [ Html.text "Table configuration" ]
@@ -7521,7 +8175,7 @@ viewResultDisplayTable model =
                                 [ FontAwesome.view FontAwesome.Solid.chevronUp
                                 ]
                             , Html.button
-                                [ HA.disabled (index + 1 == List.length model.tableColumns)
+                                [ HA.disabled (index + 1 == List.length searchModel.tableColumns)
                                 , HE.onClick (TableColumnMoved index (index + 1))
                                 ]
                                 [ FontAwesome.view FontAwesome.Solid.chevronDown
@@ -7530,7 +8184,7 @@ viewResultDisplayTable model =
                             ]
                         )
                     )
-                    model.tableColumns
+                    searchModel.tableColumns
                 )
             ]
         , Html.div
@@ -7548,7 +8202,7 @@ viewResultDisplayTable model =
                 , HA.class "gap-small"
                 ]
                 (List.concatMap
-                    (viewResultDisplayTableColumn model)
+                    (viewResultDisplayTableColumn searchModel)
                     Data.tableColumns
                 )
             ]
@@ -7592,7 +8246,7 @@ viewResultDisplayTable model =
             [ HA.disabled
                 (String.isEmpty model.savedColumnConfigurationName
                     || Dict.get model.savedColumnConfigurationName model.savedColumnConfigurations
-                        == Just model.tableColumns
+                        == Just searchModel.tableColumns
                 )
             , HE.onClick SaveColumnConfigurationPressed ]
             [ Html.text "Save" ]
@@ -7621,16 +8275,16 @@ viewResultDisplayTable model =
     ]
 
 
-viewResultDisplayTableColumn : Model -> String -> List (Html Msg)
-viewResultDisplayTableColumn model column =
+viewResultDisplayTableColumn : SearchModel -> String -> List (Html Msg)
+viewResultDisplayTableColumn searchModel column =
     [ Html.div
         [ HA.class "row"
         , HA.class "gap-small"
         , HA.class "align-center"
         ]
         [ Html.button
-            [ HAE.attributeIf (List.member column model.tableColumns) (HA.class "active")
-            , if List.member column model.tableColumns then
+            [ HAE.attributeIf (List.member column searchModel.tableColumns) (HA.class "active")
+            , if List.member column searchModel.tableColumns then
                 HE.onClick (TableColumnRemoved column)
 
               else
@@ -7645,28 +8299,28 @@ viewResultDisplayTableColumn model column =
     , case column of
         "resistance" ->
             viewResultDisplayTableColumnWithSelect
-                model
+                searchModel
                 { column = column
                 , onInput = ColumnResistanceChanged
-                , selected = model.selectedColumnResistance
+                , selected = searchModel.selectedColumnResistance
                 , types = Data.damageTypes
                 }
 
         "speed" ->
             viewResultDisplayTableColumnWithSelect
-                model
+                searchModel
                 { column = column
                 , onInput = ColumnSpeedChanged
-                , selected = model.selectedColumnSpeed
+                , selected = searchModel.selectedColumnSpeed
                 , types = Data.speedTypes
                 }
 
         "weakness" ->
             viewResultDisplayTableColumnWithSelect
-                model
+                searchModel
                 { column = column
                 , onInput = ColumnWeaknessChanged
-                , selected = model.selectedColumnWeakness
+                , selected = searchModel.selectedColumnWeakness
                 , types = Data.damageTypes
                 }
 
@@ -7676,14 +8330,14 @@ viewResultDisplayTableColumn model column =
 
 
 viewResultDisplayTableColumnWithSelect :
-    Model
+    SearchModel
     -> { column : String
        , onInput : String -> Msg
        , selected : String
        , types : List String
        }
     -> Html Msg
-viewResultDisplayTableColumnWithSelect model { column, onInput, selected, types } =
+viewResultDisplayTableColumnWithSelect searchModel { column, onInput, selected, types } =
     let
         columnWithType : String
         columnWithType =
@@ -7695,7 +8349,7 @@ viewResultDisplayTableColumnWithSelect model { column, onInput, selected, types 
         , HA.class "align-center"
         ]
         [ Html.button
-            [ HA.disabled (List.member columnWithType model.tableColumns)
+            [ HA.disabled (List.member columnWithType searchModel.tableColumns)
             , HE.onClick (TableColumnAdded columnWithType)
             ]
             [ FontAwesome.view FontAwesome.Solid.plus
@@ -7717,8 +8371,8 @@ viewResultDisplayTableColumnWithSelect model { column, onInput, selected, types 
         ]
 
 
-viewResultDisplayGrouped : Model -> List (Html Msg)
-viewResultDisplayGrouped model =
+viewResultDisplayGrouped : Model -> SearchModel -> List (Html Msg)
+viewResultDisplayGrouped model searchModel =
     [ Html.h4
         []
         [ Html.text "Group by" ]
@@ -7740,36 +8394,36 @@ viewResultDisplayGrouped model =
                         ]
                         [ Html.button
                             [ HE.onClick (GroupField1Changed field)
-                            , HA.disabled (model.groupField1 == field)
+                            , HA.disabled (searchModel.groupField1 == field)
                             , HAE.attributeIf
-                                (model.groupField1 == field)
+                                (searchModel.groupField1 == field)
                                 (HA.class "active")
                             ]
                             [ Html.text "1st" ]
                         , Html.button
                             [ HE.onClick
-                                (if model.groupField2 == Just field then
+                                (if searchModel.groupField2 == Just field then
                                     GroupField2Changed Nothing
 
                                  else
                                     GroupField2Changed (Just field)
                                 )
                             , HAE.attributeIf
-                                (model.groupField2 == Just field)
+                                (searchModel.groupField2 == Just field)
                                 (HA.class "active")
                             ]
                             [ Html.text "2nd" ]
                         , Html.button
                             [ HE.onClick
-                                (if model.groupField3 == Just field then
+                                (if searchModel.groupField3 == Just field then
                                     GroupField3Changed Nothing
 
                                  else
                                     GroupField3Changed (Just field)
                                 )
-                            , HA.disabled (model.groupField2 == Nothing)
+                            , HA.disabled (searchModel.groupField2 == Nothing)
                             , HAE.attributeIf
-                                (model.groupField3 == Just field)
+                                (searchModel.groupField3 == Just field)
                                 (HA.class "active")
                             ]
                             [ Html.text "3rd" ]
@@ -7898,8 +8552,8 @@ viewResultDisplayGrouped model =
     ]
 
 
-viewSortResults : Model -> List (Html Msg)
-viewSortResults model =
+viewSortResults : Model -> SearchModel -> List (Html Msg)
+viewSortResults model searchModel =
     [ Html.div
         [ HA.class "row"
         , HA.class "gap-small"
@@ -7942,7 +8596,7 @@ viewSortResults model =
                                 [ FontAwesome.view FontAwesome.Solid.chevronUp
                                 ]
                             , Html.button
-                                [ HA.disabled (index + 1 == List.length model.sort)
+                                [ HA.disabled (index + 1 == List.length searchModel.sort)
                                 , HE.onClick (SortOrderChanged index (index + 1))
                                 ]
                                 [ FontAwesome.view FontAwesome.Solid.chevronDown
@@ -7950,7 +8604,7 @@ viewSortResults model =
                             , Html.text (sortFieldToLabel field)
                             ]
                     )
-                    model.sort
+                    searchModel.sort
                 )
             ]
         , Html.div
@@ -7968,7 +8622,7 @@ viewSortResults model =
                 , HA.class "gap-small"
                 ]
                 (List.map
-                    (viewSortResultsField model)
+                    (viewSortResultsField searchModel)
                     (Data.sortFields
                         |> List.map Tuple3.first
                         |> List.filter (not << String.contains ".")
@@ -8003,33 +8657,33 @@ viewSortResults model =
     ]
 
 
-viewSortResultsField : Model -> String -> Html Msg
-viewSortResultsField model field =
+viewSortResultsField : SearchModel -> String -> Html Msg
+viewSortResultsField searchModel field =
     case field of
         "resistance" ->
             viewSortResultsFieldWithSelect
-                model
+                searchModel
                 { field = field
                 , onInput = SortResistanceChanged
-                , selected = model.selectedSortResistance
+                , selected = searchModel.selectedSortResistance
                 , types = Data.damageTypes
                 }
 
         "speed" ->
             viewSortResultsFieldWithSelect
-                model
+                searchModel
                 { field = field
                 , onInput = SortSpeedChanged
-                , selected = model.selectedSortSpeed
+                , selected = searchModel.selectedSortSpeed
                 , types = Data.speedTypes
                 }
 
         "weakness" ->
             viewSortResultsFieldWithSelect
-                model
+                searchModel
                 { field = field
                 , onInput = SortWeaknessChanged
-                , selected = model.selectedSortWeakness
+                , selected = searchModel.selectedSortWeakness
                 , types = Data.damageTypes
                 }
 
@@ -8040,21 +8694,21 @@ viewSortResultsField model field =
                 , HA.class "align-center"
                 ]
                 (List.append
-                    (viewSortButtons model field)
+                    (viewSortButtons searchModel field)
                     [ Html.text (String.Extra.humanize field)
                     ]
                 )
 
 
 viewSortResultsFieldWithSelect :
-    Model
+    SearchModel
     -> { field : String
        , onInput : String -> Msg
        , selected : String
        , types : List String
        }
     -> Html Msg
-viewSortResultsFieldWithSelect model { field, onInput, selected, types } =
+viewSortResultsFieldWithSelect searchModel { field, onInput, selected, types } =
     let
         fieldWithType : String
         fieldWithType =
@@ -8066,7 +8720,7 @@ viewSortResultsFieldWithSelect model { field, onInput, selected, types } =
         , HA.class "align-center"
         ]
         (List.append
-            (viewSortButtons model fieldWithType)
+            (viewSortButtons searchModel fieldWithType)
             [ Html.select
                 [ HA.class "input-container"
                 , HA.value selected
@@ -8085,17 +8739,17 @@ viewSortResultsFieldWithSelect model { field, onInput, selected, types } =
         )
 
 
-viewSortButtons : Model -> String -> List (Html Msg)
-viewSortButtons model field =
+viewSortButtons : SearchModel -> String -> List (Html Msg)
+viewSortButtons searchModel field =
     [ Html.button
         [ HE.onClick
-            (if List.member ( field, Asc ) model.sort then
+            (if List.member ( field, Asc ) searchModel.sort then
                 (SortRemoved field)
 
              else
                 (SortAdded field Asc)
             )
-        , HAE.attributeIf (List.member ( field, Asc ) model.sort) (HA.class "active")
+        , HAE.attributeIf (List.member ( field, Asc ) searchModel.sort) (HA.class "active")
         , HA.class "row"
         , HA.class "gap-tiny"
         ]
@@ -8104,13 +8758,13 @@ viewSortButtons model field =
         ]
     , Html.button
         [ HE.onClick
-            (if List.member ( field, Desc ) model.sort then
+            (if List.member ( field, Desc ) searchModel.sort then
                 (SortRemoved field)
 
              else
                 (SortAdded field Desc)
             )
-        , HAE.attributeIf (List.member ( field, Desc ) model.sort) (HA.class "active")
+        , HAE.attributeIf (List.member ( field, Desc ) searchModel.sort) (HA.class "active")
         , HA.class "row"
         , HA.class "gap-tiny"
         ]
@@ -8178,19 +8832,19 @@ viewRadioButton { checked, enabled, name, onInput, text } =
 
 
 
-viewSearchResults : Model -> Html Msg
-viewSearchResults model =
+viewSearchResults : Model -> SearchModel -> Html Msg
+viewSearchResults model searchModel =
     let
         total : Maybe Int
         total =
-            model.searchResults
+            searchModel.searchResults
                 |> List.head
                 |> Maybe.andThen Result.toMaybe
                 |> Maybe.map .total
 
         resultCount : Int
         resultCount =
-            model.searchResults
+            searchModel.searchResults
                 |> List.map Result.toMaybe
                 |> List.map (Maybe.map .hits)
                 |> List.map (Maybe.map List.length)
@@ -8224,15 +8878,15 @@ viewSearchResults model =
                     ]
               ]
 
-            , case model.resultDisplay of
+            , case searchModel.resultDisplay of
                 List ->
-                    viewSearchResultsList model remaining resultCount
+                    viewSearchResultsList model searchModel remaining resultCount
 
                 Table ->
-                    viewSearchResultsTable model remaining
+                    viewSearchResultsTable model searchModel remaining
 
                 Grouped ->
-                    viewSearchResultsGrouped model remaining
+                    viewSearchResultsGrouped model searchModel remaining
             ]
         )
 
@@ -8264,8 +8918,8 @@ viewLoadMoreButtons model remaining =
         ]
 
 
-viewSearchResultsList : Model -> Int -> Int -> List (Html Msg)
-viewSearchResultsList model remaining resultCount =
+viewSearchResultsList : Model -> SearchModel -> Int -> Int -> List (Html Msg)
+viewSearchResultsList model searchModel remaining resultCount =
     [ List.concatMap
         (\result ->
             case result of
@@ -8278,9 +8932,9 @@ viewSearchResultsList model remaining resultCount =
                         [ Html.text (httpErrorToString err) ]
                     ]
         )
-        model.searchResults
+        searchModel.searchResults
 
-    , if Maybe.Extra.isJust model.tracker then
+    , if Maybe.Extra.isJust searchModel.tracker then
         [ Html.div
             [ HA.class "loader"
             ]
@@ -8360,8 +9014,8 @@ viewSingleSearchResult model hit =
         ]
 
 
-viewSearchResultsTable : Model -> Int -> List (Html Msg)
-viewSearchResultsTable model remaining =
+viewSearchResultsTable : Model -> SearchModel -> Int -> List (Html Msg)
+viewSearchResultsTable model searchModel remaining =
     [ Html.div
         [ HA.class "fill-width-with-padding"
         , HA.style "transition" "max-width ease-in-out 0.2s"
@@ -8377,9 +9031,9 @@ viewSearchResultsTable model remaining =
             , HA.style "max-height" "95vh"
             , HA.style "overflow" "auto"
             ]
-            [ viewSearchResultGrid model
+            [ viewSearchResultGrid model searchModel
 
-            , case List.Extra.last model.searchResults of
+            , case List.Extra.last searchModel.searchResults of
                 Just (Err err) ->
                     Html.h2
                         []
@@ -8388,7 +9042,7 @@ viewSearchResultsTable model remaining =
                 _ ->
                     Html.text ""
 
-            , if Maybe.Extra.isJust model.tracker then
+            , if Maybe.Extra.isJust searchModel.tracker then
                 Html.div
                     [ HA.class "column"
                     , HA.class "align-center"
@@ -8434,8 +9088,8 @@ viewSearchResultsTable model remaining =
     ]
 
 
-viewSearchResultGrid : Model -> Html Msg
-viewSearchResultGrid model =
+viewSearchResultGrid : Model -> SearchModel -> Html Msg
+viewSearchResultGrid model searchModel =
     Html.table
         []
         [ Html.thead
@@ -8467,7 +9121,7 @@ viewSearchResultGrid model =
                                         ]
                                     , getSortIcon
                                         column
-                                        (model.sort
+                                        (searchModel.sort
                                             |> List.Extra.find (Tuple.first >> (==) column)
                                             |> Maybe.map Tuple.second
                                         )
@@ -8477,7 +9131,7 @@ viewSearchResultGrid model =
                                 Html.text (sortFieldToLabel column)
                             ]
                     )
-                    ("name" :: model.tableColumns)
+                    ("name" :: searchModel.tableColumns)
                 )
             ]
         , Html.tbody
@@ -8492,7 +9146,7 @@ viewSearchResultGrid model =
                                         []
                                         (List.map
                                             (viewSearchResultGridCell model hit)
-                                            ("name" :: model.tableColumns)
+                                            ("name" :: searchModel.tableColumns)
                                         )
                                 )
                                 r.hits
@@ -8500,7 +9154,7 @@ viewSearchResultGrid model =
                         Err _ ->
                             []
                 )
-                model.searchResults
+                searchModel.searchResults
                 |> List.concat
             )
         ]
@@ -9047,17 +9701,17 @@ maybeAsText maybeString =
         |> List.singleton
 
 
-viewSearchResultsGrouped : Model -> Int -> List (Html Msg)
-viewSearchResultsGrouped model remaining =
+viewSearchResultsGrouped : Model -> SearchModel -> Int -> List (Html Msg)
+viewSearchResultsGrouped model searchModel remaining =
     let
         allHits : List (Hit Document)
         allHits =
-            model.searchResults
+            searchModel.searchResults
                 |> List.concatMap (Result.map .hits >> Result.withDefault [])
 
         keys : List String
         keys =
-            model.searchResultGroupAggs
+            searchModel.searchResultGroupAggs
                 |> Maybe.map .group1
                 |> Maybe.withDefault []
                 |> List.map .key1
@@ -9065,7 +9719,7 @@ viewSearchResultsGrouped model remaining =
 
         counts : Dict String Int
         counts =
-            model.searchResultGroupAggs
+            searchModel.searchResultGroupAggs
                 |> Maybe.map .group1
                 |> Maybe.withDefault []
                 |> List.map
@@ -9075,7 +9729,7 @@ viewSearchResultsGrouped model remaining =
                 |> Dict.fromList
 
     in
-    [ if Maybe.Extra.isJust model.tracker || model.searchResultGroupAggs == Nothing then
+    [ if Maybe.Extra.isJust searchModel.tracker || searchModel.searchResultGroupAggs == Nothing then
         Html.div
             [ HA.class "loader"
             ]
@@ -9101,7 +9755,7 @@ viewSearchResultsGrouped model remaining =
                         [ HA.class "title" ]
                         [ Html.div
                             []
-                            [ viewGroupedTitle model.groupField1 key1
+                            [ viewGroupedTitle searchModel.groupField1 key1
                             ]
                         , Html.div
                             []
@@ -9115,19 +9769,19 @@ viewSearchResultsGrouped model remaining =
                             ]
                         ]
 
-                    , case model.groupField2 of
+                    , case searchModel.groupField2 of
                         Just field2 ->
-                            viewSearchResultsGroupedLevel2 model key1 field2 hits1
+                            viewSearchResultsGroupedLevel2 model searchModel key1 field2 hits1
 
                         Nothing ->
                             viewSearchResultsGroupedLinkList model hits1
                     ]
             )
-            (if model.searchResultGroupAggs == Nothing then
+            (if searchModel.searchResultGroupAggs == Nothing then
                 []
 
              else
-                groupDocumentsByField keys model.groupField1 allHits
+                groupDocumentsByField keys searchModel.groupField1 allHits
                     |> Dict.toList
                     |> sortGroupedList model "" counts
             )
@@ -9135,12 +9789,12 @@ viewSearchResultsGrouped model remaining =
     ]
 
 
-viewSearchResultsGroupedLevel2 : Model -> String -> String -> List (Hit Document) -> Html Msg
-viewSearchResultsGroupedLevel2 model key1 field2 hits1 =
+viewSearchResultsGroupedLevel2 : Model -> SearchModel -> String -> String -> List (Hit Document) -> Html Msg
+viewSearchResultsGroupedLevel2 model searchModel key1 field2 hits1 =
     let
         keys : List String
         keys =
-            model.searchResultGroupAggs
+            searchModel.searchResultGroupAggs
                 |> Maybe.andThen .group2
                 |> Maybe.withDefault []
                 |> List.filter
@@ -9152,7 +9806,7 @@ viewSearchResultsGroupedLevel2 model key1 field2 hits1 =
 
         counts : Dict String Int
         counts =
-            model.searchResultGroupAggs
+            searchModel.searchResultGroupAggs
                 |> Maybe.andThen .group2
                 |> Maybe.withDefault []
                 |> List.map
@@ -9193,9 +9847,9 @@ viewSearchResultsGroupedLevel2 model key1 field2 hits1 =
                                 )
                             ]
                         ]
-                    , case model.groupField3 of
+                    , case searchModel.groupField3 of
                         Just field3 ->
-                            viewSearchResultsGroupedLevel3 model key1 key2 field3 hits2
+                            viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 hits2
 
                         Nothing ->
                             viewSearchResultsGroupedLinkList model hits2
@@ -9208,12 +9862,12 @@ viewSearchResultsGroupedLevel2 model key1 field2 hits1 =
         )
 
 
-viewSearchResultsGroupedLevel3 : Model -> String -> String -> String -> List (Hit Document) -> Html Msg
-viewSearchResultsGroupedLevel3 model key1 key2 field3 hits2 =
+viewSearchResultsGroupedLevel3 : Model -> SearchModel -> String -> String -> String -> List (Hit Document) -> Html Msg
+viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 hits2 =
     let
         keys : List String
         keys =
-            model.searchResultGroupAggs
+            searchModel.searchResultGroupAggs
                 |> Maybe.andThen .group3
                 |> Maybe.withDefault []
                 |> List.filter
@@ -9226,7 +9880,7 @@ viewSearchResultsGroupedLevel3 model key1 key2 field3 hits2 =
 
         counts : Dict String Int
         counts =
-            model.searchResultGroupAggs
+            searchModel.searchResultGroupAggs
                 |> Maybe.andThen .group3
                 |> Maybe.withDefault []
                 |> List.map
