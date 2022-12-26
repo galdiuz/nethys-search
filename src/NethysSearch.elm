@@ -10060,6 +10060,12 @@ getTraitClass trait =
         "ce" ->
             HA.class "trait-alignment"
 
+        "all ancestries" ->
+            HA.class "trait-aon-special"
+
+        "stamina" ->
+            HA.class "trait-aon-special"
+
         _ ->
             HAE.empty
 
@@ -10665,6 +10671,10 @@ css =
 
     .trait-alignment {
         background-color: #4287f5;
+    }
+
+    .trait-aon-special {
+        background: linear-gradient(#000, #666);
     }
 
     .trait-rare {
