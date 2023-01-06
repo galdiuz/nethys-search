@@ -350,6 +350,7 @@ sortFields =
     , ( "frequency", "frequency.keyword", False )
     , ( "hands", "hands.keyword", False )
     , ( "hardness", "hardness", False )
+    , ( "hazard_type", "hazard_type", False )
     , ( "heighten", "heighten", False )
     , ( "hp", "hp", True )
     , ( "intelligence", "intelligence", False )
@@ -372,6 +373,7 @@ sortFields =
     , ( "reflex", "reflex", True )
     , ( "reflex_proficiency", "reflex_proficiency", False )
     , ( "region", "region", False )
+    , ( "release_date", "release_date", False )
     , ( "requirement", "requirement.keyword", False )
     , ( "saving_throw", "saving_throw.keyword", False )
     , ( "school", "school", False )
@@ -495,6 +497,7 @@ tableColumns =
     , "frequency"
     , "hands"
     , "hardness"
+    , "hazard_type"
     , "heighten"
     , "heighten_level"
     , "hp"
@@ -521,6 +524,7 @@ tableColumns =
     , "rarity"
     , "reflex"
     , "region"
+    , "release_date"
     , "requirement"
     , "resistance"
     , "saving_throw"

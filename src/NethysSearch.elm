@@ -110,6 +110,7 @@ type alias Document =
     , frequency : Maybe String
     , hands : Maybe String
     , hardness : Maybe String
+    , hazardType : Maybe String
     , heighten : List String
     , heightenLevels : List Int
     , hp : Maybe String
@@ -139,6 +140,7 @@ type alias Document =
     , ref : Maybe Int
     , reflexProficiency : Maybe String
     , region : Maybe String
+    , releaseDate : Maybe String
     , reload : Maybe String
     , requiredAbilities : Maybe String
     , requirements : Maybe String
@@ -2831,7 +2833,11 @@ buildSearchFilterTerms model =
                         [ ( field
                           , Encode.object
                                 [ ( "gte"
-                                  , Encode.float (Maybe.withDefault 0 (String.toFloat value))
+                                  , if field == "release_date" then
+                                        Encode.string value
+
+                                    else
+                                        Encode.float (Maybe.withDefault 0 (String.toFloat value))
                                   )
                                 ]
                           )
@@ -2848,7 +2854,11 @@ buildSearchFilterTerms model =
                         [ ( field
                           , Encode.object
                                 [ ( "lte"
-                                  , Encode.float (Maybe.withDefault 0 (String.toFloat value))
+                                  , if field == "release_date" then
+                                        Encode.string value
+
+                                    else
+                                        Encode.float (Maybe.withDefault 0 (String.toFloat value))
                                   )
                                 ]
                           )
@@ -3103,11 +3113,9 @@ updateModelFromUrl url model =
         , filteredAlignments = getBoolDictFromParams params ";" "alignments"
         , filteredComponents = getBoolDictFromParams params ";" "components"
         , filteredCreatureFamilies = getBoolDictFromParams params ";" "creature-families"
-        , filteredStrongestSaves = getBoolDictFromParams params ";" "strongest-saves"
         , filteredHands = getBoolDictFromParams params ";" "hands"
         , filteredItemCategories = getBoolDictFromParams params ";" "item-categories"
         , filteredItemSubcategories = getBoolDictFromParams params ";" "item-subcategories"
-        , filteredWeakestSaves = getBoolDictFromParams params ";" "weakest-saves"
         , filteredPfs = getBoolDictFromParams params ";" "pfs"
         , filteredRarities = getBoolDictFromParams params ";" "rarities"
         , filteredReloads = getBoolDictFromParams params ";" "reloads"
@@ -3115,11 +3123,13 @@ updateModelFromUrl url model =
         , filteredSchools = getBoolDictFromParams params ";" "schools"
         , filteredSizes = getBoolDictFromParams params ";" "sizes"
         , filteredSkills = getBoolDictFromParams params ";" "skills"
-        , filteredSources = getBoolDictFromParams params ";" "sources"
         , filteredSourceCategories = getBoolDictFromParams params ";" "source-categories"
+        , filteredSources = getBoolDictFromParams params ";" "sources"
+        , filteredStrongestSaves = getBoolDictFromParams params ";" "strongest-saves"
         , filteredTraditions = getBoolDictFromParams params ";" "traditions"
         , filteredTraits = getBoolDictFromParams params ";" "traits"
         , filteredTypes = getBoolDictFromParams params ";" "types"
+        , filteredWeakestSaves = getBoolDictFromParams params ";" "weakest-saves"
         , filteredWeaponCategories = getBoolDictFromParams params ";" "weapon-categories"
         , filteredWeaponGroups = getBoolDictFromParams params ";" "weapon-groups"
         , filteredWeaponTypes = getBoolDictFromParams params ";" "weapon-types"
@@ -3797,6 +3807,7 @@ documentDecoder =
     Field.attempt "frequency" Decode.string <| \frequency ->
     Field.attempt "hands" Decode.string <| \hands ->
     Field.attempt "hardness_raw" Decode.string <| \hardness ->
+    Field.attempt "hazard_type" Decode.string <| \hazardType ->
     Field.attempt "heighten" (Decode.list Decode.string) <| \heighten ->
     Field.attempt "heighten_level" (Decode.list Decode.int) <| \heightenLevels ->
     Field.attempt "hp_raw" Decode.string <| \hp ->
@@ -3827,6 +3838,7 @@ documentDecoder =
     Field.attempt "reflex_save" Decode.int <| \ref ->
     Field.attempt "reflex_proficiency" Decode.string <| \reflexProficiency ->
     Field.attempt "region" Decode.string <| \region->
+    Field.attempt "release_date" Decode.string <| \releaseDate ->
     Field.attempt "reload_raw" Decode.string <| \reload ->
     Field.attempt "required_abilities" Decode.string <| \requiredAbilities ->
     Field.attempt "requirement_markdown" Decode.string <| \requirements ->
@@ -3922,6 +3934,7 @@ documentDecoder =
         , frequency = frequency
         , hands = hands
         , hardness = hardness
+        , hazardType = hazardType
         , heighten = Maybe.withDefault [] heighten
         , heightenLevels = Maybe.withDefault [] heightenLevels
         , hp = hp
@@ -3951,6 +3964,7 @@ documentDecoder =
         , ref = ref
         , reflexProficiency = reflexProficiency
         , region = region
+        , releaseDate = releaseDate
         , reload = reload
         , requiredAbilities = requiredAbilities
         , requirements = requirements
@@ -6557,6 +6571,7 @@ viewFilterNumbers model =
                         [ Html.div
                             [ HA.class "row"
                             , HA.class "gap-small"
+                            , HA.class "align-center"
                             ]
                             [ Html.h4
                                 []
@@ -6970,7 +6985,53 @@ viewFilterNumbers model =
                             ]
                         ]
                     ]
-                ]
+              ]
+            , [ Html.div
+                    [ HA.class "column"
+                    , HA.class "gap-tiny"
+                    ]
+                    [ Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-small"
+                        , HA.class "align-center"
+                        ]
+                        [ Html.h4
+                            []
+                            [ Html.text "Release date" ]
+                        ]
+                    , Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HA.class "align-baseline"
+                        ]
+                        [ Html.div
+                            [ HA.class "input-container"
+                            , HA.class "row"
+                            , HA.class "align-baseline"
+                            ]
+                            [ Html.input
+                                [ HA.type_ "date"
+                                , HA.value (Maybe.withDefault "" (Dict.get "release_date" model.filteredFromValues))
+                                , HE.onInput (FilteredFromValueChanged "release_date")
+                                ]
+                                []
+                            ]
+                        , Html.text "to"
+                        , Html.div
+                            [ HA.class "input-container"
+                            , HA.class "row"
+                            , HA.class "align-baseline"
+                            ]
+                            [ Html.input
+                                [ HA.type_ "date"
+                                , HA.value (Maybe.withDefault "" (Dict.get "release_date" model.filteredToValues))
+                                , HE.onInput (FilteredToValueChanged "release_date")
+                                ]
+                                []
+                            ]
+                        ]
+                    ]
+              ]
             ]
         )
     ]
@@ -8540,6 +8601,9 @@ viewSearchResultGridCell model hit column =
             [ "hardness" ] ->
                 maybeAsText hit.source.hardness
 
+            [ "hazard_type" ] ->
+                maybeAsText hit.source.hazardType
+
             [ "heighten" ] ->
                 hit.source.heighten
                     |> String.join ", "
@@ -8694,6 +8758,9 @@ viewSearchResultGridCell model hit column =
 
             [ "region" ] ->
                 maybeAsText hit.source.region
+
+            [ "release_date" ] ->
+                maybeAsText hit.source.releaseDate
 
             [ "reload" ] ->
                 maybeAsText hit.source.reload
@@ -10261,7 +10328,7 @@ css =
         width: 100%;
     }
 
-    input[type=text], input[type=number] {
+    input[type=text], input[type=number], input[type=date] {
         background-color: transparent;
         border-width: 0;
         color: var(--color-text);
@@ -10730,6 +10797,7 @@ cssBlackbird : String
 cssBlackbird =
     """
     .body-container {
+        color-scheme: dark;
         --color-bg: #21252b;
         --color-bg-secondary: #21252b;
         --color-container-bg: #404859;
@@ -10760,6 +10828,7 @@ cssDark : String
 cssDark =
     """
     .body-container {
+        color-scheme: dark;
         --color-bg: #111111;
         --color-bg-secondary: #282828;
         --color-container-bg: #333333;
@@ -10790,6 +10859,7 @@ cssDead : String
 cssDead =
     """
     .body-container {
+        color-scheme: light;
         --color-bg: #ffffff;
         --color-bg-secondary: #c8c8c8;
         --color-container-bg: #dddddd;
@@ -10820,6 +10890,7 @@ cssLight : String
 cssLight =
     """
     .body-container {
+        color-scheme: light;
         --color-bg: #eeeeee;
         --color-bg-secondary: #cccccc;
         --color-container-bg: #dddddd;
@@ -10850,6 +10921,7 @@ cssPaper : String
 cssPaper =
     """
     .body-container {
+        color-scheme: light;
         --color-bg: #f1ece5;
         --color-bg-secondary: #cccccc;
         --color-container-bg: #dddddd;
@@ -10880,6 +10952,7 @@ cssExtraContrast : String
 cssExtraContrast =
     """
     .body-container {
+        color-scheme: dark;
         --color-bg: #111111;
         --color-bg-secondary: #282828;
         --color-container-bg: #333333;
@@ -10910,6 +10983,7 @@ cssLavender : String
 cssLavender =
     """
     .body-container {
+        color-scheme: light;
         --color-bg: #ffffff;
         --color-bg-secondary: #cccccc;
         --color-container-bg: #dddddd;
