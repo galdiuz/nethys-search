@@ -2517,7 +2517,49 @@ searchFields =
 buildSearchBody : Model -> LoadType -> Encode.Value
 buildSearchBody model load =
     encodeObjectMaybe
-        [ Just (buildSearchQuery model)
+        [ Just
+            ( "query"
+            , Encode.object
+                [ ( "function_score"
+                  , Encode.object
+                        [ buildSearchQuery model
+                        , ( "boost_mode", Encode.string "multiply" )
+                        , ( "functions"
+                          , Encode.list Encode.object
+                                [ [ ( "filter"
+                                    , Encode.object
+                                        [ ( "terms"
+                                          , Encode.object
+                                                [ ( "type"
+                                                  , Encode.list Encode.string
+                                                        [ "Ancestry", "Class" ]
+                                                  )
+                                                ]
+                                          )
+                                        ]
+                                    )
+                                  , ( "weight", Encode.float 1.1 )
+                                  ]
+                                , [ ( "filter"
+                                    , Encode.object
+                                        [ ( "terms"
+                                          , Encode.object
+                                                [ ( "type"
+                                                  , Encode.list Encode.string
+                                                        [ "Trait" ]
+                                                  )
+                                                ]
+                                          )
+                                        ]
+                                    )
+                                  , ( "weight", Encode.float 1.05 )
+                                  ]
+                                ]
+                          )
+                        ]
+                )
+              ]
+            )
         , Just
             ( "size"
             , Encode.int
@@ -2989,6 +3031,12 @@ buildStandardQueryBody queryString =
                     , ( "boost", Encode.float 0.1 )
                     ]
               )
+            ]
+        )
+      ]
+    , [ ( "term"
+        , Encode.object
+            [ ( "name", Encode.string queryString )
             ]
         )
       ]
