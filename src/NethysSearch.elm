@@ -3917,7 +3917,7 @@ documentDecoder =
     Field.attempt "trait_markdown" Decode.string <| \traits ->
     Field.attempt "trait" stringListDecoder <| \traitList ->
     Field.attempt "trigger_markdown" Decode.string <| \trigger ->
-    Field.attempt "usage" Decode.string <| \usage ->
+    Field.attempt "usage_markdown" Decode.string <| \usage ->
     Field.attempt "vision" Decode.string <| \vision ->
     Field.attempt "weakest_save" stringListDecoder <| \weakestSaves ->
     Field.attempt "weakness" damageTypeValuesDecoder <| \weaknessValues ->
@@ -8919,7 +8919,7 @@ viewSearchResultGridCell model hit column =
                 [ Html.text hit.source.type_ ]
 
             [ "usage" ] ->
-                maybeAsText hit.source.usage
+                maybeAsMarkdown hit.source.usage
 
             [ "vision" ] ->
                 maybeAsText hit.source.vision
