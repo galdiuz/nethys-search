@@ -331,6 +331,7 @@ sortFields =
     , ( "bulk", "bulk", True )
     , ( "charisma", "charisma", True )
     , ( "check_penalty", "check_penalty", True )
+    , ( "complexity", "complexity", False )
     , ( "component", "component", False )
     , ( "constitution", "constitution", True )
     , ( "cost", "cost.keyword", False )
@@ -381,6 +382,8 @@ sortFields =
     , ( "secondary_check", "secondary_check.keyword", False )
     , ( "size", "size", False )
     , ( "source", "source", False )
+    , ( "source_category", "source_category", False )
+    , ( "source_group", "source_group.keyword", False )
     , ( "speed_penalty", "speed_penalty.keyword", False )
     , ( "spoilers", "spoilers", False )
     , ( "strength", "strength", True )
@@ -476,6 +479,7 @@ tableColumns =
     , "bulk"
     , "charisma"
     , "check_penalty"
+    , "complexity"
     , "component"
     , "constitution"
     , "cost"
@@ -536,6 +540,8 @@ tableColumns =
     , "skill"
     , "skill_proficiency"
     , "source"
+    , "source_category"
+    , "source_group"
     , "speed"
     , "speed_penalty"
     , "spoilers"

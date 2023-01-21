@@ -85,6 +85,7 @@ type alias Document =
     , bulk : Maybe String
     , charisma : Maybe Int
     , checkPenalty : Maybe Int
+    , complexity : Maybe String
     , components : List String
     , constitution : Maybe Int
     , cost : Maybe String
@@ -155,6 +156,8 @@ type alias Document =
     , sizes : List String
     , skills : Maybe String
     , skillProficiencies : List String
+    , sourceCategory : Maybe String
+    , sourceGroup : Maybe String
     , sourceList : List String
     , sources : Maybe String
     , speed : Maybe String
@@ -3858,7 +3861,8 @@ documentDecoder =
     Field.attempt "bulk_raw" Decode.string <| \bulk ->
     Field.attempt "charisma" Decode.int <| \charisma ->
     Field.attempt "check_penalty" Decode.int <| \checkPenalty ->
-    Field.attempt "component" (Decode.list Decode.string) <| \components ->
+    Field.attempt "complexity" Decode.string <| \complexity ->
+    Field.attempt "component" stringListDecoder <| \components ->
     Field.attempt "constitution" Decode.int <| \constitution ->
     Field.attempt "cost_markdown" Decode.string <| \cost ->
     Field.attempt "creature_family" Decode.string <| \creatureFamily ->
@@ -3929,6 +3933,8 @@ documentDecoder =
     Field.attempt "skill_markdown" Decode.string <| \skills ->
     Field.attempt "skill_proficiency" stringListDecoder <| \skillProficiencies ->
     Field.attempt "source" stringListDecoder <| \sourceList ->
+    Field.attempt "source_category" Decode.string <| \sourceCategory ->
+    Field.attempt "source_group" Decode.string <| \sourceGroup ->
     Field.attempt "source_markdown" Decode.string <| \sources ->
     Field.attempt "speed" speedTypeValuesDecoder <| \speedValues ->
     Field.attempt "speed_markdown" Decode.string <| \speed ->
@@ -3985,6 +3991,7 @@ documentDecoder =
         , bulk = bulk
         , charisma = charisma
         , checkPenalty = checkPenalty
+        , complexity = complexity
         , components = Maybe.withDefault [] components
         , constitution = constitution
         , cost = cost
@@ -4060,6 +4067,8 @@ documentDecoder =
         , sizes = Maybe.withDefault [] sizes
         , skills = skills
         , skillProficiencies = Maybe.withDefault [] skillProficiencies
+        , sourceCategory = sourceCategory
+        , sourceGroup = sourceGroup
         , sourceList = Maybe.withDefault [] sourceList
         , sources = sources
         , speed = speed
@@ -8608,6 +8617,9 @@ viewSearchResultGridCell model hit column =
             [ "creature_family" ] ->
                 maybeAsMarkdown hit.source.creatureFamilyMarkdown
 
+            [ "complexity" ] ->
+                maybeAsText hit.source.complexity
+
             [ "component" ] ->
                 hit.source.components
                     |> List.map String.Extra.toTitleCase
@@ -8921,6 +8933,12 @@ viewSearchResultGridCell model hit column =
 
             [ "source" ] ->
                 maybeAsMarkdown hit.source.sources
+
+            [ "source_category" ] ->
+                maybeAsText hit.source.sourceCategory
+
+            [ "source_group" ] ->
+                maybeAsText hit.source.sourceGroup
 
             [ "speed" ] ->
                 maybeAsMarkdown hit.source.speed
