@@ -403,6 +403,7 @@ type Msg
     | LocalStorageValueReceived Decode.Value
     | MenuOpenDelayPassed
     | NoOp
+    | OpenInNewTabChanged Bool
     | PageSizeChanged Int
     | PfsFilterAdded String
     | PfsFilterRemoved String
@@ -568,6 +569,7 @@ type alias Model =
     , lastSearchKey : Maybe String
     , limitTableWidth : Bool
     , menuOpen : Bool
+    , openInNewTab : Bool
     , overlayActive : Bool
     , pageDefaultDisplays : Dict String (Dict String String)
     , pageId : String
@@ -694,6 +696,7 @@ init flagsValue =
       , lastSearchKey = Nothing
       , limitTableWidth = False
       , menuOpen = False
+      , openInNewTab = False
       , overlayActive = False
       , pageDefaultDisplays = Dict.empty
       , pageId = flags.pageId
@@ -1187,6 +1190,13 @@ update msg model =
         NoOp ->
             ( model
             , Cmd.none
+            )
+
+        OpenInNewTabChanged value ->
+            ( { model | openInNewTab = value }
+            , saveToLocalStorage
+                "open-in-new-tab"
+                (if value then "1" else "0")
             )
 
         PageSizeChanged size ->
@@ -2002,6 +2012,17 @@ updateModelFromLocalStorage ( key, value ) model =
 
                 "0" ->
                     { model | limitTableWidth = False }
+
+                _ ->
+                    model
+
+        "open-in-new-tab" ->
+            case value of
+                "1" ->
+                    { model | openInNewTab = True }
+
+                "0" ->
+                    { model | openInNewTab = False }
 
                 _ ->
                     model
@@ -7389,6 +7410,14 @@ viewResultDisplay model =
     , Html.div
         []
         [ Html.text ("Current page ID: " ++ model.pageId) ]
+    , Html.h4
+        []
+        [ Html.text "General result settings" ]
+    , viewCheckbox
+        { checked = model.openInNewTab
+        , onCheck = OpenInNewTabChanged
+        , text = "Links open in new tab"
+        }
     , Html.div
         [ HA.class "column"
         , HA.class "gap-small"
@@ -8290,7 +8319,7 @@ viewSingleSearchResult model hit =
                 [ viewPfsIconWithLink 25 (Maybe.withDefault "" hit.source.pfs)
                 , Html.a
                     [ HA.href (getUrl model hit.source)
-                    , HA.target "_blank"
+                    , HAE.attributeIf model.openInNewTab (HA.target "_blank")
                     ]
                     [ Html.text hit.source.name
                     ]
@@ -8318,7 +8347,7 @@ viewSingleSearchResult model hit =
                 [ HA.class "column"
                 , HA.class "gap-small"
                 ]
-                (viewMarkdown hit.source.searchMarkdown)
+                (viewMarkdown model hit.source.searchMarkdown)
         ]
 
 
@@ -8470,6 +8499,13 @@ viewSearchResultGrid model =
 
 viewSearchResultGridCell : Model -> Hit Document -> String -> Html msg
 viewSearchResultGridCell model hit column =
+    let
+        maybeAsMarkdown : Maybe String -> List (Html msg)
+        maybeAsMarkdown maybeString =
+            maybeString
+                |> Maybe.withDefault ""
+                |> parseAndViewAsMarkdown model
+    in
     Html.td
         [ HAE.attributeIf (column == "name") (HA.class "sticky-left")
         ]
@@ -8762,7 +8798,7 @@ viewSearchResultGridCell model hit column =
             [ "name" ] ->
                 [ Html.a
                     [ HA.href (getUrl model hit.source)
-                    , HA.target "_blank"
+                    , HAE.attributeIf model.openInNewTab (HA.target "_blank")
                     ]
                     [ Html.text hit.source.name
                     ]
@@ -8991,13 +9027,6 @@ maybeAsText maybeString =
         |> Maybe.withDefault ""
         |> Html.text
         |> List.singleton
-
-
-maybeAsMarkdown : Maybe String -> List (Html msg)
-maybeAsMarkdown maybeString =
-    maybeString
-        |> Maybe.withDefault ""
-        |> parseAndViewAsMarkdown
 
 
 viewSearchResultsGrouped : Model -> Int -> List (Html Msg)
@@ -9332,7 +9361,7 @@ viewSearchResultsGroupedLinkList model hits =
                                     Just summary ->
                                         List.append
                                             [ Html.text " - " ]
-                                            (parseAndViewAsMarkdown summary)
+                                            (parseAndViewAsMarkdown model summary)
 
                                     Nothing ->
                                         []
@@ -9758,8 +9787,8 @@ httpErrorToString error =
             "Error: Request timed out"
 
 
-parseAndViewAsMarkdown : String -> List (Html msg)
-parseAndViewAsMarkdown string =
+parseAndViewAsMarkdown : Model -> String -> List (Html msg)
+parseAndViewAsMarkdown model string =
     if String.isEmpty string then
         []
 
@@ -9768,14 +9797,14 @@ parseAndViewAsMarkdown string =
             |> Markdown.Parser.parse
             |> Result.map (List.map (Markdown.Block.walk mergeInlines))
             |> Result.mapError (List.map Markdown.Parser.deadEndToString)
-            |> viewMarkdown
+            |> viewMarkdown model
 
 
-viewMarkdown : ParsedMarkdownResult -> List (Html msg)
-viewMarkdown markdown =
+viewMarkdown : Model -> ParsedMarkdownResult -> List (Html msg)
+viewMarkdown model markdown =
     case markdown of
         Ok blocks ->
-            case Markdown.Renderer.render markdownRenderer blocks of
+            case Markdown.Renderer.render (markdownRenderer model) blocks of
                 Ok v ->
                         v
 
@@ -9789,8 +9818,8 @@ viewMarkdown markdown =
             ]
 
 
-markdownRenderer : Markdown.Renderer.Renderer (Html msg)
-markdownRenderer =
+markdownRenderer : Model -> Markdown.Renderer.Renderer (Html msg)
+markdownRenderer model =
     let
         defaultRenderer =
             Markdown.Renderer.defaultHtmlRenderer
@@ -9902,7 +9931,7 @@ markdownRenderer =
         , link = \link contents ->
             Html.a
                 [ HA.href link.destination
-                , HA.target "_blank"
+                , HAE.attributeIf model.openInNewTab (HA.target "_blank")
                 ]
                 contents
     }
