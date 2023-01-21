@@ -348,6 +348,7 @@ type Theme
     | ExtraContrast
     | Lavender
     | Light
+    | Orc
     | Paper
 
 
@@ -1756,6 +1757,9 @@ update msg model =
                     Light ->
                         "light"
 
+                    Orc ->
+                        "orc"
+
                     Paper ->
                         "paper"
 
@@ -2100,6 +2104,9 @@ updateModelFromLocalStorage ( key, value ) model =
 
                 "jonny" ->
                     { model | theme = Blackbird }
+
+                "orc" ->
+                    { model | theme = Orc }
 
                 _ ->
                     model
@@ -4245,6 +4252,9 @@ view model =
                 Light ->
                     Html.text cssLight
 
+                Orc ->
+                    Html.text cssOrc
+
                 Paper ->
                     Html.text cssPaper
 
@@ -4409,6 +4419,13 @@ viewMenu model =
                             , name = "theme-type"
                             , onInput = ThemeSelected Blackbird
                             , text = "Blackbird"
+                            }
+                        , viewRadioButton
+                            { checked = model.theme == Orc
+                            , enabled = True
+                            , name = "theme-type"
+                            , onInput = ThemeSelected Orc
+                            , text = "Orc"
                             }
                         ]
                     ]
@@ -10961,6 +10978,49 @@ cssLight =
         --color-table-text: #0f0f0f;
         --color-text: #111111;
         --element-font-variant: small-caps;
+    }
+    """
+
+
+cssOrc : String
+cssOrc =
+    """
+    .body-container {
+        color-scheme: dark;
+        --color-bg: #002604;
+        --color-bg-secondary: #002604;
+        --color-container-bg: #0e3c10;
+        --color-container-border: #eeeeee;
+        --color-element-bg: #4a4300;
+        --color-element-border: #ddffdd;
+        --color-element-icon: #cccccc;
+        --color-element-inactive-bg: #291716;
+        --color-element-inactive-border: #6c6242;
+        --color-element-inactive-text: #656148;
+        --color-element-text: #ddffdd;
+        --color-external-link: #00ffff;
+        --color-subelement-bg: #806e45;
+        --color-subelement-text: #111111;
+        --color-subsubelement-bg: #627d62;
+        --color-subsubelement-text: #0f0f0f;
+        --color-inactive-text: #999999;
+        --color-table-even: #4a4300;
+        --color-table-odd: #002604;
+        --color-table-text: #ddffdd;
+        --color-text: #ddffdd;
+        --element-font-variant: small-caps;
+    }
+
+    .title, thead th:first-child, .query-input {
+        background-image: url(/Images/orc-face-circ-25t.webp);
+        background-repeat: no-repeat;
+        background-position: 10% 39%;
+    }
+
+    .option-container {
+        background-image: url(/Images/orc-face-circ-25t.webp);
+        background-repeat: no-repeat;
+        background-position: 10% -38px;
     }
     """
 
