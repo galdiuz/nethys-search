@@ -544,6 +544,7 @@ tableColumns =
     , "source_group"
     , "speed"
     , "speed_penalty"
+    , "spell"
     , "spoilers"
     , "stage"
     , "strength"

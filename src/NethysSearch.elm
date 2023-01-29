@@ -360,6 +360,7 @@ type alias Document =
     , speed : Maybe String
     , speedValues : Maybe SpeedTypeValues
     , speedPenalty : Maybe String
+    , spell : Maybe String
     , spellList : Maybe String
     , spoilers : Maybe String
     , stages : Maybe String
@@ -4339,6 +4340,13 @@ buildSearchMustNotTerms model searchModel =
 
           else
             []
+
+        , [ [ ( "term"
+              , Encode.object
+                    [ ( "exclude_from_search", Encode.bool True ) ]
+              )
+            ]
+          ]
         ]
 
 
@@ -5260,6 +5268,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "speed" ] speedTypeValuesDecoder <| \speedValues ->
     Field.attemptAt [ "_source", "speed_markdown" ] Decode.string <| \speed ->
     Field.attemptAt [ "_source", "speed_penalty" ] Decode.string <| \speedPenalty ->
+    Field.attemptAt [ "_source", "spell_markdown" ] Decode.string <| \spell ->
     Field.attemptAt [ "_source", "spell_list" ] Decode.string <| \spellList ->
     Field.attemptAt [ "_source", "spoilers" ] Decode.string <| \spoilers ->
     Field.attemptAt [ "_source", "stage_markdown" ] Decode.string <| \stages ->
@@ -5397,6 +5406,7 @@ documentDecoder =
         , speed = speed
         , speedPenalty = speedPenalty
         , speedValues = speedValues
+        , spell = spell
         , spellList = spellList
         , spoilers = spoilers
         , stages = stages
@@ -5548,7 +5558,14 @@ mergeInlines block =
                                         if List.member tagName inlineTags then
                                             List.append
                                                 before
-                                                [ Markdown.Block.Paragraph (List.append prevInlines inlines) ]
+                                                [ Markdown.Block.Paragraph
+                                                    (List.concat
+                                                        [ prevInlines
+                                                        , [ Markdown.Block.Text " " ]
+                                                        , inlines
+                                                        ]
+                                                    )
+                                                ]
 
                                         else
                                             List.append children [ child ]
@@ -10384,6 +10401,9 @@ viewSearchResultGridCell model document column =
             [ "speed_penalty" ] ->
                 maybeAsText document.speedPenalty
 
+            [ "spell" ] ->
+                maybeAsMarkdown document.spell
+
             [ "spoilers" ] ->
                 maybeAsText document.spoilers
 
@@ -11899,9 +11919,8 @@ viewLabel text =
 
 viewTextWithActionIcons : String -> Html msg
 viewTextWithActionIcons text =
-    Html.span
-        []
-        (replaceActionLigatures
+    case
+        replaceActionLigatures
             text
             ( "single action", "[one-action]" )
             [ ( "two actions", "[two-actions]" )
@@ -11909,7 +11928,19 @@ viewTextWithActionIcons text =
             , ( "reaction", "[reaction]" )
             , ( "free action", "[free-action]" )
             ]
-        )
+    of
+        [ single ] ->
+            Html.span
+                []
+                [ Html.text " "
+                , single
+                , Html.text " "
+                ]
+
+        multiple ->
+            Html.span
+                []
+                multiple
 
 
 replaceActionLigatures : String -> ( String, String ) -> List ( String, String ) -> List (Html msg)
@@ -11917,21 +11948,27 @@ replaceActionLigatures text ( find, replace ) rem =
     if String.contains find (String.toLower text) then
         case String.split find (String.toLower text) of
             before :: after ->
-                (List.append
-                    [ Html.text before
-                    , Html.span
-                        [ HA.class "icon-font" ]
-                        [ Html.text replace ]
-                    ]
-                    (replaceActionLigatures
+                List.concat
+                    [ if String.isEmpty before then
+                        []
+                      else
+                        [ Html.text before ]
+                    , [ Html.span
+                            [ HA.class "icon-font" ]
+                            [ Html.text replace ]
+                      ]
+                    , replaceActionLigatures
                         (String.join find after)
                         ( find, replace )
                         rem
-                    )
-                )
+                    ]
 
             [] ->
-                [ Html.text text ]
+                if String.isEmpty text then
+                    []
+
+                else
+                    [ Html.text text ]
 
     else
         case rem of
@@ -11939,7 +11976,11 @@ replaceActionLigatures text ( find, replace ) rem =
                 replaceActionLigatures text next remNext
 
             [] ->
-                [ Html.text text ]
+                if String.isEmpty text then
+                    []
+
+                else
+                    [ Html.text text ]
 
 
 viewTrait : Maybe String -> String -> Html Msg
