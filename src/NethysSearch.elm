@@ -63,7 +63,6 @@ type alias Model =
     , fixedParams : Dict String String
     , groupTraits : Bool
     , groupedDisplay : GroupedDisplay
-    , groupedLinkLayout : GroupedLinkLayout
     , groupedShowPfs : Bool
     , groupedShowRarity : Bool
     , groupedSort : GroupedSort
@@ -132,6 +131,7 @@ type alias SearchModel =
     , groupField1 : String
     , groupField2 : Maybe String
     , groupField3 : Maybe String
+    , groupedLinkLayout : GroupedLinkLayout
     , lastSearchHash : Maybe String
     , query : String
     , queryType : QueryType
@@ -212,6 +212,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , groupField1 = "type"
     , groupField2 = Nothing
     , groupField3 = Nothing
+    , groupedLinkLayout = Horizontal
     , lastSearchHash = Nothing
     , query = ""
     , queryType = Standard
@@ -768,7 +769,6 @@ init flagsValue =
       , fixedParams = flags.fixedParams
       , groupTraits = False
       , groupedDisplay = Dim
-      , groupedLinkLayout = Horizontal
       , groupedShowPfs = True
       , groupedShowRarity = True
       , groupedSort = Alphanum
@@ -1333,19 +1333,13 @@ update msg model =
             )
 
         GroupedLinkLayoutChanged value ->
-            ( { model | groupedLinkLayout = value }
-            , saveToLocalStorage
-                "grouped-link-layout"
-                (case value of
-                    Horizontal ->
-                        "horizontal"
-
-                    Vertical ->
-                        "vertical"
-
-                    VerticalWithSummary ->
-                        "vertical-with-summary"
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | groupedLinkLayout = value }
                 )
+                model
+                |> updateUrlWithSearchParams
             )
 
         GroupedShowPfsIconChanged enabled ->
@@ -3011,20 +3005,6 @@ updateModelFromLocalStorage ( key, value ) model =
                 _ ->
                     model
 
-        "grouped-link-layout" ->
-            case value of
-                "horizontal" ->
-                    { model | groupedLinkLayout = Horizontal }
-
-                "vertical" ->
-                    { model | groupedLinkLayout = Vertical }
-
-                "vertical-with-summary" ->
-                    { model | groupedLinkLayout = VerticalWithSummary }
-
-                _ ->
-                    model
-
         "grouped-show-pfs" ->
             case value of
                 "1" ->
@@ -3864,6 +3844,21 @@ getDisplayParamsList model searchModel =
         else
             ""
       )
+    , ( "link-layout"
+      , if searchModel.resultDisplay == Grouped then
+            case searchModel.groupedLinkLayout of
+                Horizontal ->
+                    "horizontal"
+
+                Vertical ->
+                    "vertical"
+
+                VerticalWithSummary ->
+                    "vertical-with-summary"
+
+        else
+            ""
+      )
     ]
         |> List.filter (Tuple.second >> String.isEmpty >> not)
 
@@ -4653,6 +4648,23 @@ updateSearchModelFromDisplayParams params searchModel =
 
             else
                 searchModel.groupField3
+        , groupedLinkLayout =
+            if Dict.get "display" params == Just "grouped" then
+                case Dict.get "link-layout" params of
+                    Just "horizontal" ->
+                        Horizontal
+
+                    Just "vertical" ->
+                        Vertical
+
+                    Just "vertical-with-summary" ->
+                        VerticalWithSummary
+
+                    _ ->
+                        Horizontal
+
+            else
+                searchModel.groupedLinkLayout
     }
 
 
@@ -4763,6 +4775,9 @@ getSearchHash url =
                         False
 
                     [ "group-field-3", _ ] ->
+                        False
+
+                    [ "link-layout", _ ] ->
                         False
 
                     [ "q", q ] ->
@@ -9268,6 +9283,36 @@ viewResultDisplayGrouped model searchModel =
 
     , Html.h4
         []
+        [ Html.text "Link layout" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        ]
+        [ viewRadioButton
+            { checked = searchModel.groupedLinkLayout == Horizontal
+            , enabled = True
+            , name = "grouped-results"
+            , onInput = GroupedLinkLayoutChanged Horizontal
+            , text = "Horizontal"
+            }
+        , viewRadioButton
+            { checked = searchModel.groupedLinkLayout == Vertical
+            , enabled = True
+            , name = "grouped-results"
+            , onInput = GroupedLinkLayoutChanged Vertical
+            , text = "Vertical"
+            }
+        , viewRadioButton
+            { checked = searchModel.groupedLinkLayout == VerticalWithSummary
+            , enabled = True
+            , name = "grouped-results"
+            , onInput = GroupedLinkLayoutChanged VerticalWithSummary
+            , text = "Vertical with summary"
+            }
+        ]
+
+    , Html.h4
+        []
         [ Html.text "Groups with 0 loaded results" ]
     , Html.div
         [ HA.class "row"
@@ -9325,35 +9370,7 @@ viewResultDisplayGrouped model searchModel =
             , text = "Count (Total)"
             }
         ]
-    , Html.h4
-        []
-        [ Html.text "Link layout" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-medium"
-        ]
-        [ viewRadioButton
-            { checked = model.groupedLinkLayout == Horizontal
-            , enabled = True
-            , name = "grouped-results"
-            , onInput = GroupedLinkLayoutChanged Horizontal
-            , text = "Horizontal"
-            }
-        , viewRadioButton
-            { checked = model.groupedLinkLayout == Vertical
-            , enabled = True
-            , name = "grouped-results"
-            , onInput = GroupedLinkLayoutChanged Vertical
-            , text = "Vertical"
-            }
-        , viewRadioButton
-            { checked = model.groupedLinkLayout == VerticalWithSummary
-            , enabled = True
-            , name = "grouped-results"
-            , onInput = GroupedLinkLayoutChanged VerticalWithSummary
-            , text = "Vertical with summary"
-            }
-        ]
+
     , Html.div
         [ HA.class "row"
         , HA.class "gap-medium"
@@ -10603,7 +10620,7 @@ viewSearchResultsGrouped model searchModel remaining =
                             viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1
 
                         Nothing ->
-                            viewSearchResultsGroupedLinkList model documents1
+                            viewSearchResultsGroupedLinkList model searchModel documents1
                     ]
             )
             (if searchModel.searchResultGroupAggs == Nothing then
@@ -10690,7 +10707,7 @@ viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1 =
                             viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2
 
                         Nothing ->
-                            viewSearchResultsGroupedLinkList model documents2
+                            viewSearchResultsGroupedLinkList model searchModel documents2
                     ]
             )
             (groupDocumentsByField keys field2 documents1
@@ -10762,7 +10779,7 @@ viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2 =
                                 )
                             ]
                         ]
-                    , viewSearchResultsGroupedLinkList model documents3
+                    , viewSearchResultsGroupedLinkList model searchModel documents3
                     ]
             )
             (groupDocumentsByField keys field3 documents2
@@ -10772,8 +10789,8 @@ viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2 =
         )
 
 
-viewSearchResultsGroupedLinkList : Model -> List Document -> Html Msg
-viewSearchResultsGroupedLinkList model documents =
+viewSearchResultsGroupedLinkList : Model -> SearchModel -> List Document -> Html Msg
+viewSearchResultsGroupedLinkList model searchModel documents =
     let
         sortedDocuments : List Document
         sortedDocuments =
@@ -10823,7 +10840,7 @@ viewSearchResultsGroupedLinkList model documents =
             else
                 Html.text ""
     in
-    case model.groupedLinkLayout of
+    case searchModel.groupedLinkLayout of
         Horizontal ->
             Html.div
                 [ HA.class "row"
