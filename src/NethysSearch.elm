@@ -10615,6 +10615,15 @@ viewSearchResultsGrouped model searchModel remaining =
                     |> sortGroupedList model "" counts
             )
         )
+
+    , if Maybe.Extra.isJust searchModel.tracker || searchModel.searchResultGroupAggs == Nothing then
+        Html.div
+            [ HA.class "loader"
+            ]
+            []
+
+      else
+        viewLoadMoreButtons model remaining
     ]
 
 
