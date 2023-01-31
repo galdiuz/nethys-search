@@ -65,6 +65,7 @@ type alias Model =
     , groupedDisplay : GroupedDisplay
     , groupedLinkLayout : GroupedLinkLayout
     , groupedShowPfs : Bool
+    , groupedShowRarity : Bool
     , groupedSort : GroupedSort
     , limitTableWidth : Bool
     , linkPreviewsEnabled : Bool
@@ -595,6 +596,7 @@ type Msg
     | GroupedDisplayChanged GroupedDisplay
     | GroupedLinkLayoutChanged GroupedLinkLayout
     | GroupedShowPfsIconChanged Bool
+    | GroupedShowRarityChanged Bool
     | GroupedSortChanged GroupedSort
     | HandFilterAdded String
     | HandFilterRemoved String
@@ -768,6 +770,7 @@ init flagsValue =
       , groupedDisplay = Dim
       , groupedLinkLayout = Horizontal
       , groupedShowPfs = True
+      , groupedShowRarity = True
       , groupedSort = Alphanum
       , limitTableWidth = False
       , linkPreviewsEnabled = True
@@ -1349,6 +1352,13 @@ update msg model =
             ( { model | groupedShowPfs = enabled }
             , saveToLocalStorage
                 "grouped-show-pfs"
+                (if enabled then "1" else "0")
+            )
+
+        GroupedShowRarityChanged enabled ->
+            ( { model | groupedShowRarity = enabled }
+            , saveToLocalStorage
+                "grouped-show-rarity"
                 (if enabled then "1" else "0")
             )
 
@@ -3022,6 +3032,17 @@ updateModelFromLocalStorage ( key, value ) model =
 
                 "0" ->
                     { model | groupedShowPfs = False }
+
+                _ ->
+                    model
+
+        "grouped-show-rarity" ->
+            case value of
+                "1" ->
+                    { model | groupedShowRarity = True }
+
+                "0" ->
+                    { model | groupedShowRarity = False }
 
                 _ ->
                     model
@@ -9333,11 +9354,21 @@ viewResultDisplayGrouped model searchModel =
             , text = "Vertical with summary"
             }
         ]
-        , viewCheckbox
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        ]
+        [ viewCheckbox
             { checked = model.groupedShowPfs
             , onCheck = GroupedShowPfsIconChanged
             , text = "Show PFS icons"
             }
+        , viewCheckbox
+            { checked = model.groupedShowRarity
+            , onCheck = GroupedShowRarityChanged
+            , text = "Show Rarity"
+            }
+        ]
     ]
 
 
@@ -10748,6 +10779,40 @@ viewSearchResultsGroupedLinkList model documents =
                     (linkEventAttributes (getUrl model document))
                 )
                 [ Html.text document.name ]
+
+        rarityBadge : Document -> Html msg
+        rarityBadge document =
+            if model.groupedShowRarity then
+                case Maybe.map String.toLower document.rarity of
+                    Just "uncommon" ->
+                        Html.div
+                            [ HA.class "trait"
+                            , HA.class "trait-uncommon"
+                            , HA.class "traitbadge"
+                            ]
+                            [ Html.text "U" ]
+
+                    Just "rare" ->
+                        Html.div
+                            [ HA.class "trait"
+                            , HA.class "trait-rare"
+                            , HA.class "traitbadge"
+                            ]
+                            [ Html.text "R" ]
+
+                    Just "unique" ->
+                        Html.div
+                            [ HA.class "trait"
+                            , HA.class "trait-unique"
+                            , HA.class "traitbadge"
+                            ]
+                            [ Html.text "Q" ]
+
+                    _ ->
+                        Html.text ""
+
+            else
+                Html.text ""
     in
     case model.groupedLinkLayout of
         Horizontal ->
@@ -10757,19 +10822,20 @@ viewSearchResultsGroupedLinkList model documents =
                 ]
                 (List.map
                     (\document ->
-                        if model.groupedShowPfs then
-                            Html.div
-                                [ HA.class "row"
-                                , HA.class "gap-tiny"
-                                ]
-                                [ document.pfs
+                        Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            ]
+                            [ if model.groupedShowPfs then
+                                document.pfs
                                     |> Maybe.withDefault ""
                                     |> viewPfsIcon 0
-                                , link document
-                                ]
 
-                        else
-                            link document
+                              else
+                                  Html.text ""
+                            , link document
+                            , rarityBadge document
+                            ]
                     )
                     sortedDocuments
                 )
@@ -10781,23 +10847,19 @@ viewSearchResultsGroupedLinkList model documents =
                 ]
                 (List.map
                     (\document ->
-                        if model.groupedShowPfs then
-                            Html.div
-                                [ HA.class "row"
-                                , HA.class "gap-tiny"
-                                ]
-                                [ document.pfs
+                        Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            ]
+                            [ if model.groupedShowPfs then
+                                document.pfs
                                     |> Maybe.withDefault ""
                                     |> viewPfsIcon 0
-                                , Html.a
-                                    [ HA.href (getUrl model document) ]
-                                    [ Html.text document.name ]
-                                ]
-
-                        else
-                            Html.a
-                                [ HA.href (getUrl model document) ]
-                                [ Html.text document.name ]
+                              else
+                                Html.text ""
+                            , link document
+                            , rarityBadge document
+                            ]
                     )
                     sortedDocuments
                 )
@@ -10817,15 +10879,15 @@ viewSearchResultsGroupedLinkList model documents =
                                         |> Maybe.withDefault ""
                                         |> viewPfsIcon 0
                                     , Html.text " "
-                                    , Html.a
-                                        [ HA.href (getUrl model document) ]
-                                        [ Html.text document.name ]
+                                    , link document
+                                    , Html.text " "
+                                    , rarityBadge document
                                     ]
 
                                 else
-                                    [ Html.a
-                                        [ HA.href (getUrl model document) ]
-                                        [ Html.text document.name ]
+                                    [ link document
+                                    , Html.text " "
+                                    , rarityBadge document
                                     ]
 
                                 )
@@ -12788,6 +12850,7 @@ css =
     }
 
     .trait {
+        align-self: flex-start;
         background-color: var(--color-trait-bg);
         border-color: var(--color-trait-border);
         border-style: double;
@@ -12797,6 +12860,13 @@ css =
         font-size: 16px;
         font-variant: var(--element-font-variant);
         font-weight: 700;
+    }
+
+    .traitbadge {
+        font-size: 8px;
+        border-width: 1px;
+        padding: 1px 2px;
+        vertical-align: super;
     }
 
     .trait-alignment {
