@@ -1262,7 +1262,22 @@ update msg model =
                         , tracker = Nothing
                     }
                 )
-                model
+                { model
+                    | documents =
+                        Dict.union
+                            model.documents
+                            (result
+                                |> Result.map .documents
+                                |> Result.map
+                                    (List.map
+                                        (\document ->
+                                            ( document.id, Ok document )
+                                        )
+                                    )
+                                |> Result.withDefault []
+                                |> Dict.fromList
+                            )
+                }
             , case ( containsTeleport, firstResultUrl ) of
                 ( True, Just url ) ->
                     navigation_loadUrl url
