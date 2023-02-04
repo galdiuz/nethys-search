@@ -217,6 +217,11 @@ pageSizes =
     [ 20, 50, 100, 250, 1000 ]
 
 
+allPageWidths : List Int
+allPageWidths =
+    [ 600, 900, 1200, 1600, 2000, 2500 ]
+
+
 predefinedColumnConfigurations : List { columns : List String, label : String }
 predefinedColumnConfigurations =
     [ { columns = [ "hp", "size", "speed", "ability_boost", "ability_flaw", "language", "vision", "rarity", "pfs" ]

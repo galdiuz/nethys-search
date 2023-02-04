@@ -75,6 +75,7 @@ type alias Model =
     , pageDefaultDisplays : Dict String (Dict String String)
     , pageId : String
     , pageSize : Int
+    , pageWidth : Int
     , previewLink : Maybe { documentId : String, elementPosition : Position, fragment : Maybe String }
     , resultBaseUrl : String
     , savedColumnConfigurations : Dict String (List String)
@@ -616,6 +617,7 @@ type Msg
     | NoOp
     | OpenInNewTabChanged Bool
     | PageSizeChanged Int
+    | PageWidthChanged Int
     | PfsFilterAdded String
     | PfsFilterRemoved String
     | QueryChanged String
@@ -781,6 +783,7 @@ init flagsValue =
       , pageDefaultDisplays = Dict.empty
       , pageId = flags.pageId
       , pageSize = 50
+      , pageWidth = 0
       , previewLink = Nothing
       , resultBaseUrl =
             if String.endsWith "/" flags.resultBaseUrl then
@@ -1617,6 +1620,13 @@ update msg model =
                 (String.fromInt size)
             )
                 |> searchWithCurrentQuery LoadNewForce
+
+        PageWidthChanged width ->
+            ( { model | pageWidth = width }
+            , saveToLocalStorage
+                "page-width"
+                (String.fromInt width)
+            )
 
         PfsFilterAdded pfs ->
             ( model
@@ -3102,6 +3112,18 @@ updateModelFromLocalStorage ( key, value ) model =
                 Just size ->
                     if List.member size Data.pageSizes then
                         { model | pageSize = size }
+
+                    else
+                        model
+
+                Nothing ->
+                    model
+
+        "page-width" ->
+            case String.toInt value of
+                Just width ->
+                    if List.member width Data.allPageWidths || width == 0 then
+                        { model | pageWidth = width }
 
                     else
                         model
@@ -5664,7 +5686,11 @@ view model =
         []
         [ Html.node "style"
             []
-            [ Html.text css
+            [ Html.text
+                (css
+                    { pageWidth = model.pageWidth
+                    }
+                )
             , case model.theme of
                 Blackbird ->
                     Html.text cssBlackbird
@@ -6180,7 +6206,7 @@ viewOptionBox model searchModel filter =
             [ HA.class "row"
             , HA.style "justify-content" "space-between"
             ]
-            [ Html.h3
+            [ Html.h2
                 []
                 [ Html.text filter.label
                 ]
@@ -6305,6 +6331,10 @@ allOptions =
     , { id = "page-size"
       , label = "Result amount"
       , view = viewResultPageSize
+      }
+    , { id = "settings"
+      , label = "General settings"
+      , view = viewGeneralSettings
       }
     ]
 
@@ -8850,6 +8880,51 @@ viewResultPageSize model searchModel =
     ]
 
 
+viewGeneralSettings : Model -> SearchModel -> List (Html Msg)
+viewGeneralSettings model searchModel =
+    [ viewCheckbox
+        { checked = model.openInNewTab
+        , onCheck = OpenInNewTabChanged
+        , text = "Links open in new tab"
+        }
+    , Html.h4
+        []
+        [ Html.text "Max width" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        ]
+        (List.append
+            (List.map
+                (\width ->
+                    viewRadioButton
+                        { checked = model.pageWidth == width
+                        , enabled = True
+                        , name = "page-width"
+                        , onInput = PageWidthChanged width
+                        , text = String.fromInt width ++ "px"
+                        }
+                )
+                Data.allPageWidths
+            )
+            [ viewRadioButton
+                { checked = model.pageWidth == 0
+                , enabled = True
+                , name = "page-width"
+                , onInput = PageWidthChanged 0
+                , text = "Unlimited"
+                }
+            ]
+        )
+
+    , viewCheckbox
+        { checked = not model.limitTableWidth
+        , onCheck = not >> LimitTableWidthChanged
+        , text = "Tables always use full width"
+        }
+    ]
+
+
 viewResultDisplay : Model -> SearchModel -> List (Html Msg)
 viewResultDisplay model searchModel =
     let
@@ -8913,14 +8988,6 @@ viewResultDisplay model searchModel =
     , Html.div
         []
         [ Html.text ("Current page ID: " ++ model.pageId) ]
-    , Html.h4
-        []
-        [ Html.text "General result settings" ]
-    , viewCheckbox
-        { checked = model.openInNewTab
-        , onCheck = OpenInNewTabChanged
-        , text = "Links open in new tab"
-        }
     , Html.div
         [ HA.class "column"
         , HA.class "gap-small"
@@ -8971,11 +9038,6 @@ viewResultDisplayTable model searchModel =
     [ Html.h4
         []
         [ Html.text "Table configuration" ]
-    , viewCheckbox
-        { checked = model.limitTableWidth
-        , onCheck = LimitTableWidthChanged
-        , text = "Limit table width"
-        }
     , Html.div
         [ HA.class "row"
         , HA.class "gap-small"
@@ -12373,8 +12435,8 @@ parentOffsetDecoder =
         }
 
 
-css : String
-css =
+css : { pageWidth : Int } -> String
+css args =
     """
     @font-face {
         font-family: "Pathfinder-Icons";
@@ -12745,7 +12807,16 @@ css =
     }
 
     .limit-width {
-        max-width: 1000px;
+        max-width: """ ++
+            (case args.pageWidth of
+                0 ->
+                    "100%"
+
+                width ->
+                    String.fromInt width ++ "px"
+
+            ) ++ """;
+        transition: max-width ease-in-out 0.2s;
     }
 
     .margin-top-not-first:not(:first-child):not(h1 + h2):not(h2 + h3):not(h3 + h4):not(ul + h2):not(ul + h3) {
