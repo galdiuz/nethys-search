@@ -51,6 +51,26 @@
         app.ports.navigation_loadUrl.subscribe(url => {
             location.href = url;
         });
+
+        const resizeObserver = new ResizeObserver(entries => {
+            app.ports.document_receiveBodySize.send({
+                width: Math.round(entries[0].contentRect.width),
+                height: Math.round(entries[0].contentRect.height),
+            });
+        });
+
+        resizeObserver.observe(document.body);
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                let rect = document.body.getBoundingClientRect();
+
+                app.ports.document_receiveBodySize.send({
+                    width: Math.round(rect.width),
+                    height: Math.round(rect.height),
+                });
+            }
+        });
     </script>
 </body>
 </html>

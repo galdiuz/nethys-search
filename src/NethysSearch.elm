@@ -3088,6 +3088,17 @@ updateModelFromLocalStorage ( key, value ) model =
                 _ ->
                     model
 
+        "link-previews-enabled" ->
+            case value of
+                "1" ->
+                    { model | linkPreviewsEnabled = True }
+
+                "0" ->
+                    { model | linkPreviewsEnabled = False }
+
+                _ ->
+                    model
+
         "open-in-new-tab" ->
             case value of
                 "1" ->
