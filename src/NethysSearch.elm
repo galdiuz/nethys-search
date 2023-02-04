@@ -89,6 +89,7 @@ type alias Model =
     , sourcesAggregation : Maybe (Result Http.Error (List Source))
     , theme : Theme
     , url : Url
+    , windowSize : Size
     }
 
 
@@ -420,6 +421,8 @@ type alias Flags =
     , resultBaseUrl : String
     , showFilters : List String
     , showHeader : Bool
+    , windowHeight : Int
+    , windowWidth : Int
     }
 
 
@@ -438,6 +441,8 @@ defaultFlags =
     , resultBaseUrl = "https://2e.aonprd.com/"
     , showFilters = [ "numbers", "pfs", "rarities", "traits", "types" ]
     , showHeader = True
+    , windowHeight = 0
+    , windowWidth = 0
     }
 
 
@@ -719,6 +724,7 @@ type Msg
     | WeaponGroupFilterRemoved String
     | WeaponTypeFilterAdded String
     | WeaponTypeFilterRemoved String
+    | WindowResized Int Int
 
 
 type alias Position =
@@ -808,6 +814,7 @@ init flagsValue =
       , sourcesAggregation = Nothing
       , theme = Dark
       , url = url
+      , windowSize = { width = flags.windowWidth, height = flags.windowHeight }
       }
         |> \model ->
             List.foldl
@@ -845,6 +852,7 @@ subscriptions model =
         , document_receiveBodySize GotBodySize
         , localStorage_receive LocalStorageValueReceived
         , navigation_urlChanged UrlChanged
+        , Browser.Events.onResize WindowResized
         ]
 
 
@@ -2782,6 +2790,11 @@ update msg model =
                 )
                 model
                 |> updateUrlWithSearchParams
+            )
+
+        WindowResized width height ->
+            ( model
+            , Cmd.none
             )
 
 
@@ -5043,6 +5056,8 @@ flagsDecoder =
     Field.attempt "pageId" Decode.string <| \pageId ->
     Field.attempt "removeFilters" (Decode.list Decode.string) <| \removeFilters ->
     Field.attempt "showFilters" (Decode.list Decode.string) <| \showFilters ->
+    Field.attempt "windowHeight" Decode.int <| \windowHeight ->
+    Field.attempt "windowWidth" Decode.int <| \windowWidth ->
     Decode.succeed
         { autofocus = Maybe.withDefault defaultFlags.autofocus autofocus
         , currentUrl = currentUrl
@@ -5060,6 +5075,8 @@ flagsDecoder =
         , resultBaseUrl = Maybe.withDefault defaultFlags.resultBaseUrl resultBaseUrl
         , showFilters = Maybe.withDefault defaultFlags.showFilters showFilters
         , showHeader = Maybe.withDefault defaultFlags.showHeader showHeader
+        , windowHeight = Maybe.withDefault defaultFlags.windowHeight windowHeight
+        , windowWidth = Maybe.withDefault defaultFlags.windowWidth windowWidth
         }
 
 
@@ -6010,7 +6027,7 @@ viewLinkPreview model =
                                     ++ "px"
                                 )
 
-                        , if top + 620 < model.bodySize.height then
+                        , if top + 620 < model.bodySize.height || 620 + bottom > model.windowSize.height then
                             HA.style "top" (String.fromInt top ++ "px")
 
                           else
