@@ -6137,7 +6137,7 @@ viewFilters model searchModel =
 
         visibleFilters : List FilterBox
         visibleFilters =
-            if searchModel.showAllFilters || List.length availableFilters <= 6 then
+            if searchModel.showAllFilters || List.length availableFilters <= 8 then
                 availableFilters
 
              else
