@@ -3466,7 +3466,7 @@ urlToDocumentId url =
             withId "methodology"
 
         "/MonsterAbilities.aspx" ->
-            withId "monster-ability"
+            withId "creature-ability"
 
         "/Muses.aspx" ->
             withId "muse"
@@ -3505,7 +3505,12 @@ urlToDocumentId url =
             withId "siege-weapon"
 
         "/Skills.aspx" ->
-            withId "skill"
+            case Dict.get "General" queryParams of
+                Just "true" ->
+                    withId "skill-general-action"
+
+                _ ->
+                    withId "skill"
 
         "/Sources.aspx" ->
             withId "source"
