@@ -2793,7 +2793,7 @@ update msg model =
             )
 
         WindowResized width height ->
-            ( model
+            ( { model | windowSize = { width = width, height = height } }
             , Cmd.none
             )
 
