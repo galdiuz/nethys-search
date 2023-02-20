@@ -12428,8 +12428,8 @@ parentOffsetDecoder =
     Field.require "offsetLeft" Decode.int <| \x ->
     Field.require "offsetTop" Decode.int <| \y ->
     Field.require "id" Decode.string <| \id ->
-    Field.attemptAt [ "parentElement", "scrollLeft" ] Decode.int <| \parentScrollX ->
-    Field.attemptAt [ "parentElement", "scrollTop" ] Decode.int <| \parentScrollY ->
+    Field.attemptAt [ "parentElement", "scrollLeft" ] numericDecoder <| \parentScrollX ->
+    Field.attemptAt [ "parentElement", "scrollTop" ] numericDecoder <| \parentScrollY ->
     Field.attemptAt [ "parentElement", "tagName" ] Decode.string <| \parentTagName ->
     Field.attempt "offsetParent" (Decode.lazy (\_ -> parentOffsetDecoder)) <| \parent ->
     Decode.succeed
@@ -12466,6 +12466,15 @@ parentOffsetDecoder =
                     Maybe.withDefault 0 parentScrollY
                   )
         }
+
+
+numericDecoder : Decode.Decoder Int
+numericDecoder =
+    Decode.oneOf
+        [ Decode.int
+        , Decode.float
+            |> Decode.map floor
+        ]
 
 
 css : { pageWidth : Int } -> String
