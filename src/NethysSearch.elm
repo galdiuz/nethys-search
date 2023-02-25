@@ -3301,262 +3301,264 @@ urlToDocumentId url =
     let
         queryParams : Dict String String
         queryParams =
-            Maybe.map queryToParamsDict url.query
+            url.query
+                |> Maybe.map String.toLower
+                |> Maybe.map queryToParamsDict
                 |> Maybe.withDefault Dict.empty
 
         withId type_ =
-            case Dict.get "ID" queryParams of
+            case Dict.get "id" queryParams of
                 Just id ->
                     Just (type_ ++ "-" ++ id)
 
                 Nothing ->
                     Nothing
     in
-    case url.path of
-        "/Actions.aspx" ->
+    case String.toLower url.path of
+        "/actions.aspx" ->
             withId "action"
 
-        "/Ancestries.aspx" ->
+        "/ancestries.aspx" ->
             withId "ancestry"
 
-        "/AnimalCompanions.aspx" ->
-            if Dict.get "Advanced" queryParams == Just "true" then
+        "/animalcompanions.aspx" ->
+            if Dict.get "ddvanced" queryParams == Just "true" then
                 withId "animal-companion-advanced"
 
-            else if Dict.get "Specialized" queryParams == Just "true" then
+            else if Dict.get "specialized" queryParams == Just "true" then
                 withId "animal-companion-specialization"
 
-            else if Dict.get "Unique" queryParams == Just "true" then
+            else if Dict.get "unique" queryParams == Just "true" then
                 withId "animal-companion-unique"
 
             else
                 withId "animal-companion"
 
-        "/ArcaneSchools.aspx" ->
+        "/arcaneschools.aspx" ->
             withId "arcane-school"
 
-        "/ArcaneThesis.aspx" ->
+        "/arcanethesis.aspx" ->
             withId "arcane-thesis"
 
-        "/Archetypes.aspx" ->
+        "/archetypes.aspx" ->
             withId "archetype"
 
-        "/Armor.aspx" ->
+        "/armor.aspx" ->
             withId "armor"
 
-        "/ArmorGroups.aspx" ->
+        "/armorgroups.aspx" ->
             withId "armor-specialization"
 
-        "/Articles.aspx" ->
+        "/articles.aspx" ->
             withId "article"
 
-        "/Backgrounds.aspx" ->
+        "/backgrounds.aspx" ->
             withId "background"
 
-        "/Bloodlines.aspx" ->
+        "/bloodlines.aspx" ->
             withId "bloodline"
 
-        "/CampMeals.aspx" ->
+        "/campmeals.aspx" ->
             withId "campsite-meal"
 
-        "/Causes.aspx" ->
+        "/causes.aspx" ->
             withId "cause"
 
-        "/Classes.aspx" ->
+        "/classes.aspx" ->
             withId "class"
 
-        "/ClassKits.aspx" ->
+        "/classkits.aspx" ->
             withId "class-kit"
 
-        "/ClassSamples.aspx" ->
+        "/classsamples.aspx" ->
             withId "class-sample"
 
-        "/Conditions.aspx" ->
+        "/conditions.aspx" ->
             withId "condition"
 
-        "/ConsciousMinds.aspx" ->
+        "/consciousminds.aspx" ->
             withId "conscious-mind"
 
-        "/Monsters.aspx" ->
+        "/monsters.aspx" ->
             withId "creature"
 
-        "/NPCs.aspx" ->
+        "/npcs.aspx" ->
             withId "creature"
 
-        "/MonsterFamilies.aspx" ->
+        "/monsterfamilies.aspx" ->
             withId "creature-family"
 
-        "/Curses.aspx" ->
+        "/curses.aspx" ->
             withId "curse"
 
-        "/Deities.aspx" ->
+        "/deities.aspx" ->
             withId "deity"
 
-        "/DeityCategories.aspx" ->
+        "/deitycategories.aspx" ->
             withId "deity-category"
 
-        "/DeviantFeats.aspx" ->
+        "/deviantfeats.aspx" ->
             withId "deviant-ability-classification"
 
-        "/Diseases.aspx" ->
+        "/diseases.aspx" ->
             withId "disease"
 
-        "/Doctrines.aspx" ->
+        "/doctrines.aspx" ->
             withId "doctrine"
 
-        "/Domains.aspx" ->
+        "/domains.aspx" ->
             withId "domain"
 
-        "/DruidicOrders.aspx" ->
+        "/druidicorders.aspx" ->
             withId "druidic-order"
 
-        "/Eidolons.aspx" ->
+        "/eidolons.aspx" ->
             withId "eidolon"
 
-        "/Equipment.aspx" ->
+        "/equipment.aspx" ->
             withId "equipment"
 
-        "/Familiars.aspx" ->
-            if Dict.get "Specific" queryParams == Just "true" then
+        "/familiars.aspx" ->
+            if Dict.get "specific" queryParams == Just "true" then
                 withId "familiar-specific"
 
             else
                 withId "familiar-ability"
 
-        "/Feats.aspx" ->
+        "/feats.aspx" ->
             withId "feat"
 
-        "/Hazards.aspx" ->
+        "/hazards.aspx" ->
             withId "hazard"
 
-        "/HellknightOrders.aspx" ->
+        "/hellknightorders.aspx" ->
             withId "hellknight-order"
 
-        "/Heritages.aspx" ->
+        "/heritages.aspx" ->
             withId "heritage"
 
-        "/HuntersEdge.aspx" ->
+        "/huntersedge.aspx" ->
             withId "hunters-edge"
 
-        "/HybridStudies.aspx" ->
+        "/hybridstudies.aspx" ->
             withId "hybrid-study"
 
-        "/Implements.aspx" ->
+        "/implements.aspx" ->
             withId "implement"
 
-        "/Innovations.aspx" ->
+        "/innovations.aspx" ->
             withId "innovation"
 
-        "/Instincts.aspx" ->
+        "/instincts.aspx" ->
             withId "instinct"
 
-        "/KMEvents.aspx" ->
+        "/kmevents.aspx" ->
             withId "kingdom-event"
 
-        "/KMStructures.aspx" ->
+        "/kmstructures.aspx" ->
             withId "kingdom-structure"
 
-        "/Languages.aspx" ->
+        "/languages.aspx" ->
             withId "language"
 
-        "/Lessons.aspx" ->
+        "/lessons.aspx" ->
             withId "lesson"
 
-        "/Methodologies.aspx" ->
+        "/methodologies.aspx" ->
             withId "methodology"
 
-        "/MonsterAbilities.aspx" ->
+        "/monsterabilities.aspx" ->
             withId "creature-ability"
 
-        "/Muses.aspx" ->
+        "/muses.aspx" ->
             withId "muse"
 
-        "/Mysteries.aspx" ->
+        "/mysteries.aspx" ->
             withId "mystery"
 
-        "/NPCThemeTemplates.aspx" ->
+        "/npcthemetemplates.aspx" ->
             withId "npc-theme-template"
 
-        "/Patrons.aspx" ->
+        "/patrons.aspx" ->
             withId "patron"
 
-        "/Planes.aspx" ->
+        "/planes.aspx" ->
             withId "plane"
 
-        "/Rackets.aspx" ->
+        "/rackets.aspx" ->
             withId "racket"
 
-        "/Relics.aspx" ->
+        "/relics.aspx" ->
             withId "relic"
 
-        "/ResearchFields.aspx" ->
+        "/researchfields.aspx" ->
             withId "research-field"
 
-        "/Rituals.aspx" ->
+        "/rituals.aspx" ->
             withId "ritual"
 
-        "/Rules.aspx" ->
+        "/rules.aspx" ->
             withId "rules"
 
-        "/Shields.aspx" ->
+        "/shields.aspx" ->
             withId "shield"
 
-        "/SiegeWeapons.aspx" ->
+        "/siegeweapons.aspx" ->
             withId "siege-weapon"
 
-        "/Skills.aspx" ->
-            case Dict.get "General" queryParams of
+        "/skills.aspx" ->
+            case Dict.get "general" queryParams of
                 Just "true" ->
                     withId "skill-general-action"
 
                 _ ->
                     withId "skill"
 
-        "/Sources.aspx" ->
+        "/sources.aspx" ->
             withId "source"
 
-        "/Spells.aspx" ->
+        "/spells.aspx" ->
             withId "spell"
 
-        "/Styles.aspx" ->
+        "/styles.aspx" ->
             withId "style"
 
-        "/SubconsciousMinds.aspx" ->
+        "/subconsciousminds.aspx" ->
             withId "subconscious-mind"
 
-        "/Tenets.aspx" ->
+        "/tenets.aspx" ->
             withId "tenet"
 
-        "/SpellLists.aspx" ->
-            case Dict.get "Tradition" queryParams of
+        "/spelllists.aspx" ->
+            case Dict.get "tradition" queryParams of
                 Just id ->
                     Just ("tradition-" ++ id)
 
                 Nothing ->
                     Nothing
 
-        "/Traits.aspx" ->
+        "/traits.aspx" ->
             withId "trait"
 
-        "/Vehicles.aspx" ->
+        "/vehicles.aspx" ->
             withId "vehicle"
 
-        "/KMWarArmies.aspx" ->
+        "/kmwararmies.aspx" ->
             withId "warfare-army"
 
-        "/KMWarTactics.aspx" ->
+        "/kmwartactics.aspx" ->
             withId "warfare-tactic"
 
-        "/Ways.aspx" ->
+        "/ways.aspx" ->
             withId "way"
 
-        "/Weapons.aspx" ->
+        "/weapons.aspx" ->
             withId "weapon"
 
-        "/WeaponGroups.aspx" ->
+        "/weapongroups.aspx" ->
             withId "weapon-group"
 
-        "/WeatherHazards.aspx" ->
+        "/weatherhazards.aspx" ->
             withId "weather-hazard"
 
         _ ->
