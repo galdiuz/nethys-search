@@ -6034,7 +6034,10 @@ viewLinkPreview model =
                                     ++ "px"
                                 )
 
-                        , if top + 620 < model.bodySize.height || 620 + bottom > model.windowSize.height then
+                        , if top + 620 < model.bodySize.height
+                            || top + 620 < model.windowSize.height
+                            || 620 + bottom > model.windowSize.height
+                          then
                             HA.style "top" (String.fromInt top ++ "px")
 
                           else
