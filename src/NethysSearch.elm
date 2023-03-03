@@ -3500,6 +3500,9 @@ urlToDocumentId url =
         "/rules.aspx" ->
             withId "rules"
 
+        "/setrelics.aspx" ->
+            withId "set-relic"
+
         "/shields.aspx" ->
             withId "shield"
 
