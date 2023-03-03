@@ -11881,7 +11881,7 @@ markdownHtmlRenderer model titleLevel overrideRight =
             (\maybeGap children ->
                 [ Html.div
                     [ HA.class "row"
-                    , HA.class "responsive"
+                    , HA.class "wrap"
                     , HAE.attributeMaybe
                         (\gap -> HA.class ("gap-" ++ gap))
                         maybeGap
@@ -11904,16 +11904,17 @@ markdownHtmlRenderer model titleLevel overrideRight =
             )
             |> Markdown.Html.withOptionalAttribute "gap"
         , Markdown.Html.tag "column"
-            (\gap children ->
+            (\gap flex children ->
                 [ Html.div
                     [ HA.class "column"
                     , HA.class ("gap-" ++ gap)
-                    , HA.style "flex" "1"
+                    , HAE.attributeMaybe (HA.style "flex") flex
                     ]
                     (List.concat children)
                 ]
             )
             |> Markdown.Html.withAttribute "gap"
+            |> Markdown.Html.withOptionalAttribute "flex"
         , Markdown.Html.tag "image"
             (\src _ ->
                 [ Html.a
