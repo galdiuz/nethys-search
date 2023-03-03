@@ -12529,6 +12529,7 @@ css args =
         background-color: transparent;
         color: var(--color-text);
         font-size: var(--font-normal);
+        padding: 1px 6px;
     }
 
     button.active {
