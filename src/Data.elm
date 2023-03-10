@@ -30,6 +30,27 @@ alignments =
     ]
 
 
+armorCategories : List String
+armorCategories =
+    [ "unarmored"
+    , "light"
+    , "medium"
+    , "heavy"
+    ]
+
+
+armorGroups : List String
+armorGroups =
+    [ "chain"
+    , "cloth"
+    , "composite"
+    , "leather"
+    , "plate"
+    , "skeletal"
+    , "wood"
+    ]
+
+
 damageTypes : List String
 damageTypes =
     [ "acid"

@@ -102,6 +102,8 @@ type alias SearchModel =
     , filteredAbilities : Dict String Bool
     , filteredActions : Dict String Bool
     , filteredAlignments : Dict String Bool
+    , filteredArmorCategories : Dict String Bool
+    , filteredArmorGroups : Dict String Bool
     , filteredComponents : Dict String Bool
     , filteredCreatureFamilies : Dict String Bool
     , filteredFromValues : Dict String String
@@ -184,6 +186,8 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , filteredAbilities = Dict.empty
     , filteredActions = Dict.empty
     , filteredAlignments = Dict.empty
+    , filteredArmorCategories = Dict.empty
+    , filteredArmorGroups = Dict.empty
     , filteredComponents = Dict.empty
     , filteredCreatureFamilies = Dict.empty
     , filteredFromValues = Dict.empty
@@ -579,6 +583,10 @@ type Msg
     | ActionsFilterRemoved String
     | AlignmentFilterAdded String
     | AlignmentFilterRemoved String
+    | ArmorCategoryFilterAdded String
+    | ArmorCategoryFilterRemoved String
+    | ArmorGroupFilterAdded String
+    | ArmorGroupFilterRemoved String
     | AutoQueryTypeChanged Bool
     | ColumnResistanceChanged String
     | ColumnSpeedChanged String
@@ -646,6 +654,8 @@ type Msg
     | RemoveAllAbilityFiltersPressed
     | RemoveAllActionsFiltersPressed
     | RemoveAllAlignmentFiltersPressed
+    | RemoveAllArmorCategoryFiltersPressed
+    | RemoveAllArmorGroupFiltersPressed
     | RemoveAllComponentFiltersPressed
     | RemoveAllCreatureFamilyFiltersPressed
     | RemoveAllHandFiltersPressed
@@ -943,6 +953,46 @@ update msg model =
             , updateCurrentSearchModel
                 (\searchModel ->
                     { searchModel | filteredAlignments = Dict.remove alignment searchModel.filteredAlignments }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        ArmorCategoryFilterAdded category ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredArmorCategories = toggleBoolDict category searchModel.filteredArmorCategories }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        ArmorCategoryFilterRemoved category ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredArmorCategories = Dict.remove category searchModel.filteredArmorCategories }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        ArmorGroupFilterAdded group ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredArmorGroups = toggleBoolDict group searchModel.filteredArmorGroups }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        ArmorGroupFilterRemoved group ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredArmorGroups = Dict.remove group searchModel.filteredArmorGroups }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -1793,6 +1843,26 @@ update msg model =
             , updateCurrentSearchModel
                 (\searchModel ->
                     { searchModel | filteredAlignments = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        RemoveAllArmorCategoryFiltersPressed ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredArmorCategories = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        RemoveAllArmorGroupFiltersPressed ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredArmorGroups = Dict.empty }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -3396,7 +3466,7 @@ urlToDocumentId url =
             withId "armor"
 
         "/armorgroups.aspx" ->
-            withId "armor-specialization"
+            withId "armor-group"
 
         "/articles.aspx" ->
             withId "article"
@@ -3707,6 +3777,22 @@ updateUrlWithSearchParams ({ searchModel, url } as model) =
               )
             , ( "exclude-alignments"
               , boolDictExcluded searchModel.filteredAlignments
+                    |> String.join ";"
+              )
+            , ( "include-armor-categories"
+              , boolDictIncluded searchModel.filteredArmorCategories
+                    |> String.join ";"
+              )
+            , ( "exclude-armor-categories"
+              , boolDictExcluded searchModel.filteredArmorCategories
+                    |> String.join ";"
+              )
+            , ( "include-armor-groups"
+              , boolDictIncluded searchModel.filteredArmorGroups
+                    |> String.join ";"
+              )
+            , ( "exclude-armor-groups"
+              , boolDictExcluded searchModel.filteredArmorGroups
                     |> String.join ";"
               )
             , ( "include-components"
@@ -4651,6 +4737,8 @@ updateSearchModelFromParams params model searchModel =
         , filteredAbilities = getBoolDictFromParams params ";" "abilities"
         , filteredActions = getBoolDictFromParams params ";" "actions"
         , filteredAlignments = getBoolDictFromParams params ";" "alignments"
+        , filteredArmorCategories = getBoolDictFromParams params ";" "armor-categories"
+        , filteredArmorGroups = getBoolDictFromParams params ";" "armor-groups"
         , filteredComponents = getBoolDictFromParams params ";" "components"
         , filteredCreatureFamilies = getBoolDictFromParams params ";" "creature-families"
         , filteredHands = getBoolDictFromParams params ";" "hands"
@@ -6394,6 +6482,11 @@ allFilters =
       , view = viewFilterAlignments
       , visibleIf = \_ -> True
       }
+    , { id = "armor"
+      , label = "Armor"
+      , view = viewFilterArmor
+      , visibleIf = getAggregation .types >> List.member "armor"
+      }
     , { id = "components"
       , label = "Casting components"
       , view = viewFilterComponents
@@ -6485,7 +6578,7 @@ allFilters =
     , { id = "weapons"
       , label = "Weapons"
       , view = viewFilterWeapons
-      , visibleIf = \_ -> True
+      , visibleIf = getAggregation .types >> List.member "weapon"
       }
     ]
 
@@ -6540,6 +6633,8 @@ filterFields searchModel =
     [ ( "ability", searchModel.filteredAbilities, False )
     , ( "actions.keyword", searchModel.filteredActions, False )
     , ( "alignment", searchModel.filteredAlignments, False )
+    , ( "armor_category", searchModel.filteredArmorCategories, False )
+    , ( "armor_group", searchModel.filteredArmorGroups, False )
     , ( "component", searchModel.filteredComponents, searchModel.filterComponentsOperator )
     , ( "creature_family", searchModel.filteredCreatureFamilies, False )
     , ( "hands.keyword", searchModel.filteredHands, False )
@@ -7206,6 +7301,66 @@ viewFilterAlignments model searchModel =
                     ]
             )
             Data.alignments
+        )
+    ]
+
+
+viewFilterArmor : Model -> SearchModel -> List (Html Msg)
+viewFilterArmor model searchModel =
+    [ Html.h4
+        []
+        [ Html.text "Armor categories" ]
+    , Html.button
+        [ HA.style "align-self" "flex-start"
+        , HA.style "justify-self" "flex-start"
+        , HE.onClick RemoveAllArmorCategoryFiltersPressed
+        ]
+        [ Html.text "Reset selection" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (List.map
+            (\category ->
+                Html.button
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HE.onClick (ArmorCategoryFilterAdded category)
+                    ]
+                    [ Html.text (toTitleCase category)
+                    , viewFilterIcon (Dict.get category searchModel.filteredArmorCategories)
+                    ]
+            )
+            Data.armorCategories
+        )
+
+    , Html.h4
+        []
+        [ Html.text "Armor groups" ]
+    , Html.button
+        [ HA.style "align-self" "flex-start"
+        , HA.style "justify-self" "flex-start"
+        , HE.onClick RemoveAllArmorGroupFiltersPressed
+        ]
+        [ Html.text "Reset selection" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (List.map
+            (\group ->
+                Html.button
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HE.onClick (ArmorGroupFilterAdded group)
+                    ]
+                    [ Html.text (toTitleCase group)
+                    , viewFilterIcon (Dict.get group searchModel.filteredArmorGroups)
+                    ]
+            )
+            Data.armorGroups
         )
     ]
 
