@@ -10778,6 +10778,11 @@ viewSearchResultGridCell model document column =
                     |> Maybe.map numberWithSign
                     |> maybeAsText
 
+            [ "strength_req" ] ->
+                document.strength
+                    |> Maybe.map String.fromInt
+                    |> maybeAsText
+
             [ "strongest_save" ] ->
                 document.strongestSaves
                     |> List.filter (\s -> not (List.member s [ "fort", "ref" ]))

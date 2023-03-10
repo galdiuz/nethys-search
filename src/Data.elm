@@ -227,7 +227,7 @@ predefinedColumnConfigurations =
     [ { columns = [ "hp", "size", "speed", "ability_boost", "ability_flaw", "language", "vision", "rarity", "pfs" ]
       , label = "Ancestries"
       }
-    , { columns = [ "armor_category", "ac", "dex_cap", "check_penalty", "speed_penalty", "strength", "bulk", "armor_group", "trait" ]
+    , { columns = [ "armor_category", "ac", "dex_cap", "check_penalty", "speed_penalty", "strength_req", "bulk", "armor_group", "trait" ]
       , label = "Armor"
       }
     , { columns = [ "pfs", "ability", "skill", "feat", "rarity", "source" ]
@@ -392,6 +392,7 @@ sortFields =
     , ( "speed_penalty", "speed_penalty.keyword", False )
     , ( "spoilers", "spoilers", False )
     , ( "strength", "strength", True )
+    , ( "strength_req", "strength", True )
     , ( "strongest_save", "strongest_save", False )
     , ( "target", "target.keyword", False )
     , ( "tradition", "tradition", False )
@@ -553,6 +554,7 @@ tableColumns =
     , "spoilers"
     , "stage"
     , "strength"
+    , "strength_req"
     , "strongest_save"
     , "summary"
     , "target"
