@@ -510,6 +510,7 @@ type alias FilterBox =
     { id : String
     , label : String
     , view : Model -> SearchModel -> List (Html Msg)
+    , visibleIf : SearchModel -> Bool
     }
 
 
@@ -6195,6 +6196,7 @@ viewFilters model searchModel =
         availableFilters =
             allFilters
                 |> List.filter (\filter -> not (List.member filter.id searchModel.removeFilters))
+                |> List.filter (\filter -> filter.visibleIf searchModel)
 
         visibleFilters : List FilterBox
         visibleFilters =
@@ -6324,86 +6326,110 @@ allFilters =
     [ { id = "numbers"
       , label = "Numbers"
       , view = viewFilterNumbers
+      , visibleIf = \_ -> True
       }
     , { id = "abilities"
       , label = "Abilities (Boosts)"
       , view = viewFilterAbilities
+      , visibleIf = \_ -> True
       }
     , { id = "actions"
       , label = "Actions / Cast time"
       , view = viewFilterActions
+      , visibleIf = moreThanOneAggregation .actions
       }
     , { id = "alignments"
       , label = "Alignments"
       , view = viewFilterAlignments
+      , visibleIf = \_ -> True
       }
     , { id = "components"
       , label = "Casting components"
       , view = viewFilterComponents
+      , visibleIf = \_ -> True
       }
     , { id = "creature-families"
       , label = "Creature families"
       , view = viewFilterCreatureFamilies
+      , visibleIf = moreThanOneAggregation .creatureFamilies
       }
     , { id = "item-categories"
       , label = "Item categories"
       , view = viewFilterItemCategories
+      , visibleIf =
+            \searchModel ->
+                (moreThanOneAggregation .itemCategories searchModel)
+                    || (moreThanOneAggregation .itemSubcategories searchModel)
       }
     , { id = "hands"
       , label = "Hands"
       , view = viewFilterHands
+      , visibleIf = moreThanOneAggregation .hands
       }
     , { id = "schools"
       , label = "Magic schools"
       , view = viewFilterMagicSchools
+      , visibleIf = \_ -> True
       }
     , { id = "pfs"
       , label = "PFS"
       , view = viewFilterPfs
+      , visibleIf = \_ -> True
       }
     , { id = "rarities"
       , label = "Rarities"
       , view = viewFilterRarities
+      , visibleIf = moreThanOneAggregation .traits
       }
     , { id = "reload"
       , label = "Reload"
       , view = viewFilterReload
+      , visibleIf = moreThanOneAggregation .reloads
       }
     , { id = "saving-throws"
       , label = "Saving throws"
       , view = viewFilterSavingThrows
+      , visibleIf = \_ -> True
       }
     , { id = "sizes"
       , label = "Sizes"
       , view = viewFilterSizes
+      , visibleIf = \_ -> True
       }
     , { id = "skills"
       , label = "Skills"
       , view = viewFilterSkills
+      , visibleIf = \_ -> True
       }
     , { id = "sources"
       , label = "Sources & Spoilers"
       , view = viewFilterSources
+      , visibleIf = \_ -> True
       }
     , { id = "strongest-saves"
       , label = "Strongest / Weakest saves"
       , view = viewFilterStrongestSaves
+      , visibleIf = \_ -> True
       }
     , { id = "traditions"
       , label = "Traditions / Spell lists"
       , view = viewFilterTraditions
+      , visibleIf = \_ -> True
       }
     , { id = "traits"
       , label = "Traits"
       , view = viewFilterTraits
+      , visibleIf = moreThanOneAggregation .traits
       }
     , { id = "types"
       , label = "Types / Categories"
       , view = viewFilterTypes
+      , visibleIf = \_ -> True
       }
     , { id = "weapons"
       , label = "Weapons"
       , view = viewFilterWeapons
+      , visibleIf = \_ -> True
       }
     ]
 
@@ -6413,24 +6439,44 @@ allOptions =
     [ { id = "query-type"
       , label = "Query type"
       , view = viewQueryType
+      , visibleIf = \_ -> True
       }
     , { id = "display"
       , label = "Result display"
       , view = viewResultDisplay
+      , visibleIf = \_ -> True
       }
     , { id = "sort"
       , label = "Sort results"
       , view = viewSortResults
+      , visibleIf = \_ -> True
       }
     , { id = "page-size"
       , label = "Result amount"
       , view = viewResultPageSize
+      , visibleIf = \_ -> True
       }
     , { id = "settings"
       , label = "General settings"
       , view = viewGeneralSettings
+      , visibleIf = \_ -> True
       }
     ]
+
+
+getAggregation : (Aggregations -> List a) -> SearchModel -> List a
+getAggregation fun searchModel =
+    searchModel.aggregations
+        |> Maybe.andThen Result.toMaybe
+        |> Maybe.map fun
+        |> Maybe.withDefault []
+
+
+moreThanOneAggregation : (Aggregations -> List a) -> SearchModel -> Bool
+moreThanOneAggregation fun searchModel =
+    getAggregation fun searchModel
+        |> List.length
+        |> (<) 1
 
 
 filterFields : SearchModel -> List ( String, Dict String Bool, Bool )
