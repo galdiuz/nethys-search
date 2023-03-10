@@ -61,6 +61,7 @@ type alias Model =
     , documents : Dict String (Result Http.Error Document)
     , elasticUrl : String
     , fixedParams : Dict String String
+    , globalAggregations : Maybe (Result Http.Error GlobalAggregations)
     , groupTraits : Bool
     , groupedDisplay : GroupedDisplay
     , groupedShowPfs : Bool
@@ -455,9 +456,13 @@ type alias Aggregations =
     , reloads : List String
     , sources : List String
     , traits : List String
-    , traitGroups : Dict String (List String)
     , types : List String
     , weaponGroups : List String
+    }
+
+
+type alias GlobalAggregations =
+    { traitGroups : Dict String (List String)
     }
 
 
@@ -583,6 +588,7 @@ type Msg
     | GotAggregationsResult (Result Http.Error Aggregations)
     | GotBodySize Size
     | GotDocuments (List String) Bool (Result Http.Error (List (Result String Document)))
+    | GotGlobalAggregationsResult (Result Http.Error GlobalAggregations)
     | GotGroupAggregationsResult (Result Http.Error SearchResult)
     | GotSearchResult (Result Http.Error SearchResult)
     | GotSourcesAggregationResult (Result Http.Error (List Source))
@@ -775,6 +781,7 @@ init flagsValue =
       , documents = Dict.empty
       , elasticUrl = flags.elasticUrl
       , fixedParams = flags.fixedParams
+      , globalAggregations = Nothing
       , groupTraits = False
       , groupedDisplay = Dim
       , groupedShowPfs = True
@@ -833,6 +840,7 @@ init flagsValue =
                     |> searchWithCurrentQuery LoadNew
                     |> updateTitle
                     |> getAggregations
+                    |> getGlobalAggregations
                     |> getSourcesAggregation
 
 
@@ -1228,6 +1236,11 @@ update msg model =
                 ]
             )
 
+        GotGlobalAggregationsResult result ->
+            ( { model | globalAggregations = Just result }
+            , Cmd.none
+            )
+
         GotGroupAggregationsResult result ->
             ( updateCurrentSearchModel
                 (\searchModel ->
@@ -1301,7 +1314,6 @@ update msg model =
             ( { model | sourcesAggregation = Just result }
             , Cmd.none
             )
-
 
         GroupField1Changed field ->
             updateCurrentSearchModel
@@ -5009,6 +5021,41 @@ buildCompositeTermsSource missing ( name, field ) =
     ]
 
 
+getGlobalAggregations : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+getGlobalAggregations ( model, cmd ) =
+    ( model
+    , Cmd.batch
+        [ cmd
+        , Http.request
+            { method = "POST"
+            , url = model.elasticUrl ++ "/_search"
+            , headers = []
+            , body = Http.jsonBody (buildGlobalAggregationsBody model.searchModel)
+            , expect = Http.expectJson GotGlobalAggregationsResult globalAggregationsDecoder
+            , timeout = Just 10000
+            , tracker = Nothing
+            }
+        ]
+    )
+
+
+buildGlobalAggregationsBody : SearchModel -> Encode.Value
+buildGlobalAggregationsBody searchModel =
+    Encode.object
+        [ ( "aggs"
+          , Encode.object
+                [ buildCompositeAggregation
+                    "trait_group"
+                    False
+                    [ ( "group", "trait_group" )
+                    , ( "trait", "name.keyword" )
+                    ]
+                ]
+          )
+        , ( "size", Encode.int 0 )
+        ]
+
+
 getSourcesAggregation : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 getSourcesAggregation ( model, cmd ) =
     ( model
@@ -5198,18 +5245,6 @@ aggregationsDecoder =
         (aggregationBucketDecoder Decode.string)
         <| \traits ->
     Field.requireAt
-        [ "aggregations", "trait_group" ]
-        (aggregationBucketDecoder
-            (Field.require "group" Decode.string <| \group ->
-             Field.require "trait" Decode.string <| \trait ->
-             Decode.succeed
-                { group = String.toLower group
-                , trait = String.toLower trait
-                }
-            )
-        )
-        <| \traitGroups ->
-    Field.requireAt
         [ "aggregations", "type" ]
         (aggregationBucketDecoder Decode.string)
         <| \types ->
@@ -5226,10 +5261,6 @@ aggregationsDecoder =
         , reloads = reloads
         , sources = sources
         , traits = traits
-        , traitGroups =
-            traitGroups
-                |> Dict.Extra.groupBy .group
-                |> Dict.map (\_ v -> List.map .trait v)
         , types = types
         , weaponGroups = weaponGroups
         }
@@ -5238,6 +5269,28 @@ aggregationsDecoder =
 aggregationBucketDecoder : Decode.Decoder a -> Decode.Decoder (List a)
 aggregationBucketDecoder keyDecoder =
     Decode.field "buckets" (Decode.list (Decode.field "key" keyDecoder))
+
+
+globalAggregationsDecoder : Decode.Decoder GlobalAggregations
+globalAggregationsDecoder =
+    Field.requireAt
+        [ "aggregations", "trait_group" ]
+        (aggregationBucketDecoder
+            (Field.require "group" Decode.string <| \group ->
+             Field.require "trait" Decode.string <| \trait ->
+             Decode.succeed
+                { group = String.toLower group
+                , trait = String.toLower trait
+                }
+            )
+        )
+        <| \traitGroups ->
+    Decode.succeed
+        { traitGroups =
+            traitGroups
+                |> Dict.Extra.groupBy .group
+                |> Dict.map (\_ v -> List.map .trait v)
+        }
 
 
 sourcesAggregationDecoder : Decode.Decoder (List Source)
@@ -7916,12 +7969,12 @@ viewFilterTraits model searchModel =
             [ HA.class "column"
             , HA.class "gap-small"
             ]
-            (case searchModel.aggregations of
-                Just (Ok aggregations) ->
+            (case ( model.globalAggregations, searchModel.aggregations ) of
+                ( Just (Ok globalAggregations), Just (Ok aggregations) ) ->
                     let
                         categorizedTraits : List String
                         categorizedTraits =
-                            aggregations.traitGroups
+                            globalAggregations.traitGroups
                                 |> Dict.values
                                 |> List.concat
 
@@ -7979,7 +8032,7 @@ viewFilterTraits model searchModel =
                                     )
                                 ]
                         )
-                        (aggregations.traitGroups
+                        (globalAggregations.traitGroups
                             |> Dict.filter
                                 (\group traits ->
                                     not (List.member group [ "half-elf", "half-orc", "aon-special" ])
@@ -7993,15 +8046,17 @@ viewFilterTraits model searchModel =
                                     )
                                 )
                             |> List.map (Tuple.mapSecond (List.filter ((/=) "common")))
+                            |> List.map (Tuple.mapSecond (List.filter (\trait -> List.member trait aggregations.traits)))
                             |> List.filter (Tuple.second >> List.isEmpty >> not)
                         )
                     )
 
-                Just (Err _) ->
+                ( Nothing, Nothing ) ->
+                    [ viewScrollboxLoader ]
+
+                _ ->
                     []
 
-                Nothing ->
-                    [ viewScrollboxLoader ]
             )
 
       else
