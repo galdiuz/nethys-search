@@ -110,6 +110,7 @@ type alias SearchModel =
     , filteredItemSubcategories : Dict String Bool
     , filteredPfs : Dict String Bool
     , filteredRarities : Dict String Bool
+    , filteredRegions : Dict String Bool
     , filteredReloads : Dict String Bool
     , filteredSavingThrows : Dict String Bool
     , filteredSchools : Dict String Bool
@@ -190,6 +191,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , filteredItemCategories = Dict.empty
     , filteredItemSubcategories = Dict.empty
     , filteredRarities = Dict.empty
+    , filteredRegions = Dict.empty
     , filteredReloads = Dict.empty
     , filteredSavingThrows = Dict.empty
     , filteredSchools = Dict.empty
@@ -453,6 +455,7 @@ type alias Aggregations =
     , hands : List String
     , itemCategories : List String
     , itemSubcategories : List { category : String, name : String }
+    , regions : List String
     , reloads : List String
     , sources : List String
     , traits : List String
@@ -636,6 +639,8 @@ type Msg
     | QueryTypeSelected QueryType
     | RarityFilterAdded String
     | RarityFilterRemoved String
+    | RegionFilterAdded String
+    | RegionFilterRemoved String
     | ReloadFilterAdded String
     | ReloadFilterRemoved String
     | RemoveAllAbilityFiltersPressed
@@ -648,6 +653,7 @@ type Msg
     | RemoveAllItemSubcategoryFiltersPressed
     | RemoveAllPfsFiltersPressed
     | RemoveAllRarityFiltersPressed
+    | RemoveAllRegionFiltersPressed
     | RemoveAllReloadFiltersPressed
     | RemoveAllSavingThrowFiltersPressed
     | RemoveAllSchoolFiltersPressed
@@ -1712,6 +1718,26 @@ update msg model =
                 |> updateUrlWithSearchParams
             )
 
+        RegionFilterAdded region ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredRegions = toggleBoolDict region searchModel.filteredRegions }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        RegionFilterRemoved region ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredRegions = Dict.remove region searchModel.filteredRegions }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
         ReloadFilterAdded reload ->
             ( model
             , updateCurrentSearchModel
@@ -1837,6 +1863,16 @@ update msg model =
             , updateCurrentSearchModel
                 (\searchModel ->
                     { searchModel | filteredRarities = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        RemoveAllRegionFiltersPressed ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredRegions = Dict.empty }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -3736,6 +3772,14 @@ updateUrlWithSearchParams ({ searchModel, url } as model) =
               , boolDictExcluded searchModel.filteredRarities
                     |> String.join ";"
               )
+            , ( "include-regions"
+              , boolDictIncluded searchModel.filteredRegions
+                    |> String.join ";"
+              )
+            , ( "exclude-regions"
+              , boolDictExcluded searchModel.filteredRegions
+                    |> String.join ";"
+              )
             , ( "include-reloads"
               , boolDictIncluded searchModel.filteredReloads
                     |> String.join ";"
@@ -4614,6 +4658,7 @@ updateSearchModelFromParams params model searchModel =
         , filteredItemSubcategories = getBoolDictFromParams params ";" "item-subcategories"
         , filteredPfs = getBoolDictFromParams params ";" "pfs"
         , filteredRarities = getBoolDictFromParams params ";" "rarities"
+        , filteredRegions = getBoolDictFromParams params ";" "regions"
         , filteredReloads = getBoolDictFromParams params ";" "reloads"
         , filteredSavingThrows = getBoolDictFromParams params ";" "saving-throws"
         , filteredSchools = getBoolDictFromParams params ";" "schools"
@@ -4948,6 +4993,7 @@ buildAggregationsBody searchModel =
                         , "creature_family"
                         , "item_category"
                         , "hands.keyword"
+                        , "region"
                         , "reload_raw.keyword"
                         , "source"
                         , "trait"
@@ -5234,6 +5280,10 @@ aggregationsDecoder =
         )
         <| \itemSubcategories ->
     Field.requireAt
+        [ "aggregations", "region" ]
+        (aggregationBucketDecoder Decode.string)
+        <| \regions ->
+    Field.requireAt
         [ "aggregations", "reload_raw.keyword" ]
         (aggregationBucketDecoder Decode.string)
         <| \reloads ->
@@ -5259,6 +5309,7 @@ aggregationsDecoder =
         , hands = hands
         , itemCategories = itemCategories
         , itemSubcategories = itemSubcategories
+        , regions = regions
         , reloads = reloads
         , sources = sources
         , traits = traits
@@ -6381,6 +6432,11 @@ allFilters =
       , view = viewFilterRarities
       , visibleIf = moreThanOneAggregation .traits
       }
+    , { id = "regions"
+      , label = "Regions"
+      , view = viewFilterRegions
+      , visibleIf = moreThanOneAggregation .regions
+      }
     , { id = "reload"
       , label = "Reload"
       , view = viewFilterReload
@@ -6424,7 +6480,7 @@ allFilters =
     , { id = "types"
       , label = "Types / Categories"
       , view = viewFilterTypes
-      , visibleIf = \_ -> True
+      , visibleIf = moreThanOneAggregation .types
       }
     , { id = "weapons"
       , label = "Weapons"
@@ -6491,6 +6547,7 @@ filterFields searchModel =
     , ( "item_subcategory", searchModel.filteredItemSubcategories, False )
     , ( "pfs", searchModel.filteredPfs, False )
     , ( "rarity", searchModel.filteredRarities, False )
+    , ( "region", searchModel.filteredRegions, False )
     , ( "reload_raw.keyword", searchModel.filteredReloads, False )
     , ( "saving_throw", searchModel.filteredSavingThrows, False )
     , ( "school", searchModel.filteredSchools, False )
@@ -6727,7 +6784,7 @@ viewActiveFilters searchModel =
                                             , HE.onClick (removeMsg value)
                                             ]
                                             [ viewPfsIcon 16 value
-                                            , viewTextWithActionIcons (String.Extra.toTitleCase value)
+                                            , viewTextWithActionIcons (toTitleCase value)
                                             ]
                                     )
                                     list
@@ -7073,7 +7130,7 @@ viewFilterAbilities model searchModel =
                     , HA.class "gap-tiny"
                     , HE.onClick (AbilityFilterAdded ability)
                     ]
-                    [ Html.text (String.Extra.toTitleCase ability)
+                    [ Html.text (toTitleCase ability)
                     , viewFilterIcon (Dict.get ability searchModel.filteredAbilities)
                     ]
             )
@@ -7176,7 +7233,7 @@ viewFilterComponents model searchModel =
                     , HA.class "gap-tiny"
                     , HE.onClick (ComponentFilterAdded component)
                     ]
-                    [ Html.text (String.Extra.toTitleCase component)
+                    [ Html.text (toTitleCase component)
                     , viewFilterIcon (Dict.get component searchModel.filteredComponents)
                     ]
             )
@@ -7234,7 +7291,7 @@ viewFilterCreatureFamilies model searchModel =
                             , HA.style "text-align" "left"
                             , HE.onClick (CreatureFamilyFilterAdded (String.toLower creatureFamily))
                             ]
-                            [ Html.text (String.Extra.toTitleCase creatureFamily)
+                            [ Html.text (toTitleCase creatureFamily)
                             , viewFilterIcon (Dict.get (String.toLower creatureFamily) searchModel.filteredCreatureFamilies)
                             ]
                     )
@@ -7338,7 +7395,7 @@ viewFilterItemCategories model searchModel =
                             ]
                             [ Html.div
                                 []
-                                [ Html.text (String.Extra.toTitleCase category) ]
+                                [ Html.text (toTitleCase category) ]
                             , viewFilterIcon (Dict.get category searchModel.filteredItemCategories)
                             ]
                     )
@@ -7428,7 +7485,7 @@ viewFilterItemCategories model searchModel =
                             ]
                             [ Html.div
                                 []
-                                [ Html.text (String.Extra.toTitleCase subcategory.name) ]
+                                [ Html.text (toTitleCase subcategory.name) ]
                             , viewFilterIcon
                                 (Maybe.Extra.or
                                     (Dict.get subcategory.name searchModel.filteredItemSubcategories)
@@ -7477,7 +7534,7 @@ viewFilterMagicSchools model searchModel =
                     , HA.class "trait"
                     , HE.onClick (SchoolFilterAdded school)
                     ]
-                    [ Html.text (String.Extra.toTitleCase school)
+                    [ Html.text (toTitleCase school)
                     , viewFilterIcon (Dict.get school searchModel.filteredSchools)
                     ]
             )
@@ -7510,7 +7567,7 @@ viewFilterPfs model searchModel =
                     , HE.onClick (PfsFilterAdded pfs)
                     ]
                     [ viewPfsIcon 16 pfs
-                    , Html.text (String.Extra.toTitleCase pfs)
+                    , Html.text (toTitleCase pfs)
                     , viewFilterIcon (Dict.get pfs searchModel.filteredPfs)
                     ]
             )
@@ -7550,7 +7607,7 @@ viewFilterRarities model searchModel =
                             , HA.class ("trait-" ++ rarity)
                             , HE.onClick (RarityFilterAdded rarity)
                             ]
-                            [ Html.text (String.Extra.toTitleCase rarity)
+                            [ Html.text (toTitleCase rarity)
                             , viewFilterIcon (Dict.get rarity searchModel.filteredRarities)
                             ]
                     )
@@ -7559,6 +7616,45 @@ viewFilterRarities model searchModel =
                         |> List.filter ((/=) "common")
                         |> (::) "common"
                     )
+
+            Just (Err _) ->
+                []
+
+            Nothing ->
+                [ viewScrollboxLoader ]
+        )
+    ]
+
+
+viewFilterRegions : Model -> SearchModel -> List (Html Msg)
+viewFilterRegions model searchModel =
+    [ Html.button
+        [ HA.style "align-self" "flex-start"
+        , HA.style "justify-self" "flex-start"
+        , HE.onClick RemoveAllRegionFiltersPressed
+        ]
+        [ Html.text "Reset selection" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        , HA.class "wrap"
+        ]
+        (case searchModel.aggregations of
+            Just (Ok { regions })->
+                (List.map
+                    (\region ->
+                        Html.button
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HE.onClick (RegionFilterAdded region)
+                            ]
+                            [ Html.text (toTitleCase region)
+                            , viewFilterIcon (Dict.get region searchModel.filteredRegions)
+                            ]
+                    )
+                    (List.sort regions)
+                )
 
             Just (Err _) ->
                 []
@@ -7629,7 +7725,7 @@ viewFilterSavingThrows model searchModel =
                     , HA.style "text-align" "left"
                     , HE.onClick (SavingThrowFilterAdded save)
                     ]
-                    [ Html.text (String.Extra.toTitleCase save)
+                    [ Html.text (toTitleCase save)
                     , viewFilterIcon (Dict.get save searchModel.filteredSavingThrows)
                     ]
             )
@@ -7663,7 +7759,7 @@ viewFilterSizes model searchModel =
                     , HA.class "trait-size"
                     , HE.onClick (SizeFilterAdded size)
                     ]
-                    [ Html.text (String.Extra.toTitleCase size)
+                    [ Html.text (toTitleCase size)
                     , viewFilterIcon (Dict.get size searchModel.filteredSizes)
                     ]
             )
@@ -7695,7 +7791,7 @@ viewFilterSkills model searchModel =
                     , HA.class "gap-tiny"
                     , HE.onClick (SkillFilterAdded skill)
                     ]
-                    [ Html.text (String.Extra.toTitleCase skill)
+                    [ Html.text (toTitleCase skill)
                     , viewFilterIcon (Dict.get skill searchModel.filteredSkills)
                     ]
             )
@@ -7732,7 +7828,7 @@ viewFilterSources model searchModel =
                     , HA.class "gap-tiny"
                     , HE.onClick (SourceCategoryFilterAdded category)
                     ]
-                    [ Html.text (String.Extra.toTitleCase category)
+                    [ Html.text (toTitleCase category)
                     , viewFilterIcon (Dict.get category searchModel.filteredSourceCategories)
                     ]
             )
@@ -7872,7 +7968,7 @@ viewFilterStrongestSaves model searchModel =
                     , HA.style "text-align" "left"
                     , HE.onClick (StrongestSaveFilterAdded (String.toLower save))
                     ]
-                    [ Html.text (String.Extra.toTitleCase save)
+                    [ Html.text (toTitleCase save)
                     , viewFilterIcon (Dict.get (String.toLower save) searchModel.filteredStrongestSaves)
                     ]
             )
@@ -7902,7 +7998,7 @@ viewFilterStrongestSaves model searchModel =
                     , HA.style "text-align" "left"
                     , HE.onClick (WeakestSaveFilterAdded (String.toLower save))
                     ]
-                    [ Html.text (String.Extra.toTitleCase save)
+                    [ Html.text (toTitleCase save)
                     , viewFilterIcon (Dict.get (String.toLower save) searchModel.filteredWeakestSaves)
                     ]
             )
@@ -7948,7 +8044,7 @@ viewFilterTraditions model searchModel =
                     , HA.class "gap-tiny"
                     , HE.onClick (TraditionFilterAdded tradition)
                     ]
-                    [ Html.text (String.Extra.toTitleCase tradition)
+                    [ Html.text (toTitleCase tradition)
                     , viewFilterIcon (Dict.get tradition searchModel.filteredTraditions)
                     ]
             )
@@ -8044,7 +8140,7 @@ viewFilterTraits model searchModel =
                                     ]
                                     [ Html.h4
                                         []
-                                        [ Html.text (String.Extra.toTitleCase group) ]
+                                        [ Html.text (toTitleCase group) ]
                                     , Html.button
                                         [ HE.onClick (TraitGroupIncludePressed traits) ]
                                         [ Html.text "Include group" ]
@@ -8070,7 +8166,7 @@ viewFilterTraits model searchModel =
                                                 , HA.class "gap-tiny"
                                                 , HE.onClick (TraitFilterAdded trait)
                                                 ]
-                                                [ Html.text (String.Extra.toTitleCase trait)
+                                                [ Html.text (toTitleCase trait)
                                                 , viewFilterIcon (Dict.get trait searchModel.filteredTraits)
                                                 ]
                                         )
@@ -8123,7 +8219,7 @@ viewFilterTraits model searchModel =
                                 , HA.class "gap-tiny"
                                 , HE.onClick (TraitFilterAdded trait)
                                 ]
-                                [ Html.text (String.Extra.toTitleCase trait)
+                                [ Html.text (toTitleCase trait)
                                 , viewFilterIcon (Dict.get trait searchModel.filteredTraits)
                                 ]
                         )
@@ -8193,7 +8289,7 @@ viewFilterTypes model searchModel =
                             , HA.class "gap-tiny"
                             , HE.onClick (TypeFilterAdded type_)
                             ]
-                            [ Html.text (String.Extra.toTitleCase type_)
+                            [ Html.text (toTitleCase type_)
                             , viewFilterIcon (Dict.get type_ searchModel.filteredTypes)
                             ]
                     )
@@ -8234,7 +8330,7 @@ viewFilterWeapons model searchModel =
                     , HA.class "gap-tiny"
                     , HE.onClick (WeaponCategoryFilterAdded category)
                     ]
-                    [ Html.text (String.Extra.toTitleCase category)
+                    [ Html.text (toTitleCase category)
                     , viewFilterIcon (Dict.get category searchModel.filteredWeaponCategories)
                     ]
             )
@@ -8264,7 +8360,7 @@ viewFilterWeapons model searchModel =
                             , HA.class "gap-tiny"
                             , HE.onClick (WeaponGroupFilterAdded group)
                             ]
-                            [ Html.text (String.Extra.toTitleCase group)
+                            [ Html.text (toTitleCase group)
                             , viewFilterIcon (Dict.get group searchModel.filteredWeaponGroups)
                             ]
                     )
@@ -8299,7 +8395,7 @@ viewFilterWeapons model searchModel =
                     , HA.class "gap-tiny"
                     , HE.onClick (WeaponTypeFilterAdded type_)
                     ]
-                    [ Html.text (String.Extra.toTitleCase type_)
+                    [ Html.text (toTitleCase type_)
                     , viewFilterIcon (Dict.get type_ searchModel.filteredWeaponTypes)
                     ]
             )
@@ -8529,7 +8625,7 @@ viewFilterNumbers model searchModel =
                                 (\speed ->
                                     Html.option
                                         [ HA.value speed ]
-                                        [ Html.text (String.Extra.toTitleCase speed)
+                                        [ Html.text (toTitleCase speed)
                                         ]
                                 )
                                 Data.speedTypes
@@ -10290,7 +10386,7 @@ viewSearchResultGridCell model document column =
 
             [ "aspect" ] ->
                 document.aspect
-                    |> Maybe.map String.Extra.toTitleCase
+                    |> Maybe.map toTitleCase
                     |> maybeAsText
 
             [ "attack_proficiency" ] ->
@@ -10335,7 +10431,7 @@ viewSearchResultGridCell model document column =
 
             [ "component" ] ->
                 document.components
-                    |> List.map String.Extra.toTitleCase
+                    |> List.map toTitleCase
                     |> String.join ", "
                     |> Html.text
                     |> List.singleton
@@ -10384,7 +10480,7 @@ viewSearchResultGridCell model document column =
 
             [ "divine_font" ] ->
                 document.divineFonts
-                    |> List.map String.Extra.toTitleCase
+                    |> List.map toTitleCase
                     |> String.join " or "
                     |> Html.text
                     |> List.singleton
@@ -10574,7 +10670,7 @@ viewSearchResultGridCell model document column =
 
             [ "rarity" ] ->
                 document.rarity
-                    |> Maybe.map (String.Extra.toTitleCase)
+                    |> Maybe.map toTitleCase
                     |> maybeAsText
 
             [ "reflex" ] ->
@@ -10611,7 +10707,7 @@ viewSearchResultGridCell model document column =
 
             [ "school" ] ->
                 document.school
-                    |> Maybe.map (String.Extra.toTitleCase)
+                    |> Maybe.map toTitleCase
                     |> maybeAsText
 
             [ "secondary_casters" ] ->
@@ -10685,7 +10781,7 @@ viewSearchResultGridCell model document column =
             [ "strongest_save" ] ->
                 document.strongestSaves
                     |> List.filter (\s -> not (List.member s [ "fort", "ref" ]))
-                    |> List.map String.Extra.toTitleCase
+                    |> List.map toTitleCase
                     |> String.join ", "
                     |> Html.text
                     |> List.singleton
@@ -10726,7 +10822,7 @@ viewSearchResultGridCell model document column =
             [ "weakest_save" ] ->
                 document.weakestSaves
                     |> List.filter (\s -> not (List.member s [ "fort", "ref" ]))
-                    |> List.map String.Extra.toTitleCase
+                    |> List.map toTitleCase
                     |> String.join ", "
                     |> Html.text
                     |> List.singleton
@@ -11441,7 +11537,7 @@ viewGroupedTitle field value =
             (Dict.fromList Data.alignments
                 |> Dict.get value
                 |> Maybe.withDefault value
-                |> String.Extra.toTitleCase
+                |> toTitleCase
             )
 
     else if field == "duration" then
@@ -11465,7 +11561,7 @@ viewGroupedTitle field value =
             , HA.class "align-center"
             ]
             [ viewPfsIcon 0 value
-            , Html.text (String.Extra.toTitleCase value)
+            , Html.text (toTitleCase value)
             ]
 
     else if field == "range" then
@@ -12489,6 +12585,7 @@ toTitleCase : String -> String
 toTitleCase str =
     str
         |> String.Extra.toTitleCase
+        |> String.replace " And " " and "
         |> String.replace " In " " in "
         |> String.replace " Of " " of "
         |> String.replace " On " " on "
