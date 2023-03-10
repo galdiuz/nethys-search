@@ -6530,11 +6530,6 @@ allFilters =
       , view = viewFilterRegions
       , visibleIf = moreThanOneAggregation .regions
       }
-    , { id = "reload"
-      , label = "Reload"
-      , view = viewFilterReload
-      , visibleIf = moreThanOneAggregation .reloads
-      }
     , { id = "saving-throws"
       , label = "Saving throws"
       , view = viewFilterSavingThrows
@@ -7820,44 +7815,6 @@ viewFilterRegions model searchModel =
     ]
 
 
-viewFilterReload : Model -> SearchModel -> List (Html Msg)
-viewFilterReload model searchModel =
-    [ Html.button
-        [ HA.style "align-self" "flex-start"
-        , HA.style "justify-self" "flex-start"
-        , HE.onClick RemoveAllReloadFiltersPressed
-        ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (case searchModel.aggregations of
-            Just (Ok { reloads })->
-                (List.map
-                    (\reload ->
-                        Html.button
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            , HE.onClick (ReloadFilterAdded reload)
-                            ]
-                            [ Html.text reload
-                            , viewFilterIcon (Dict.get reload searchModel.filteredReloads)
-                            ]
-                    )
-                    (List.sort reloads)
-                )
-
-            Just (Err _) ->
-                []
-
-            Nothing ->
-                [ viewScrollboxLoader ]
-        )
-    ]
-
-
 viewFilterSavingThrows : Model -> SearchModel -> List (Html Msg)
 viewFilterSavingThrows model searchModel =
     [ Html.button
@@ -8555,6 +8512,43 @@ viewFilterWeapons model searchModel =
                     ]
             )
             Data.weaponTypes
+        )
+
+    , Html.h4
+        []
+        [ Html.text "Reload" ]
+    , Html.button
+        [ HA.style "align-self" "flex-start"
+        , HA.style "justify-self" "flex-start"
+        , HE.onClick RemoveAllReloadFiltersPressed
+        ]
+        [ Html.text "Reset selection" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (case searchModel.aggregations of
+            Just (Ok { reloads })->
+                (List.map
+                    (\reload ->
+                        Html.button
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HE.onClick (ReloadFilterAdded reload)
+                            ]
+                            [ Html.text reload
+                            , viewFilterIcon (Dict.get reload searchModel.filteredReloads)
+                            ]
+                    )
+                    (List.sort reloads)
+                )
+
+            Just (Err _) ->
+                []
+
+            Nothing ->
+                [ viewScrollboxLoader ]
         )
     ]
 
