@@ -73,7 +73,7 @@ type alias Model =
     , noUi : Bool
     , openInNewTab : Bool
     , overlayActive : Bool
-    , pageDefaultDisplays : Dict String (Dict String String)
+    , pageDefaultParams : Dict String (Dict String String)
     , pageId : String
     , pageSize : Int
     , pageWidth : Int
@@ -178,7 +178,7 @@ emptySearchModel :
    , fixedQueryString : String
    }
    -> SearchModel
-emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilters }=
+emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilters } =
     { aggregations = Nothing
     , alwaysShowFilters = alwaysShowFilters
     , debounce = 0
@@ -634,7 +634,6 @@ type Msg
     | LinkEnteredDebouncePassed String
     | LinkLeft
     | LoadMorePressed Int
-    | LoadPageDefaultDisplayPressed
     | LocalStorageValueReceived Decode.Value
     | MenuOpenDelayPassed
     | NoOp
@@ -683,7 +682,7 @@ type Msg
     | RemoveAllWeaponTypeFiltersPressed
     | ResultDisplayChanged ResultDisplay
     | SaveColumnConfigurationPressed
-    | SavePageDefaultDisplayPressed
+    | SaveDefaultParamsPressed
     | SavedColumnConfigurationNameChanged String
     | SavedColumnConfigurationSelected String
     | SavingThrowFilterAdded String
@@ -810,7 +809,7 @@ init flagsValue =
       , noUi = flags.noUi
       , openInNewTab = False
       , overlayActive = False
-      , pageDefaultDisplays = Dict.empty
+      , pageDefaultParams = Dict.empty
       , pageId = flags.pageId
       , pageSize = 50
       , pageWidth = 0
@@ -845,7 +844,7 @@ init flagsValue =
                 (updateModelFromLocalStorage)
                 model
                 (Dict.toList flags.localStorage)
-        |> updateModelFromUrl url
+        |> updateModelFromDefaultsOrUrl
     , Cmd.none
     )
         |> \( model, cmd ) ->
@@ -1648,17 +1647,6 @@ update msg model =
             )
                 |> searchWithCurrentQuery (LoadMore size)
 
-        LoadPageDefaultDisplayPressed ->
-            ( model
-            , updateUrlWithSearchParams
-                (updateModelFromDisplayParams
-                    (Dict.get model.pageId model.pageDefaultDisplays
-                        |> Maybe.withDefault Dict.empty
-                    )
-                    model
-                )
-            )
-
         LocalStorageValueReceived json ->
             ( case
                 ( Decode.decodeValue (Decode.field "key" Decode.string) json
@@ -2137,17 +2125,18 @@ update msg model =
             )
                 |> saveColumnConfigurationsToLocalStorage
 
-        SavePageDefaultDisplayPressed ->
+        SaveDefaultParamsPressed ->
             let
+                newDefaults : Dict String (Dict String String)
                 newDefaults =
                     Dict.insert
                         model.pageId
-                        (Dict.fromList (getDisplayParamsList model model.searchModel))
-                        model.pageDefaultDisplays
+                        (Dict.fromList (getSearchModelQueryParams model model.searchModel))
+                        model.pageDefaultParams
             in
-            ( { model | pageDefaultDisplays = newDefaults }
+            ( { model | pageDefaultParams = newDefaults }
             , saveToLocalStorage
-                "page-default-displays"
+                "page-default-params"
                 (Encode.dict
                     identity
                     (Encode.dict
@@ -2813,7 +2802,7 @@ update msg model =
                     parseUrl urlString
             in
             ( { model | url = url }
-                |> updateModelFromUrl url
+                |> updateModelFromDefaultsOrUrl
             , Cmd.none
             )
                 |> searchWithCurrentQuery LoadNew
@@ -3242,10 +3231,23 @@ updateModelFromLocalStorage ( key, value ) model =
                 _ ->
                     model
 
+        -- Legacy
         "page-default-displays" ->
             case Decode.decodeString (Decode.dict (Decode.dict Decode.string)) value of
-                Ok configurations ->
-                    { model | pageDefaultDisplays = configurations }
+                Ok defaults ->
+                    if Dict.isEmpty model.pageDefaultParams then
+                        { model | pageDefaultParams = defaults }
+
+                    else
+                        model
+
+                Err _ ->
+                    model
+
+        "page-default-params" ->
+            case Decode.decodeString (Decode.dict (Decode.dict Decode.string)) value of
+                Ok defaults ->
+                    { model | pageDefaultParams = defaults }
 
                 Err _ ->
                     model
@@ -3715,299 +3717,8 @@ updateUrlWithSearchParams : Model -> Cmd Msg
 updateUrlWithSearchParams ({ searchModel, url } as model) =
     { url
         | query =
-            [ ( "q", searchModel.query )
-            , ( "type"
-              , if model.autoQueryType then
-                    if queryCouldBeComplex searchModel.query then
-                        "eqs"
-
-                    else
-                        ""
-
-                else
-                    case searchModel.queryType of
-                        Standard ->
-                            ""
-
-                        ElasticsearchQueryString ->
-                            "eqs"
-              )
-            , ( "include-traits"
-              , boolDictIncluded searchModel.filteredTraits
-                    |> String.join ";"
-              )
-            , ( "exclude-traits"
-              , boolDictExcluded searchModel.filteredTraits
-                    |> String.join ";"
-              )
-            , ( "traits-operator"
-              , if searchModel.filterTraitsOperator then
-                  ""
-
-                else
-                  "or"
-              )
-            , ( "include-types"
-              , boolDictIncluded searchModel.filteredTypes
-                    |> String.join ";"
-              )
-            , ( "exclude-types"
-              , boolDictExcluded searchModel.filteredTypes
-                    |> String.join ";"
-              )
-            , ( "include-abilities"
-              , boolDictIncluded searchModel.filteredAbilities
-                    |> String.join ";"
-              )
-            , ( "exclude-abilities"
-              , boolDictExcluded searchModel.filteredAbilities
-                    |> String.join ";"
-              )
-            , ( "include-actions"
-              , boolDictIncluded searchModel.filteredActions
-                    |> String.join ";"
-              )
-            , ( "exclude-actions"
-              , boolDictExcluded searchModel.filteredActions
-                    |> String.join ";"
-              )
-            , ( "include-alignments"
-              , boolDictIncluded searchModel.filteredAlignments
-                    |> String.join ";"
-              )
-            , ( "exclude-alignments"
-              , boolDictExcluded searchModel.filteredAlignments
-                    |> String.join ";"
-              )
-            , ( "include-armor-categories"
-              , boolDictIncluded searchModel.filteredArmorCategories
-                    |> String.join ";"
-              )
-            , ( "exclude-armor-categories"
-              , boolDictExcluded searchModel.filteredArmorCategories
-                    |> String.join ";"
-              )
-            , ( "include-armor-groups"
-              , boolDictIncluded searchModel.filteredArmorGroups
-                    |> String.join ";"
-              )
-            , ( "exclude-armor-groups"
-              , boolDictExcluded searchModel.filteredArmorGroups
-                    |> String.join ";"
-              )
-            , ( "include-components"
-              , boolDictIncluded searchModel.filteredComponents
-                    |> String.join ";"
-              )
-            , ( "exclude-components"
-              , boolDictExcluded searchModel.filteredComponents
-                    |> String.join ";"
-              )
-            , ( "components-operator"
-              , if searchModel.filterComponentsOperator then
-                  ""
-
-                else
-                  "or"
-              )
-            , ( "include-creature-families"
-              , boolDictIncluded searchModel.filteredCreatureFamilies
-                    |> String.join ";"
-              )
-            , ( "exclude-creature-families"
-              , boolDictExcluded searchModel.filteredCreatureFamilies
-                    |> String.join ";"
-              )
-            , ( "include-hands"
-              , boolDictIncluded searchModel.filteredHands
-                    |> String.join ";"
-              )
-            , ( "exclude-hands"
-              , boolDictExcluded searchModel.filteredHands
-                    |> String.join ";"
-              )
-            , ( "include-item-categories"
-              , boolDictIncluded searchModel.filteredItemCategories
-                    |> String.join ";"
-              )
-            , ( "exclude-item-categories"
-              , boolDictExcluded searchModel.filteredItemCategories
-                    |> String.join ";"
-              )
-            , ( "include-item-subcategories"
-              , boolDictIncluded searchModel.filteredItemSubcategories
-                    |> String.join ";"
-              )
-            , ( "exclude-item-subcategories"
-              , boolDictExcluded searchModel.filteredItemSubcategories
-                    |> String.join ";"
-              )
-            , ( "include-pfs"
-              , boolDictIncluded searchModel.filteredPfs
-                    |> String.join ";"
-              )
-            , ( "exclude-pfs"
-              , boolDictExcluded searchModel.filteredPfs
-                    |> String.join ";"
-              )
-            , ( "include-rarities"
-              , boolDictIncluded searchModel.filteredRarities
-                    |> String.join ";"
-              )
-            , ( "exclude-rarities"
-              , boolDictExcluded searchModel.filteredRarities
-                    |> String.join ";"
-              )
-            , ( "include-regions"
-              , boolDictIncluded searchModel.filteredRegions
-                    |> String.join ";"
-              )
-            , ( "exclude-regions"
-              , boolDictExcluded searchModel.filteredRegions
-                    |> String.join ";"
-              )
-            , ( "include-reloads"
-              , boolDictIncluded searchModel.filteredReloads
-                    |> String.join ";"
-              )
-            , ( "exclude-reloads"
-              , boolDictExcluded searchModel.filteredReloads
-                    |> String.join ";"
-              )
-            , ( "include-saving-throws"
-              , boolDictIncluded searchModel.filteredSavingThrows
-                    |> String.join ";"
-              )
-            , ( "exclude-saving-throws"
-              , boolDictExcluded searchModel.filteredSavingThrows
-                    |> String.join ";"
-              )
-            , ( "include-schools"
-              , boolDictIncluded searchModel.filteredSchools
-                    |> String.join ";"
-              )
-            , ( "exclude-schools"
-              , boolDictExcluded searchModel.filteredSchools
-                    |> String.join ";"
-              )
-            , ( "include-sizes"
-              , boolDictIncluded searchModel.filteredSizes
-                    |> String.join ";"
-              )
-            , ( "exclude-sizes"
-              , boolDictExcluded searchModel.filteredSizes
-                    |> String.join ";"
-              )
-            , ( "include-skills"
-              , boolDictIncluded searchModel.filteredSkills
-                    |> String.join ";"
-              )
-            , ( "exclude-skills"
-              , boolDictExcluded searchModel.filteredSkills
-                    |> String.join ";"
-              )
-            , ( "include-sources"
-              , boolDictIncluded searchModel.filteredSources
-                    |> String.join ";"
-              )
-            , ( "exclude-sources"
-              , boolDictExcluded searchModel.filteredSources
-                    |> String.join ";"
-              )
-            , ( "include-source-categories"
-              , boolDictIncluded searchModel.filteredSourceCategories
-                    |> String.join ";"
-              )
-            , ( "exclude-source-categories"
-              , boolDictExcluded searchModel.filteredSourceCategories
-                    |> String.join ";"
-              )
-            , ( "include-strongest-saves"
-              , boolDictIncluded searchModel.filteredStrongestSaves
-                    |> String.join ";"
-              )
-            , ( "exclude-strongest-saves"
-              , boolDictExcluded searchModel.filteredStrongestSaves
-                    |> String.join ";"
-              )
-            , ( "include-traditions"
-              , boolDictIncluded searchModel.filteredTraditions
-                    |> String.join ";"
-              )
-            , ( "exclude-traditions"
-              , boolDictExcluded searchModel.filteredTraditions
-                    |> String.join ";"
-              )
-            , ( "traditions-operator"
-              , if searchModel.filterTraditionsOperator then
-                    ""
-
-                else
-                    "or"
-              )
-            , ( "include-weakest-saves"
-              , boolDictIncluded searchModel.filteredWeakestSaves
-                    |> String.join ";"
-              )
-            , ( "exclude-weakest-saves"
-              , boolDictExcluded searchModel.filteredWeakestSaves
-                    |> String.join ";"
-              )
-            , ( "include-weapon-categories"
-              , boolDictIncluded searchModel.filteredWeaponCategories
-                    |> String.join ";"
-              )
-            , ( "exclude-weapon-categories"
-              , boolDictExcluded searchModel.filteredWeaponCategories
-                    |> String.join ";"
-              )
-            , ( "include-weapon-groups"
-              , boolDictIncluded searchModel.filteredWeaponGroups
-                    |> String.join ";"
-              )
-            , ( "exclude-weapon-groups"
-              , boolDictExcluded searchModel.filteredWeaponGroups
-                    |> String.join ";"
-              )
-            , ( "include-weapon-types"
-              , boolDictIncluded searchModel.filteredWeaponTypes
-                    |> String.join ";"
-              )
-            , ( "exclude-weapon-types"
-              , boolDictExcluded searchModel.filteredWeaponTypes
-                    |> String.join ";"
-              )
-            , ( "values-from"
-              , searchModel.filteredFromValues
-                    |> Dict.toList
-                    |> List.map (\( field, value ) -> field ++ ":" ++ value)
-                    |> String.join ";"
-              )
-            , ( "values-to"
-              , searchModel.filteredToValues
-                    |> Dict.toList
-                    |> List.map (\( field, value ) -> field ++ ":" ++ value)
-                    |> String.join ";"
-              )
-            , ( "spoilers"
-              , if searchModel.filterSpoilers then
-                    "hide"
-
-                else
-                    ""
-              )
-            , ( "sort"
-              , searchModel.sort
-                    |> List.map
-                        (\( field, dir ) ->
-                            field ++ "-" ++ sortDirToString dir
-                        )
-                    |> String.join ","
-              )
-            ]
+            getSearchModelQueryParams model searchModel
                 |> List.append (Dict.toList model.fixedParams)
-                |> \list -> List.append list (getDisplayParamsList model searchModel)
-                |> List.filter (Tuple.second >> String.isEmpty >> not)
                 |> List.map (\(key, val) -> Url.Builder.string key val)
                 |> Url.Builder.toQuery
                 |> String.dropLeft 1
@@ -4017,9 +3728,298 @@ updateUrlWithSearchParams ({ searchModel, url } as model) =
         |> navigation_pushUrl
 
 
-getDisplayParamsList : Model -> SearchModel ->  List ( String, String )
-getDisplayParamsList model searchModel =
-    [ ( "display"
+getSearchModelQueryParams : Model -> SearchModel -> List ( String, String )
+getSearchModelQueryParams model searchModel =
+    [ ( "q", searchModel.query )
+    , ( "type"
+      , if model.autoQueryType then
+            if queryCouldBeComplex searchModel.query then
+                "eqs"
+
+            else
+                ""
+
+        else
+            case searchModel.queryType of
+                Standard ->
+                    ""
+
+                ElasticsearchQueryString ->
+                    "eqs"
+      )
+    , ( "include-traits"
+      , boolDictIncluded searchModel.filteredTraits
+            |> String.join ";"
+      )
+    , ( "exclude-traits"
+      , boolDictExcluded searchModel.filteredTraits
+            |> String.join ";"
+      )
+    , ( "traits-operator"
+      , if searchModel.filterTraitsOperator then
+          ""
+
+        else
+          "or"
+      )
+    , ( "include-types"
+      , boolDictIncluded searchModel.filteredTypes
+            |> String.join ";"
+      )
+    , ( "exclude-types"
+      , boolDictExcluded searchModel.filteredTypes
+            |> String.join ";"
+      )
+    , ( "include-abilities"
+      , boolDictIncluded searchModel.filteredAbilities
+            |> String.join ";"
+      )
+    , ( "exclude-abilities"
+      , boolDictExcluded searchModel.filteredAbilities
+            |> String.join ";"
+      )
+    , ( "include-actions"
+      , boolDictIncluded searchModel.filteredActions
+            |> String.join ";"
+      )
+    , ( "exclude-actions"
+      , boolDictExcluded searchModel.filteredActions
+            |> String.join ";"
+      )
+    , ( "include-alignments"
+      , boolDictIncluded searchModel.filteredAlignments
+            |> String.join ";"
+      )
+    , ( "exclude-alignments"
+      , boolDictExcluded searchModel.filteredAlignments
+            |> String.join ";"
+      )
+    , ( "include-armor-categories"
+      , boolDictIncluded searchModel.filteredArmorCategories
+            |> String.join ";"
+      )
+    , ( "exclude-armor-categories"
+      , boolDictExcluded searchModel.filteredArmorCategories
+            |> String.join ";"
+      )
+    , ( "include-armor-groups"
+      , boolDictIncluded searchModel.filteredArmorGroups
+            |> String.join ";"
+      )
+    , ( "exclude-armor-groups"
+      , boolDictExcluded searchModel.filteredArmorGroups
+            |> String.join ";"
+      )
+    , ( "include-components"
+      , boolDictIncluded searchModel.filteredComponents
+            |> String.join ";"
+      )
+    , ( "exclude-components"
+      , boolDictExcluded searchModel.filteredComponents
+            |> String.join ";"
+      )
+    , ( "components-operator"
+      , if searchModel.filterComponentsOperator then
+          ""
+
+        else
+          "or"
+      )
+    , ( "include-creature-families"
+      , boolDictIncluded searchModel.filteredCreatureFamilies
+            |> String.join ";"
+      )
+    , ( "exclude-creature-families"
+      , boolDictExcluded searchModel.filteredCreatureFamilies
+            |> String.join ";"
+      )
+    , ( "include-hands"
+      , boolDictIncluded searchModel.filteredHands
+            |> String.join ";"
+      )
+    , ( "exclude-hands"
+      , boolDictExcluded searchModel.filteredHands
+            |> String.join ";"
+      )
+    , ( "include-item-categories"
+      , boolDictIncluded searchModel.filteredItemCategories
+            |> String.join ";"
+      )
+    , ( "exclude-item-categories"
+      , boolDictExcluded searchModel.filteredItemCategories
+            |> String.join ";"
+      )
+    , ( "include-item-subcategories"
+      , boolDictIncluded searchModel.filteredItemSubcategories
+            |> String.join ";"
+      )
+    , ( "exclude-item-subcategories"
+      , boolDictExcluded searchModel.filteredItemSubcategories
+            |> String.join ";"
+      )
+    , ( "include-pfs"
+      , boolDictIncluded searchModel.filteredPfs
+            |> String.join ";"
+      )
+    , ( "exclude-pfs"
+      , boolDictExcluded searchModel.filteredPfs
+            |> String.join ";"
+      )
+    , ( "include-rarities"
+      , boolDictIncluded searchModel.filteredRarities
+            |> String.join ";"
+      )
+    , ( "exclude-rarities"
+      , boolDictExcluded searchModel.filteredRarities
+            |> String.join ";"
+      )
+    , ( "include-regions"
+      , boolDictIncluded searchModel.filteredRegions
+            |> String.join ";"
+      )
+    , ( "exclude-regions"
+      , boolDictExcluded searchModel.filteredRegions
+            |> String.join ";"
+      )
+    , ( "include-reloads"
+      , boolDictIncluded searchModel.filteredReloads
+            |> String.join ";"
+      )
+    , ( "exclude-reloads"
+      , boolDictExcluded searchModel.filteredReloads
+            |> String.join ";"
+      )
+    , ( "include-saving-throws"
+      , boolDictIncluded searchModel.filteredSavingThrows
+            |> String.join ";"
+      )
+    , ( "exclude-saving-throws"
+      , boolDictExcluded searchModel.filteredSavingThrows
+            |> String.join ";"
+      )
+    , ( "include-schools"
+      , boolDictIncluded searchModel.filteredSchools
+            |> String.join ";"
+      )
+    , ( "exclude-schools"
+      , boolDictExcluded searchModel.filteredSchools
+            |> String.join ";"
+      )
+    , ( "include-sizes"
+      , boolDictIncluded searchModel.filteredSizes
+            |> String.join ";"
+      )
+    , ( "exclude-sizes"
+      , boolDictExcluded searchModel.filteredSizes
+            |> String.join ";"
+      )
+    , ( "include-skills"
+      , boolDictIncluded searchModel.filteredSkills
+            |> String.join ";"
+      )
+    , ( "exclude-skills"
+      , boolDictExcluded searchModel.filteredSkills
+            |> String.join ";"
+      )
+    , ( "include-sources"
+      , boolDictIncluded searchModel.filteredSources
+            |> String.join ";"
+      )
+    , ( "exclude-sources"
+      , boolDictExcluded searchModel.filteredSources
+            |> String.join ";"
+      )
+    , ( "include-source-categories"
+      , boolDictIncluded searchModel.filteredSourceCategories
+            |> String.join ";"
+      )
+    , ( "exclude-source-categories"
+      , boolDictExcluded searchModel.filteredSourceCategories
+            |> String.join ";"
+      )
+    , ( "include-strongest-saves"
+      , boolDictIncluded searchModel.filteredStrongestSaves
+            |> String.join ";"
+      )
+    , ( "exclude-strongest-saves"
+      , boolDictExcluded searchModel.filteredStrongestSaves
+            |> String.join ";"
+      )
+    , ( "include-traditions"
+      , boolDictIncluded searchModel.filteredTraditions
+            |> String.join ";"
+      )
+    , ( "exclude-traditions"
+      , boolDictExcluded searchModel.filteredTraditions
+            |> String.join ";"
+      )
+    , ( "traditions-operator"
+      , if searchModel.filterTraditionsOperator then
+            ""
+
+        else
+            "or"
+      )
+    , ( "include-weakest-saves"
+      , boolDictIncluded searchModel.filteredWeakestSaves
+            |> String.join ";"
+      )
+    , ( "exclude-weakest-saves"
+      , boolDictExcluded searchModel.filteredWeakestSaves
+            |> String.join ";"
+      )
+    , ( "include-weapon-categories"
+      , boolDictIncluded searchModel.filteredWeaponCategories
+            |> String.join ";"
+      )
+    , ( "exclude-weapon-categories"
+      , boolDictExcluded searchModel.filteredWeaponCategories
+            |> String.join ";"
+      )
+    , ( "include-weapon-groups"
+      , boolDictIncluded searchModel.filteredWeaponGroups
+            |> String.join ";"
+      )
+    , ( "exclude-weapon-groups"
+      , boolDictExcluded searchModel.filteredWeaponGroups
+            |> String.join ";"
+      )
+    , ( "include-weapon-types"
+      , boolDictIncluded searchModel.filteredWeaponTypes
+            |> String.join ";"
+      )
+    , ( "exclude-weapon-types"
+      , boolDictExcluded searchModel.filteredWeaponTypes
+            |> String.join ";"
+      )
+    , ( "values-from"
+      , searchModel.filteredFromValues
+            |> Dict.toList
+            |> List.map (\( field, value ) -> field ++ ":" ++ value)
+            |> String.join ";"
+      )
+    , ( "values-to"
+      , searchModel.filteredToValues
+            |> Dict.toList
+            |> List.map (\( field, value ) -> field ++ ":" ++ value)
+            |> String.join ";"
+      )
+    , ( "spoilers"
+      , if searchModel.filterSpoilers then
+            "hide"
+
+        else
+            ""
+      )
+    , ( "sort"
+      , searchModel.sort
+            |> List.map
+                (\( field, dir ) ->
+                    field ++ "-" ++ sortDirToString dir
+                )
+            |> String.join ","
+      )
+    , ( "display"
       , case searchModel.resultDisplay of
             Grouped ->
                 "grouped"
@@ -4646,37 +4646,18 @@ buildElasticsearchQueryStringQueryBody queryString =
     ]
 
 
-getQueryParamsDictFromUrl : Dict String String -> Maybe (Dict String String) -> String -> Url -> Dict String String
-getQueryParamsDictFromUrl fixedParams pageDefaultDisplay defaultQuery url =
+getQueryParamsDictFromUrl : Dict String String -> Url -> Dict String String
+getQueryParamsDictFromUrl fixedParams url =
     case url.query of
         Just query ->
-            let
-                urlDict : Dict String String
-                urlDict =
-                    queryToParamsDict query
-                        |> Dict.filter
-                            (\key _ ->
-                                not (Dict.member key fixedParams)
-                            )
-            in
-            if Dict.isEmpty urlDict then
-                Dict.union
-                    (Maybe.withDefault Dict.empty pageDefaultDisplay)
-                    (queryToParamsDict defaultQuery)
-
-            else
-                if Dict.member "display" urlDict then
-                    urlDict
-
-                else
-                    Dict.union
-                        (Maybe.withDefault Dict.empty pageDefaultDisplay)
-                        urlDict
+            queryToParamsDict query
+                |> Dict.filter
+                    (\key _ ->
+                        not (Dict.member key fixedParams)
+                    )
 
         Nothing ->
-            Dict.union
-                (Maybe.withDefault Dict.empty pageDefaultDisplay)
-                (queryToParamsDict defaultQuery)
+            Dict.empty
 
 
 queryToParamsDict : String -> Dict String String
@@ -4695,21 +4676,39 @@ queryToParamsDict query =
         |> Dict.fromList
 
 
-updateModelFromUrl : Url -> Model -> Model
-updateModelFromUrl url model =
+updateModelFromDefaultsOrUrl : Model -> Model
+updateModelFromDefaultsOrUrl model =
     let
-        params : Dict String String
-        params =
+        defaultParams : Dict String String
+        defaultParams =
+            Dict.get model.pageId model.pageDefaultParams
+                |> Maybe.withDefault (queryToParamsDict model.searchModel.defaultQuery)
+
+        urlParams : Dict String String
+        urlParams =
             getQueryParamsDictFromUrl
                 model.fixedParams
-                (Dict.get model.pageId model.pageDefaultDisplays)
-                model.searchModel.defaultQuery
-                url
+                model.url
+
+        shouldApplyDefault : Bool
+        shouldApplyDefault =
+            urlParams
+                |> Dict.remove "q"
+                |> Dict.isEmpty
+
+        paramsToUpdateWith : Dict String String
+        paramsToUpdateWith =
+            if shouldApplyDefault then
+                (Dict.insert
+                    "q"
+                    (Maybe.withDefault "" (Dict.get "q" urlParams))
+                    defaultParams
+                )
+
+             else
+                urlParams
     in
-    { model
-        | searchModel = updateSearchModelFromParams params model model.searchModel
-    }
-        |> updateModelFromDisplayParams params
+    { model | searchModel = updateSearchModelFromParams paramsToUpdateWith model model.searchModel }
 
 
 updateSearchModelFromParams : Dict String String -> Model -> SearchModel -> SearchModel
@@ -4815,20 +4814,7 @@ updateSearchModelFromParams params model searchModel =
                         )
                     )
                 |> Maybe.withDefault []
-    }
-
-
-updateModelFromDisplayParams : Dict String String -> Model -> Model
-updateModelFromDisplayParams params model =
-    { model
-        | searchModel = updateSearchModelFromDisplayParams params model.searchModel
-    }
-
-
-updateSearchModelFromDisplayParams : Dict String String -> SearchModel -> SearchModel
-updateSearchModelFromDisplayParams params searchModel =
-    { searchModel
-        | resultDisplay =
+        , resultDisplay =
             case Dict.get "display" params of
                 Just "grouped" ->
                     Grouped
@@ -6605,6 +6591,11 @@ allOptions =
       , view = viewGeneralSettings
       , visibleIf = \_ -> True
       }
+    , { id = "default-params"
+      , label = "Default params"
+      , view = viewDefaultParams
+      , visibleIf = \_ -> True
+      }
     ]
 
 
@@ -6762,40 +6753,9 @@ viewActiveFiltersAndOptions model searchModel =
             Html.text ""
 
           else
-            viewActiveFilters searchModel
+            viewActiveFilters True searchModel
 
-        , if List.isEmpty searchModel.sort then
-            Html.text ""
-
-          else
-            Html.div
-                [ HA.class "row"
-                , HA.class "gap-tiny"
-                , HA.class "align-baseline"
-                ]
-                (List.concat
-                    [ [ Html.text "Sort by:" ]
-                    , List.map
-                        (\( field, dir ) ->
-                            Html.button
-                                [ HA.class "row"
-                                , HA.class "gap-tiny"
-                                , HE.onClick (SortRemoved field)
-                                ]
-                                [ Html.text
-                                    (field
-                                        |> String.split "."
-                                        |> (::) (sortDirToString dir)
-                                        |> List.reverse
-                                        |> String.join " "
-                                        |> String.Extra.humanize
-                                    )
-                                , getSortIcon field (Just dir)
-                                ]
-                        )
-                        searchModel.sort
-                    ]
-                )
+        , viewActiveSorts True searchModel
 
         , Html.div
             []
@@ -6839,18 +6799,14 @@ viewActiveFiltersAndOptions model searchModel =
         ]
 
 
-viewActiveFilters : SearchModel -> Html Msg
-viewActiveFilters searchModel =
+viewActiveFilters : Bool -> SearchModel -> Html Msg
+viewActiveFilters canClick searchModel =
     Html.div
         [ HA.class "row"
         , HA.class "gap-medium"
         , HA.class "align-center"
         ]
-        [ Html.div
-            [ HA.class "row"
-            , HA.class "gap-medium"
-            , HA.class "align-center"
-            ]
+        (List.append
             (List.map
                 (\{ class, label, list, removeMsg } ->
                     if List.isEmpty list then
@@ -6871,7 +6827,7 @@ viewActiveFilters searchModel =
                                             , HA.class "gap-tiny"
                                             , HAE.attributeMaybe HA.class class
                                             , getTraitClass value
-                                            , HE.onClick (removeMsg value)
+                                            , HAE.attributeIf canClick (HE.onClick (removeMsg value))
                                             ]
                                             [ viewPfsIcon 16 value
                                             , viewTextWithActionIcons (toTitleCase value)
@@ -7158,12 +7114,6 @@ viewActiveFilters searchModel =
                   }
                 ]
             )
-
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-medium"
-            , HA.class "align-baseline"
-            ]
             (mergeFromToValues searchModel
                 |> List.map
                     (\( field, maybeFrom, maybeTo ) ->
@@ -7177,7 +7127,7 @@ viewActiveFilters searchModel =
                                 |> Maybe.map
                                     (\from ->
                                         Html.button
-                                            [ HE.onClick (FilteredFromValueChanged field "")
+                                            [ HAE.attributeIf canClick (HE.onClick (FilteredFromValueChanged field ""))
                                             ]
                                             [ Html.text ("at least " ++ from ++ " " ++ sortFieldSuffix field) ]
                                     )
@@ -7186,7 +7136,7 @@ viewActiveFilters searchModel =
                                 |> Maybe.map
                                     (\to ->
                                         Html.button
-                                            [ HE.onClick (FilteredToValueChanged field "")
+                                            [ HAE.attributeIf canClick (HE.onClick (FilteredToValueChanged field ""))
                                             ]
                                             [ Html.text ("up to " ++ to ++ " " ++ sortFieldSuffix field) ]
                                     )
@@ -7194,7 +7144,43 @@ viewActiveFilters searchModel =
                             ]
                     )
             )
-        ]
+        )
+
+
+viewActiveSorts : Bool -> SearchModel -> Html Msg
+viewActiveSorts canClick searchModel =
+    if List.isEmpty searchModel.sort then
+        Html.text ""
+
+    else
+        Html.div
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "align-baseline"
+            ]
+            (List.concat
+                [ [ Html.text "Sort by:" ]
+                , List.map
+                    (\( field, dir ) ->
+                        Html.button
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HAE.attributeIf canClick (HE.onClick (SortRemoved field))
+                            ]
+                            [ Html.text
+                                (field
+                                    |> String.split "."
+                                    |> (::) (sortDirToString dir)
+                                    |> List.reverse
+                                    |> String.join " "
+                                    |> String.Extra.humanize
+                                )
+                            , getSortIcon field (Just dir)
+                            ]
+                    )
+                    searchModel.sort
+                ]
+            )
 
 
 viewFilterAbilities : Model -> SearchModel -> List (Html Msg)
@@ -9312,15 +9298,58 @@ viewGeneralSettings model searchModel =
     ]
 
 
+viewDefaultParams : Model -> SearchModel -> List (Html Msg)
+viewDefaultParams model searchModel =
+    let
+        pageDefaultSearchModel : SearchModel
+        pageDefaultSearchModel =
+            updateSearchModelFromParams
+                (Dict.get model.pageId model.pageDefaultParams
+                    |> Maybe.withDefault (queryToParamsDict searchModel.defaultQuery)
+                )
+                model
+                model.searchModel
+    in
+    [ Html.text
+        """
+        Default parameters are automatically applied when you visit a page without
+        any search parameters in the URL. These defaults are saved per page
+        type. You can view the defaults for the current page type below.
+        """
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-small"
+        ]
+        [ Html.button
+            [ HE.onClick SaveDefaultParamsPressed
+            ]
+            [ Html.text "Save current filters as default" ]
+        ]
+    , Html.h3
+        []
+        [ Html.text ("Defaults for " ++ model.pageId) ]
+    , viewActiveFilters False pageDefaultSearchModel
+    , viewActiveSorts False pageDefaultSearchModel
+    , Html.div
+        []
+        [ Html.text "Display: "
+        , Html.text
+            (case pageDefaultSearchModel.resultDisplay of
+                List ->
+                    "List"
+
+                Table ->
+                    "Table"
+
+                Grouped ->
+                    "Grouped"
+            )
+        ]
+    ]
+
+
 viewResultDisplay : Model -> SearchModel -> List (Html Msg)
 viewResultDisplay model searchModel =
-    let
-        pageDefaultDisplayIsCurrent : Bool
-        pageDefaultDisplayIsCurrent =
-            Dict.get model.pageId model.pageDefaultDisplays
-                |> Maybe.withDefault Dict.empty
-                |> (==) (Dict.fromList (getDisplayParamsList model searchModel))
-    in
     [ Html.div
         [ HA.class "row"
         , HA.class "align-baseline"
@@ -9348,33 +9377,6 @@ viewResultDisplay model searchModel =
             , text = "Grouped"
             }
         ]
-    , Html.h4
-        []
-        [ Html.text "Page default display" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-small"
-        ]
-        [ Html.button
-            [ HE.onClick SavePageDefaultDisplayPressed
-            , HA.disabled
-                (Dict.member model.pageId model.pageDefaultDisplays
-                    && pageDefaultDisplayIsCurrent
-                )
-            ]
-            [ Html.text "Save current as default" ]
-        , Html.button
-            [ HE.onClick LoadPageDefaultDisplayPressed
-            , HA.disabled
-                (not (Dict.member model.pageId model.pageDefaultDisplays)
-                    || pageDefaultDisplayIsCurrent
-                )
-            ]
-            [ Html.text "Load default" ]
-        ]
-    , Html.div
-        []
-        [ Html.text ("Current page ID: " ++ model.pageId) ]
     , Html.div
         [ HA.class "column"
         , HA.class "gap-small"
