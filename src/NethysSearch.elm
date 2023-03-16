@@ -256,6 +256,14 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
 
 
 type alias SearchResult =
+    { documentIds : List String
+    , searchAfter : Encode.Value
+    , total : Int
+    , groupAggs : Maybe GroupAggregations
+    }
+
+
+type alias SearchResultWithDocuments =
     { documents : List Document
     , searchAfter : Encode.Value
     , total : Int
@@ -357,7 +365,7 @@ type alias Document =
     , resistances : Maybe String
     , savingThrow : Maybe String
     , school : Maybe String
-    , searchMarkdown : ParsedMarkdownResult
+    , searchMarkdown : Markdown
     , secondaryCasters : Maybe String
     , secondaryChecks : Maybe String
     , senses : Maybe String
@@ -537,7 +545,8 @@ type LoadType
 
 
 type ResultDisplay
-    = Grouped
+    = Full
+    | Grouped
     | List
     | Table
 
@@ -601,8 +610,8 @@ type Msg
     | GotBodySize Size
     | GotDocuments (List String) Bool (Result Http.Error (List (Result String Document)))
     | GotGlobalAggregationsResult (Result Http.Error GlobalAggregations)
-    | GotGroupAggregationsResult (Result Http.Error SearchResult)
-    | GotSearchResult (Result Http.Error SearchResult)
+    | GotGroupAggregationsResult (Result Http.Error SearchResultWithDocuments)
+    | GotSearchResult (Result Http.Error SearchResultWithDocuments)
     | GotSourcesAggregationResult (Result Http.Error (List Source))
     | FilterAbilityChanged String
     | FilterComponentsOperatorChanged Bool
@@ -1326,6 +1335,39 @@ update msg model =
                         |> Maybe.map .documents
                         |> Maybe.andThen List.head
                         |> Maybe.map (getUrl model)
+
+                resultWithParsedMarkdown : Result Http.Error SearchResultWithDocuments
+                resultWithParsedMarkdown =
+                    Result.map
+                        (\r ->
+                            { r
+                                | documents =
+                                    List.map
+                                        (\d ->
+                                            case model.searchModel.resultDisplay of
+                                                List ->
+                                                    parseDocumentSearchMarkdown d
+
+                                                Full ->
+                                                    parseDocumentMarkdown d
+
+                                                _ ->
+                                                    d
+                                        )
+                                        r.documents
+                            }
+                        )
+                        result
+
+                childDocumentIds : List String
+                childDocumentIds =
+                    resultWithParsedMarkdown
+                        |> Result.map .documents
+                        |> Result.withDefault []
+                        |> List.map .markdown
+                        |> List.filterMap getParsedMarkdown
+                        |> List.concatMap getChildDocumentIds
+                        |> List.filter (\childId -> not (Dict.member childId model.documents))
             in
             ( updateCurrentSearchModel
                 (\searchModel ->
@@ -1333,7 +1375,7 @@ update msg model =
                         | searchResults =
                             List.append
                                 (List.filter Result.Extra.isOk searchModel.searchResults)
-                                [ result ]
+                                [ Result.map removeDocumentsFromSearchResult result ]
                         , searchResultGroupAggs =
                             result
                                 |> Result.toMaybe
@@ -1346,7 +1388,7 @@ update msg model =
                     | documents =
                         Dict.union
                             model.documents
-                            (result
+                            (resultWithParsedMarkdown
                                 |> Result.map .documents
                                 |> Result.map
                                     (List.map
@@ -1363,7 +1405,11 @@ update msg model =
                     navigation_loadUrl url
 
                 _ ->
-                    Cmd.none
+                    if List.isEmpty childDocumentIds then
+                        Cmd.none
+
+                    else
+                        fetchDocuments model False childDocumentIds
             )
 
         GotSourcesAggregationResult result ->
@@ -2100,13 +2146,51 @@ update msg model =
             )
 
         ResultDisplayChanged value ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | resultDisplay = value }
-                )
-                model
-                |> updateUrlWithSearchParams
+            let
+                newModel : Model
+                newModel =
+                    { model
+                        | documents =
+                            if value == List then
+                                Dict.map
+                                    (\_ -> Result.map parseDocumentSearchMarkdown)
+                                    model.documents
+
+                            else if value == Full then
+                                Dict.map
+                                    (\_ -> Result.map parseDocumentMarkdown)
+                                    model.documents
+
+                            else
+                                model.documents
+                    }
+
+                childDocumentIds : List String
+                childDocumentIds =
+                    newModel.documents
+                        |> Dict.values
+                        |> List.filterMap Result.toMaybe
+                        |> List.map .markdown
+                        |> List.filterMap getParsedMarkdown
+                        |> List.concatMap getChildDocumentIds
+                        |> List.filter (\childId -> not (Dict.member childId model.documents))
+            in
+            ( newModel
+            , Cmd.batch
+                [ updateCurrentSearchModel
+                    (\searchModel ->
+                        { searchModel
+                            | resultDisplay = value
+                        }
+                    )
+                    model
+                    |> updateUrlWithSearchParams
+                , if List.isEmpty childDocumentIds then
+                    Cmd.none
+
+                  else
+                    fetchDocuments model False childDocumentIds
+                ]
             )
 
         SaveColumnConfigurationPressed ->
@@ -2954,6 +3038,15 @@ fetchDocuments model fetchLinks ids =
             }
 
 
+removeDocumentsFromSearchResult : SearchResultWithDocuments -> SearchResult
+removeDocumentsFromSearchResult result =
+    { documentIds = List.map .id result.documents
+    , searchAfter = result.searchAfter
+    , total = result.total
+    , groupAggs = result.groupAggs
+    }
+
+
 parseMarkdown : Markdown -> Markdown
 parseMarkdown markdown =
     case markdown of
@@ -2971,6 +3064,11 @@ parseMarkdown markdown =
 parseDocumentMarkdown : Document -> Document
 parseDocumentMarkdown document =
     { document | markdown = parseMarkdown document.markdown }
+
+
+parseDocumentSearchMarkdown : Document -> Document
+parseDocumentSearchMarkdown document =
+    { document | searchMarkdown = parseMarkdown document.searchMarkdown }
 
 
 getParsedMarkdown : Markdown -> Maybe ParsedMarkdownResult
@@ -4021,6 +4119,9 @@ getSearchModelQueryParams model searchModel =
       )
     , ( "display"
       , case searchModel.resultDisplay of
+            Full ->
+                "full"
+
             Grouped ->
                 "grouped"
 
@@ -4816,6 +4917,9 @@ updateSearchModelFromParams params model searchModel =
                 |> Maybe.withDefault []
         , resultDisplay =
             case Dict.get "display" params of
+                Just "full" ->
+                    Full
+
                 Just "grouped" ->
                     Grouped
 
@@ -5264,7 +5368,7 @@ encodeObjectMaybe list =
         |> Encode.object
 
 
-esResultDecoder : Decode.Decoder SearchResult
+esResultDecoder : Decode.Decoder SearchResultWithDocuments
 esResultDecoder =
     Field.requireAt [ "hits", "hits" ] (Decode.list documentDecoder) <| \documents ->
     Field.requireAt [ "hits", "hits" ] (Decode.list (Decode.field "sort" Decode.value)) <| \sorts ->
@@ -5519,7 +5623,6 @@ documentDecoder =
     Field.attemptAt [ "_source", "lesson_markdown" ] Decode.string <| \lessons ->
     Field.attemptAt [ "_source", "lesson_type" ] Decode.string <| \lessonType ->
     Field.attemptAt [ "_source", "level" ] Decode.int <| \level ->
-    Field.attemptAt [ "_source", "search_markdown" ] Decode.string <| \searchMarkdown ->
     Field.attemptAt [ "_source", "markdown" ] Decode.string <| \markdown ->
     Field.attemptAt [ "_source", "mystery_markdown" ] Decode.string <| \mysteries ->
     Field.attemptAt [ "_source", "onset_raw" ] Decode.string <| \onset ->
@@ -5545,6 +5648,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "resistance_markdown" ] Decode.string <| \resistances ->
     Field.attemptAt [ "_source", "saving_throw_markdown" ] Decode.string <| \savingThrow ->
     Field.attemptAt [ "_source", "school" ] Decode.string <| \school ->
+    Field.attemptAt [ "_source", "search_markdown" ] Decode.string <| \searchMarkdown ->
     Field.attemptAt [ "_source", "secondary_casters_raw" ] Decode.string <| \secondaryCasters ->
     Field.attemptAt [ "_source", "secondary_check_markdown" ] Decode.string <| \secondaryChecks ->
     Field.attemptAt [ "_source", "sense_markdown" ] Decode.string <| \senses ->
@@ -5677,12 +5781,7 @@ documentDecoder =
         , resistances = resistances
         , savingThrow = savingThrow
         , school = school
-        , searchMarkdown =
-            searchMarkdown
-                |> Maybe.withDefault ""
-                |> Markdown.Parser.parse
-                |> Result.map (List.map (Markdown.Block.walk mergeInlines))
-                |> Result.mapError (List.map Markdown.Parser.deadEndToString)
+        , searchMarkdown = NotParsed (Maybe.withDefault "" searchMarkdown)
         , secondaryCasters = secondaryCasters
         , secondaryChecks = secondaryChecks
         , senses = senses
@@ -9338,6 +9437,9 @@ viewDefaultParams model searchModel =
                 List ->
                     "List"
 
+                Full ->
+                    "Full"
+
                 Table ->
                     "Table"
 
@@ -9363,6 +9465,13 @@ viewResultDisplay model searchModel =
             , text = "List"
             }
         , viewRadioButton
+            { checked = searchModel.resultDisplay == Full
+            , enabled = True
+            , name = "result-display"
+            , onInput = ResultDisplayChanged Full
+            , text = "Full"
+            }
+        , viewRadioButton
             { checked = searchModel.resultDisplay == Table
             , enabled = True
             , name = "result-display"
@@ -9384,6 +9493,9 @@ viewResultDisplay model searchModel =
         (case searchModel.resultDisplay of
             List ->
                 viewResultDisplayList model
+
+            Full ->
+                viewResultDisplayFull model
 
             Table ->
                 viewResultDisplayTable model searchModel
@@ -9420,6 +9532,11 @@ viewResultDisplayList model =
         , text = "Show summary"
         }
     ]
+
+
+viewResultDisplayFull : Model -> List (Html Msg)
+viewResultDisplayFull model =
+    []
 
 
 viewResultDisplayTable : Model -> SearchModel -> List (Html Msg)
@@ -10149,7 +10266,7 @@ viewSearchResults model searchModel =
         resultCount =
             searchModel.searchResults
                 |> List.map Result.toMaybe
-                |> List.map (Maybe.map .documents)
+                |> List.map (Maybe.map .documentIds)
                 |> List.map (Maybe.map List.length)
                 |> List.map (Maybe.withDefault 0)
                 |> List.sum
@@ -10184,6 +10301,9 @@ viewSearchResults model searchModel =
             , case searchModel.resultDisplay of
                 List ->
                     viewSearchResultsList model searchModel remaining resultCount
+
+                Full ->
+                    viewSearchResultsFull model searchModel remaining
 
                 Table ->
                     viewSearchResultsTable model searchModel remaining
@@ -10227,7 +10347,10 @@ viewSearchResultsList model searchModel remaining resultCount =
         (\result ->
             case result of
                 Ok r ->
-                    List.map (viewSingleSearchResult model) r.documents
+                    r.documentIds
+                        |> List.filterMap (\id -> Dict.get id model.documents)
+                        |> List.filterMap Result.toMaybe
+                        |> List.map (viewSingleSearchResult model)
 
                 Err err ->
                     [ Html.h2
@@ -10316,8 +10439,56 @@ viewSingleSearchResult model document =
                 [ HA.class "column"
                 , HA.class "gap-small"
                 ]
-                (viewMarkdown model 0 Nothing document.searchMarkdown)
+                (case document.searchMarkdown of
+                    Parsed parsed ->
+                        viewMarkdown model 0 Nothing parsed
+
+                    NotParsed _ ->
+                        [ Html.div
+                            [ HA.style "color" "red" ]
+                            [ Html.text ("Not parsed: " ++ document.id) ]
+                        ]
+                )
         ]
+
+
+viewSearchResultsFull : Model -> SearchModel -> Int -> List (Html Msg)
+viewSearchResultsFull model searchModel remaining =
+    [ List.concatMap
+        (\result ->
+            case result of
+                Ok r ->
+                    List.map
+                        (\id ->
+                            Html.section
+                                [ HA.class "column"
+                                , HA.class "gap-small"
+                                , HA.class "limit-width"
+                                , HA.class "fill-width-with-padding"
+                                , HA.class "fade-in"
+                                ]
+                                (viewDocument model id 0 Nothing)
+                        )
+                        r.documentIds
+
+                Err err ->
+                    [ Html.h2
+                        []
+                        [ Html.text (httpErrorToString err) ]
+                    ]
+        )
+        searchModel.searchResults
+    , if Maybe.Extra.isJust searchModel.tracker then
+        [ Html.div
+            [ HA.class "loader"
+            ]
+            []
+        ]
+
+      else
+        [ viewLoadMoreButtons model remaining ]
+    ]
+        |> List.concat
 
 
 viewSearchResultsTable : Model -> SearchModel -> Int -> List (Html Msg)
@@ -10446,16 +10617,18 @@ viewSearchResultGrid model searchModel =
                 (\result ->
                     case result of
                         Ok r ->
-                            List.map
-                                (\document ->
-                                    Html.tr
-                                        []
-                                        (List.map
-                                            (viewSearchResultGridCell model document)
-                                            ("name" :: searchModel.tableColumns)
-                                        )
-                                )
-                                r.documents
+                            r.documentIds
+                                |> List.filterMap (\id -> Dict.get id model.documents)
+                                |> List.filterMap Result.toMaybe
+                                |> List.map
+                                    (\document ->
+                                        Html.tr
+                                            []
+                                            (List.map
+                                                (viewSearchResultGridCell model document)
+                                                ("name" :: searchModel.tableColumns)
+                                            )
+                                    )
 
                         Err _ ->
                             []
@@ -11024,7 +11197,9 @@ viewSearchResultsGrouped model searchModel remaining =
         allDocuments : List Document
         allDocuments =
             searchModel.searchResults
-                |> List.concatMap (Result.map .documents >> Result.withDefault [])
+                |> List.concatMap (Result.map .documentIds >> Result.withDefault [])
+                |> List.filterMap (\id -> Dict.get id model.documents)
+                |> List.filterMap Result.toMaybe
 
         keys : List String
         keys =
