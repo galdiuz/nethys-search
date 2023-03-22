@@ -8775,6 +8775,11 @@ viewFilterNumbers model searchModel =
                   , step = "1"
                   , suffix = Nothing
                   }
+                , { field = "damage_die"
+                  , hint = Nothing
+                  , step = "1"
+                  , suffix = Nothing
+                  }
                 ]
             , [ Html.div
                     [ HA.class "column"
