@@ -6339,7 +6339,7 @@ viewDocument model id titleLevel overrideRight =
         Just (Ok document) ->
             case document.markdown of
                 Parsed parsed ->
-                    viewMarkdown model titleLevel overrideRight parsed
+                    viewMarkdown model document.id titleLevel overrideRight parsed
 
                 NotParsed _ ->
                     [ Html.div
@@ -10446,7 +10446,7 @@ viewSingleSearchResult model document =
                 ]
                 (case document.searchMarkdown of
                     Parsed parsed ->
-                        viewMarkdown model 0 Nothing parsed
+                        viewMarkdown model document.id 0 Nothing parsed
 
                     NotParsed _ ->
                         [ Html.div
@@ -12008,11 +12008,11 @@ parseAndViewAsMarkdown model string =
             |> Markdown.Parser.parse
             |> Result.map (List.map (Markdown.Block.walk mergeInlines))
             |> Result.mapError (List.map Markdown.Parser.deadEndToString)
-            |> viewMarkdown model 0 Nothing
+            |> viewMarkdown model "" 0 Nothing
 
 
-viewMarkdown : Model -> Int -> Maybe String -> ParsedMarkdownResult -> List (Html Msg)
-viewMarkdown model titleLevel overrideRight markdown =
+viewMarkdown : Model -> String -> Int -> Maybe String -> ParsedMarkdownResult -> List (Html Msg)
+viewMarkdown model id titleLevel overrideRight markdown =
     case markdown of
         Ok blocks ->
             case Markdown.Renderer.render (markdownRenderer model titleLevel overrideRight) blocks of
@@ -12020,10 +12020,19 @@ viewMarkdown model titleLevel overrideRight markdown =
                     List.concat v
 
                 Err err ->
-                    [ Html.text err ]
+                    [ Html.div
+                        [ HA.style "color" "red" ]
+                        [ Html.text ("Error rendering markdown for " ++ id ++ ":") ]
+                    , Html.div
+                        [ HA.style "color" "red" ]
+                        [ Html.text err ]
+                    ]
 
         Err errors ->
             [ Html.div
+                [ HA.style "color" "red" ]
+                [ Html.text ("Error parsing markdown for " ++ id ++ ":") ]
+            , Html.div
                 [ HA.style "color" "red" ]
                 (List.map Html.text errors)
             ]
