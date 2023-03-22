@@ -12774,6 +12774,15 @@ getTraitClass trait =
         "gargantuan" ->
             HA.class "trait-size"
 
+        "size" ->
+            HA.class "trait-size"
+
+        "metropolis" ->
+            HA.class "trait-size"
+
+        "town" ->
+            HA.class "trait-size"
+
         "no alignment" ->
             HA.class "trait-alignment"
 
@@ -12805,6 +12814,12 @@ getTraitClass trait =
             HA.class "trait-alignment"
 
         "ce" ->
+            HA.class "trait-alignment"
+
+        "alignment" ->
+            HA.class "trait-alignment"
+
+        "alignment abbreviation" ->
             HA.class "trait-alignment"
 
         "all ancestries" ->
