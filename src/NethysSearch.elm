@@ -149,6 +149,7 @@ type alias SearchModel =
     , searchResultGroupAggs : Maybe GroupAggregations
     , searchResults : List (Result Http.Error SearchResult)
     , searchSources : String
+    , searchTableColumns : String
     , searchTraits : String
     , searchTypes : String
     , selectedColumnResistance : String
@@ -233,6 +234,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , searchItemSubcategories = ""
     , searchResults = []
     , searchSources = ""
+    , searchTableColumns = ""
     , searchTraits = ""
     , searchTypes = ""
     , selectedColumnResistance = "acid"
@@ -703,6 +705,7 @@ type Msg
     | SearchItemCategoriesChanged String
     | SearchItemSubcategoriesChanged String
     | SearchSourcesChanged String
+    | SearchTableColumnsChanged String
     | SearchTraitsChanged String
     | SearchTypesChanged String
     | ShowAdditionalInfoChanged Bool
@@ -2327,6 +2330,15 @@ update msg model =
             ( updateCurrentSearchModel
                 (\searchModel ->
                     { searchModel | searchSources = value }
+                )
+                model
+            , Cmd.none
+            )
+
+        SearchTableColumnsChanged value ->
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | searchTableColumns = value }
                 )
                 model
             , Cmd.none
@@ -9610,13 +9622,42 @@ viewResultDisplayTable model searchModel =
                 []
                 [ Html.text "Available columns" ]
             , Html.div
+                [ HA.class "row"
+                , HA.class "input-container"
+                ]
+                [ Html.input
+                    [ HA.placeholder "Filter columns"
+                    , HA.value searchModel.searchTableColumns
+                    , HA.type_ "text"
+                    , HE.onInput SearchTableColumnsChanged
+                    ]
+                    []
+                , if String.isEmpty searchModel.searchTableColumns then
+                    Html.text ""
+
+                  else
+                    Html.button
+                        [ HA.class "input-button"
+                        , HE.onClick (SearchTableColumnsChanged "")
+                        ]
+                        [ FontAwesome.view FontAwesome.Solid.times ]
+                ]
+            , Html.div
                 [ HA.class "scrollbox"
                 , HA.class "column"
                 , HA.class "gap-small"
+                , HA.style "max-height" "170px"
                 ]
                 (List.concatMap
                     (viewResultDisplayTableColumn searchModel)
-                    Data.tableColumns
+
+                    (Data.tableColumns
+                        |> List.filter
+                            (String.toLower
+                                >> String.replace "_" " "
+                                >> String.contains (String.toLower searchModel.searchTableColumns)
+                            )
+                    )
                 )
             ]
         ]
