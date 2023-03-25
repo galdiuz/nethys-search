@@ -88,7 +88,6 @@ type alias Model =
     , showResultSummary : Bool
     , showResultTraits : Bool
     , sourcesAggregation : Maybe (Result Http.Error (List Source))
-    , theme : Theme
     , url : Url
     , windowSize : Size
     }
@@ -576,17 +575,6 @@ type SortDir
     | Desc
 
 
-type Theme
-    = Blackbird
-    | Dark
-    | Dead
-    | ExtraContrast
-    | Lavender
-    | Light
-    | Orc
-    | Paper
-
-
 type Msg
     = AbilityFilterAdded String
     | AbilityFilterRemoved String
@@ -738,7 +726,6 @@ type Msg
     | TableColumnMoved Int Int
     | TableColumnRemoved String
     | TableColumnSetChosen (List String)
-    | ThemeSelected Theme
     | TraditionFilterAdded String
     | TraditionFilterRemoved String
     | TraitGroupDeselectPressed (List String)
@@ -847,7 +834,6 @@ init flagsValue =
       , showResultSummary = True
       , showResultTraits = True
       , sourcesAggregation = Nothing
-      , theme = Dark
       , url = url
       , windowSize = { width = flags.windowWidth, height = flags.windowHeight }
       }
@@ -2746,37 +2732,6 @@ update msg model =
                 |> updateUrlWithSearchParams
             )
 
-        ThemeSelected theme ->
-            ( { model | theme = theme }
-            , saveToLocalStorage
-                "theme"
-                (case theme of
-                    Blackbird ->
-                        "jonny"
-
-                    Dark ->
-                        "dark"
-
-                    Dead ->
-                        "dead"
-
-                    Light ->
-                        "light"
-
-                    Orc ->
-                        "orc"
-
-                    Paper ->
-                        "paper"
-
-                    ExtraContrast ->
-                        "extra-contrast"
-
-                    Lavender ->
-                        "lavender"
-                )
-            )
-
         TraditionFilterAdded tradition ->
             ( model
             , updateCurrentSearchModel
@@ -3430,46 +3385,6 @@ updateModelFromLocalStorage ( key, value ) model =
                 _ ->
                     model
 
-        "theme" ->
-            case value of
-                "dark" ->
-                    { model | theme = Dark }
-
-                "light" ->
-                    { model | theme = Light }
-
-                "book-print" ->
-                    { model | theme = Paper }
-
-                "paper" ->
-                    { model | theme = Paper }
-
-                "extra-contrast" ->
-                    { model | theme = ExtraContrast }
-
-                "contrast-dark" ->
-                    { model | theme = ExtraContrast }
-
-                "dead" ->
-                    { model | theme = Dead }
-
-                "lavender" ->
-                    { model | theme = Lavender }
-
-                "lavander" ->
-                    { model | theme = Lavender }
-
-                "blackbird" ->
-                    { model | theme = Blackbird }
-
-                "jonny" ->
-                    { model | theme = Blackbird }
-
-                "orc" ->
-                    { model | theme = Orc }
-
-                _ ->
-                    model
         _ ->
             model
 
@@ -6019,30 +5934,6 @@ view model =
                     { pageWidth = model.pageWidth
                     }
                 )
-            , case model.theme of
-                Blackbird ->
-                    Html.text cssBlackbird
-
-                Dark ->
-                    Html.text cssDark
-
-                Dead ->
-                    Html.text cssDead
-
-                Light ->
-                    Html.text cssLight
-
-                Orc ->
-                    Html.text cssOrc
-
-                Paper ->
-                    Html.text cssPaper
-
-                ExtraContrast ->
-                    Html.text cssExtraContrast
-
-                Lavender ->
-                    Html.text cssLavender
 
             , if model.showResultAdditionalInfo then
                 Html.text ""
@@ -6140,83 +6031,6 @@ viewMenu model =
             , HA.class "gap-large"
             ]
             [ Html.section
-                [ HA.class "column"
-                , HA.class "gap-medium"
-                ]
-                [ Html.h1
-                    [ HA.class "title" ]
-                    [ Html.text "Options" ]
-                , Html.div
-                    [ HA.class "column"
-                    , HA.class "gap-tiny"
-                    ]
-                    [ Html.h2
-                        [ HA.class "title" ]
-                        [ Html.text "Theme" ]
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-medium"
-                        ]
-                        [ viewRadioButton
-                            { checked = model.theme == Dark
-                            , enabled = True
-                            , name = "theme-type"
-                            , onInput = ThemeSelected Dark
-                            , text = "Dark"
-                            }
-                        , viewRadioButton
-                            { checked = model.theme == Light
-                            , enabled = True
-                            , name = "theme-type"
-                            , onInput = ThemeSelected Light
-                            , text = "Light"
-                            }
-                        , viewRadioButton
-                            { checked = model.theme == Paper
-                            , enabled = True
-                            , name = "theme-type"
-                            , onInput = ThemeSelected Paper
-                            , text = "Paper"
-                            }
-                        , viewRadioButton
-                            { checked = model.theme == ExtraContrast
-                            , enabled = True
-                            , name = "theme-type"
-                            , onInput = ThemeSelected ExtraContrast
-                            , text = "Extra Contrast"
-                            }
-                        , viewRadioButton
-                            { checked = model.theme == Dead
-                            , enabled = True
-                            , name = "theme-type"
-                            , onInput = ThemeSelected Dead
-                            , text = "Theme of the Dead"
-                            }
-                        , viewRadioButton
-                            { checked = model.theme == Lavender
-                            , enabled = True
-                            , name = "theme-type"
-                            , onInput = ThemeSelected Lavender
-                            , text = "Lavender"
-                            }
-                        , viewRadioButton
-                            { checked = model.theme == Blackbird
-                            , enabled = True
-                            , name = "theme-type"
-                            , onInput = ThemeSelected Blackbird
-                            , text = "Blackbird"
-                            }
-                        , viewRadioButton
-                            { checked = model.theme == Orc
-                            , enabled = True
-                            , name = "theme-type"
-                            , onInput = ThemeSelected Orc
-                            , text = "Orc"
-                            }
-                        ]
-                    ]
-                ]
-            , Html.section
                 [ HA.class "column"
                 , HA.class "gap-medium"
                 ]
@@ -12926,6 +12740,7 @@ viewPfsIconWithLink height pfs =
             Html.a
                 [ HA.href "/PFS.aspx"
                 , HA.target "_blank"
+                , HA.style "display" "flex"
                 ]
                 [ viewPfsIcon height pfs
                 ]
@@ -13095,6 +12910,36 @@ css args =
     }
 
     :root, :host {
+        --color-bg: var(--bg-main, #0f0f0f);
+        --color-box-bg: var(--border-1, #333333);
+        --color-box-bg-alt: var(--border-2, #282828);
+        --color-box-border: var(--text-1, #eeeeee);
+        --color-box-text: var(--text-1, --color-text);
+        --color-table-border: var(--color-text);
+        --color-table-head-bg: var(--color-title1-bg);
+        --color-table-head-text: var(--color-title1-text);
+        --color-table-row-bg-alt: var(--bg-1, #64542f);
+        --color-table-row-bg: var(--bg-2, #342c19);
+        --color-table-row-text: var(--text-2, --color-text);
+        --color-text: var(--text-1, #eeeeee);
+        --color-text-inactive: var(--border-1, #999999);
+        --color-title1-bg: var(--head-bg, #522e2c);
+        --color-title1-text: var(--head-fg, #cbc18f);
+        --color-title2-bg: var(--mid-bg, #806e45);
+        --color-title2-text: var(--mid-fg, #0f0f0f);
+        --color-title3-bg: var(--sub-bg, #627d62);
+        --color-title3-text: var(--sub-fg, #0f0f0f);
+        --color-title4-bg: var(--header4-bg, #4a8091);
+        --color-title4-text: var(--header4-fg, #0f0f0f);
+        --color-title5-bg: var(--header5-bg, #494e70);
+        --color-title5-text: var(--header5-fg, #0f0f0f);
+        --color-title6-bg: var(--header6-bg, #623a6e);
+        --color-title6-text: var(--header6-fg, #0f0f0f);
+        --color-trait-bg: var(--head-bg, #522e2c);
+        --color-trait-border: #d8c483;
+        --color-trait-text: var(--text-2, #eeeeee);
+        --element-font-variant: var(--font-variant, small-caps);
+        --element-border-radius: var(--border-radius, 4px);
         --font-normal: 16px;
         --font-large: 20px;
         --font-very-large: 24px;
@@ -13103,6 +12948,7 @@ css args =
         --gap-medium: 12px;
         --gap-large: 20px;
         color: var(--color-text);
+        color-scheme: var(--color-scheme, light);
         font-family: "Century Gothic", CenturyGothic, AppleGothic, sans-serif;
         font-size: var(--font-normal);
         line-height: normal;
@@ -13122,7 +12968,7 @@ css args =
     }
 
     button {
-        border-color: var(--color-text-inactive);
+        border-color: var(--color-text);
         border-width: 1px;
         border-style: solid;
         border-radius: 4px;
@@ -13138,6 +12984,7 @@ css args =
     }
 
     button.excluded, button:disabled {
+        border-color: var(--color-text-inactive);
         color: var(--color-text-inactive);
     }
 
@@ -13534,7 +13381,9 @@ css args =
     .option-container {
         border-style: solid;
         border-width: 1px;
+        border-color: var(--color-box-border);
         background-color: var(--color-box-bg);
+        color: var(--color-box-text);
         padding: 8px;
     }
 
@@ -13589,7 +13438,7 @@ css args =
 
     .title {
         align-items: center;
-        border-radius: 4px;
+        border-radius: var(--element-border-radius);
         display: flex;
         flex-direction: row;
         font-variant: var(--element-font-variant);
@@ -13685,316 +13534,5 @@ css args =
         to {
             opacity: 1;
         }
-    }
-    """
-
-
-cssBlackbird : String
-cssBlackbird =
-    """
-    :root, :host {
-        color-scheme: dark;
-        --color-bg: var(--bg-main, #21252b);
-        --color-box-bg-alt: #21252b;
-        --color-box-bg: #404859;
-        --color-box-border: #ededed;
-        --color-table-border: var(--color-text);
-        --color-table-head-bg: var(--color-title1-bg);
-        --color-table-head-text: var(--color-title1-text);
-        --color-table-row-bg-alt: var(--bg-1, #64542f);
-        --color-table-row-bg: var(--bg-2, #342c19);
-        --color-table-row-text: var(--color-text);
-        --color-text: var(--text-1, #ededed);
-        --color-text-inactive: #999999;
-        --color-title1-bg: #404859;
-        --color-title1-text: #ededed;
-        --color-title2-bg: #404859;
-        --color-title2-text: #ededed;
-        --color-title3-bg: #404859;
-        --color-title3-text: #ededed;
-        --color-title4-bg: #404859;
-        --color-title4-text: #ededed;
-        --color-title5-bg: #404859;
-        --color-title5-text: #ededed;
-        --color-title6-bg: #404859;
-        --color-title6-text: #ededed;
-        --color-trait-bg: var(--head-bg, #522e2c);
-        --color-trait-border: var(--text-2, cbc5c3);
-        --color-trait-text: #eeeeee;
-        --element-font-variant: normal;
-    }
-    """
-
-
-cssDark : String
-cssDark =
-    """
-    :root, :host {
-        color-scheme: dark;
-        --color-bg: var(--bg-main, #0f0f0f);
-        --color-box-bg: #333333;
-        --color-box-bg-alt: #282828;
-        --color-box-border: #eeeeee;
-        --color-table-border: var(--color-text);
-        --color-table-head-bg: var(--color-title1-bg);
-        --color-table-head-text: var(--color-title1-text);
-        --color-table-row-bg-alt: var(--bg-1, #64542f);
-        --color-table-row-bg: var(--bg-2, #342c19);
-        --color-table-row-text: var(--color-text);
-        --color-text: #eeeeee;
-        --color-text-inactive: #999999;
-        --color-title1-bg: var(--head-bg, #522e2c);
-        --color-title1-text: var(--head-fg, #cbc18f);
-        --color-title2-bg: var(--mid-bg, #806e45);
-        --color-title2-text: var(--mid-fg, #0f0f0f);
-        --color-title3-bg: var(--sub-bg, #627d62);
-        --color-title3-text: var(--sub-fg, #0f0f0f);
-        --color-title4-bg: #4a8091;
-        --color-title4-text: #0f0f0f;
-        --color-title5-bg: #494e70;
-        --color-title5-text: #0f0f0f;
-        --color-title6-bg: #623a6e;
-        --color-title6-text: #0f0f0f;
-        --color-trait-bg: var(--head-bg, #522e2c);
-        --color-trait-border: #d8c483;
-        --color-trait-text: #eeeeee;
-        --element-font-variant: small-caps;
-    }
-    """
-
-
-cssDead : String
-cssDead =
-    """
-    :root, :host {
-        color-scheme: light;
-        --color-bg: var(--bg-main, #ffffff);
-        --color-box-bg-alt: #c8c8c8;
-        --color-box-bg: #dddddd;
-        --color-box-border: #eeeeee;
-        --color-table-border: var(--color-text);
-        --color-table-head-bg: var(--color-title1-bg);
-        --color-table-head-text: var(--color-title1-text);
-        --color-table-row-bg-alt: var(--bg-1, #c3cdce);
-        --color-table-row-bg: var(--bg-2, #74919b);
-        --color-table-row-text: var(--color-text);
-        --color-text: var(--text-1, #0f0f0f);
-        --color-text-inactive: #999999;
-        --color-title1-bg: var(--head-bg, #482d5a);
-        --color-title1-text: var(--head-fg, #cbc18f);
-        --color-title2-bg: var(--mid-bg, #709cab);
-        --color-title2-text: var(--mid-fg, #0f0f0f);
-        --color-title3-bg: var(--sub-bg, #c18479);
-        --color-title3-text: var(--sub-fg, #0f0f0f);
-        --color-title4-bg: #4a8091;
-        --color-title4-text: #0f0f0f;
-        --color-title5-bg: #494e70;
-        --color-title5-text: #0f0f0f;
-        --color-title6-bg: #623a6e;
-        --color-title6-text: #0f0f0f;
-        --color-trait-bg: var(--head-bg, #522e2c);
-        --color-trait-border: #d8c483;
-        --color-trait-text: #eeeeee;
-        --element-font-variant: small-caps;
-    }
-    """
-
-
-cssLight : String
-cssLight =
-    """
-    :root, :host {
-        color-scheme: light;
-        --color-bg: var(--bg-main, #eeeeee);
-        --color-box-bg-alt: #cccccc;
-        --color-box-bg: #dddddd;
-        --color-box-border: #111111;
-        --color-table-border: var(--color-text);
-        --color-table-head-bg: var(--color-title1-bg);
-        --color-table-head-text: var(--color-title1-text);
-        --color-table-row-bg-alt: var(--bg-1, #cbc18f);
-        --color-table-row-bg: var(--bg-2, #ded7bb);
-        --color-table-row-text: var(--color-text);
-        --color-text: #0f0f0f;
-        --color-text-inactive: #666666;
-        --color-title1-bg: var(--head-bg, #6f413e);
-        --color-title1-text: var(--head-fg, #cbc18f);
-        --color-title2-bg: var(--mid-bg, #806e45);
-        --color-title2-text: var(--mid-fg, #0f0f0f);
-        --color-title3-bg: var(--sub-bg, #627d62);
-        --color-title3-text: var(--sub-fg, #0f0f0f);
-        --color-title4-bg: #4a8091;
-        --color-title4-text: #0f0f0f;
-        --color-title5-bg: #494e70;
-        --color-title5-text: #0f0f0f;
-        --color-title6-bg: #623a6e;
-        --color-title6-text: #0f0f0f;
-        --color-trait-bg: var(--head-bg, #522e2c);
-        --color-trait-border: #d8c483;
-        --color-trait-text: #eeeeee;
-        --element-font-variant: small-caps;
-    }
-    """
-
-
-cssOrc : String
-cssOrc =
-    """
-    :root, :host {
-        color-scheme: dark;
-        --color-bg: var(--bg-main, #002604);
-        --color-box-bg-alt: #002604;
-        --color-box-bg: #0e3c10;
-        --color-box-border: #eeeeee;
-        --color-table-border: var(--color-text);
-        --color-table-head-bg: var(--color-title1-bg);
-        --color-table-head-text: var(--color-title1-text);
-        --color-table-row-bg-alt: var(--bg-1, #002604);
-        --color-table-row-bg: var(--bg-2, #4a4300);
-        --color-table-row-text: var(--color-text);
-        --color-text: #ddffdd;
-        --color-text-inactive: #999999;
-        --color-title1-bg: var(--head-bg, #4a4300);
-        --color-title1-text: var(--text-1, #cbc18f);
-        --color-title2-bg: var(--mid-bg, #002604);
-        --color-title2-text: var(--text-1, #ddffdd);
-        --color-title3-bg: var(--mid-bg, #4a4300);
-        --color-title3-text: var(--text-1, #ddffdd);
-        --color-title4-bg: #4a4300;
-        --color-title4-text: #ddffdd;
-        --color-title5-bg: #4a4300;
-        --color-title5-text: #ddffdd;
-        --color-title6-bg: #4a4300;
-        --color-title6-text: #ddffdd;
-        --color-trait-bg: var(--head-bg, #522e2c);
-        --color-trait-border: #d8c483;
-        --color-trait-text: var(--color-text);
-        --element-font-variant: small-caps;
-    }
-
-    .title, thead th:first-child, .query-input {
-        background-image: url(/Images/orc-face-circ-25t.webp);
-        background-repeat: no-repeat;
-        background-position: 10% 39%;
-    }
-
-    .option-container {
-        background-image: url(/Images/orc-face-circ-25t.webp);
-        background-repeat: no-repeat;
-        background-position: 10% -38px;
-    }
-    """
-
-
-cssPaper : String
-cssPaper =
-    """
-    :root, :host {
-        color-scheme: light;
-        --color-bg: #f1ece5;
-        --color-box-bg-alt: #cccccc;
-        --color-box-bg: #dddddd;
-        --color-box-border: #111111;
-        --color-table-border: var(--color-text);
-        --color-table-head-bg: var(--color-title1-bg);
-        --color-table-head-text: var(--color-title1-text);
-        --color-table-row-bg-alt: var(--bg-1, #ede3c7);
-        --color-table-row-bg: var(--bg-2, #f4eee0);
-        --color-table-row-text: var(--color-text);
-        --color-text: #111111;
-        --color-text-inactive: #999999;
-        --color-title1-bg: var(--head-bg, #5d0000);
-        --color-title1-text: var(--head-fg, #cbc18f);
-        --color-title2-bg: var(--mid-bg, #dbd0bc);
-        --color-title2-text: var(--mid-fg, #0f0f0f);
-        --color-title3-bg: var(--sub-bg, #002564);
-        --color-title3-text: var(--sub-fg, #c8c6b7);
-        --color-title4-bg: var(--sub-bg, #002564);
-        --color-title4-text: var(--sub-fg, #c8c6b7);
-        --color-title5-bg: var(--sub-bg, #002564);
-        --color-title5-text: var(--sub-fg, #c8c6b7);
-        --color-title6-bg: var(--sub-bg, #002564);
-        --color-title6-text: var(--sub-fg, #c8c6b7);
-        --color-trait-bg: var(--head-bg, #522e2c);
-        --color-trait-border: #d8c483;
-        --color-trait-text: #eeeeee;
-        --element-font-variant: small-caps;
-    }
-    """
-
-
-cssExtraContrast : String
-cssExtraContrast =
-    """
-    :root, :host {
-        color-scheme: dark;
-        --color-bg: var(--bg-main, #0f0f0f);
-        --color-box-bg-alt: #282828;
-        --color-box-bg: #333333;
-        --color-box-border: #eeeeee;
-        --color-table-border: var(--color-text);
-        --color-table-head-bg: var(--color-title1-bg);
-        --color-table-head-text: var(--color-title1-text);
-        --color-table-row-bg-alt: var(--bg-1, #cccccc);
-        --color-table-row-bg: var(--bg-2, #ffffff);
-        --color-table-row-text: var(--text-2, #000000);
-        --color-text: var(--text-1, #ffffff);
-        --color-text-inactive: #999999;
-        --color-title1-bg: var(--head-bg, #482d5a);
-        --color-title1-text: var(--head-fg, #cbc18f);
-        --color-title2-bg: var(--mid-bg, #709cab);
-        --color-title2-text: var(--mid-fg, #0f0f0f);
-        --color-title3-bg: var(--sub-bg, #c18479);
-        --color-title3-text: var(--sub-fg, #0f0f0f);
-        --color-title4-bg: #4a8091;
-        --color-title4-text: #0f0f0f;
-        --color-title5-bg: #494e70;
-        --color-title5-text: #0f0f0f;
-        --color-title6-bg: #623a6e;
-        --color-title6-text: #0f0f0f;
-        --color-trait-bg: var(--head-bg, #522e2c);
-        --color-trait-border: #d8c483;
-        --color-trait-text: #eeeeee;
-        --color-table-even: #ffffff;
-        --color-table-odd: #cccccc;
-        --color-table-border: #0f0f0f;
-        --element-font-variant: small-caps;
-    }
-    """
-
-
-cssLavender : String
-cssLavender =
-    """
-    :root, :host {
-        color-scheme: light;
-        --color-bg: #ffffff;
-        --color-box-bg-alt: var(--bg-0, c9c0d8);
-        --color-box-bg: var(--sub-bg, #f0e6ff);
-        --color-box-border: #111111;
-        --color-table-border: var(--color-text);
-        --color-table-head-bg: var(--color-title1-bg);
-        --color-table-head-text: var(--head-fg, #ffffff);
-        --color-table-row-bg-alt: var(--bg-1, #64542f);
-        --color-table-row-bg: var(--bg-2, #342c19);
-        --color-table-row-text: var(--text-2, #ffffff);
-        --color-text: #000000;
-        --color-text-inactive: #999999;
-        --color-title1-bg: var(--head-bg, #522e2c);
-        --color-title1-text: var(--head-fg, #cbc18f);
-        --color-title2-bg: var(--mid-bg, #b8a0ce);
-        --color-title2-text: var(--mid-fg, #0f0f0f);
-        --color-title3-bg: var(--sub-bg, #f0e6ff);
-        --color-title3-text: var(--sub-fg, #0f0f0f);
-        --color-title4-bg: #4a8091;
-        --color-title4-text: #0f0f0f;
-        --color-title5-bg: #494e70;
-        --color-title5-text: #0f0f0f;
-        --color-title6-bg: #623a6e;
-        --color-title6-text: #0f0f0f;
-        --color-trait-bg: var(--head-bg, #522e2c);
-        --color-trait-border: #d8c483;
-        --color-trait-text: #eeeeee;
-        --element-font-variant: small-caps;
     }
     """
