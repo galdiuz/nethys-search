@@ -6819,6 +6819,26 @@ viewActiveFilters canClick searchModel =
                   , removeMsg = AlignmentFilterRemoved
                   }
                 , { class = Nothing
+                  , label = "Include armor categories:"
+                  , list = boolDictIncluded searchModel.filteredArmorCategories
+                  , removeMsg = ArmorCategoryFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude armor categories:"
+                  , list = boolDictExcluded searchModel.filteredArmorCategories
+                  , removeMsg = ArmorCategoryFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Include armor groups:"
+                  , list = boolDictIncluded searchModel.filteredArmorGroups
+                  , removeMsg = ArmorGroupFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude armor groups:"
+                  , list = boolDictExcluded searchModel.filteredArmorGroups
+                  , removeMsg = ArmorGroupFilterRemoved
+                  }
+                , { class = Nothing
                   , label =
                         if searchModel.filterComponentsOperator then
                             "Include all components:"
