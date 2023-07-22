@@ -30,7 +30,6 @@ import Maybe.Extra
 import Process
 import Regex
 import Result.Extra
-import Set exposing (Set)
 import String.Extra
 import Svg
 import Svg.Attributes as SA
@@ -166,7 +165,7 @@ type alias SearchModel =
     , sortHasChanged : Bool
     , tableColumns : List String
     , tracker : Maybe Int
-    , visibleFilterBoxes : Set String
+    , visibleFilterBoxes : List String
     }
 
 
@@ -251,7 +250,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , sortHasChanged = False
     , tableColumns = []
     , tracker = Nothing
-    , visibleFilterBoxes = Set.empty
+    , visibleFilterBoxes = []
     }
 
 
@@ -2369,10 +2368,10 @@ update msg model =
                     { searchModel
                         | visibleFilterBoxes =
                             if show then
-                                Set.insert id searchModel.visibleFilterBoxes
+                                id :: searchModel.visibleFilterBoxes
 
                             else
-                                Set.remove id searchModel.visibleFilterBoxes
+                                List.Extra.remove id searchModel.visibleFilterBoxes
                     }
                 )
                 model
@@ -6263,10 +6262,10 @@ viewFilters model searchModel =
                             [ HE.onClick
                                 (ShowFilterBox
                                     filter.id
-                                    (not (Set.member filter.id searchModel.visibleFilterBoxes))
+                                    (not (List.member filter.id searchModel.visibleFilterBoxes))
                                 )
                             , HAE.attributeIf
-                                (Set.member filter.id searchModel.visibleFilterBoxes)
+                                (List.member filter.id searchModel.visibleFilterBoxes)
                                 (HA.class "active")
                             ]
                             [ Html.text filter.label ]
@@ -6298,10 +6297,10 @@ viewFilters model searchModel =
                             [ HE.onClick
                                 (ShowFilterBox
                                     filter.id
-                                    (not (Set.member filter.id searchModel.visibleFilterBoxes))
+                                    (not (List.member filter.id searchModel.visibleFilterBoxes))
                                 )
                             , HAE.attributeIf
-                                (Set.member filter.id searchModel.visibleFilterBoxes)
+                                (List.member filter.id searchModel.visibleFilterBoxes)
                                 (HA.class "active")
                             ]
                             [ Html.text filter.label ]
@@ -6313,15 +6312,19 @@ viewFilters model searchModel =
             [ HA.class "column"
             , HA.class "gap-small"
             ]
-            (List.map
-                (\filter ->
-                    if Set.member filter.id searchModel.visibleFilterBoxes then
-                        viewOptionBox model searchModel filter
+            (allFilters ++ allOptions
+                |> List.filterMap
+                    (\filterBox ->
+                        case List.Extra.elemIndex filterBox.id searchModel.visibleFilterBoxes of
+                            Just idx ->
+                                Just ( idx, filterBox )
 
-                    else
-                        Html.text ""
-                )
-                (allFilters ++ allOptions)
+                            Nothing ->
+                                Nothing
+                    )
+                |> List.sortBy Tuple.first
+                |> List.map Tuple.second
+                |> List.map (viewOptionBox model searchModel)
             )
         ]
 
