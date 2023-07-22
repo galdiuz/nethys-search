@@ -3466,7 +3466,7 @@ urlToDocumentId url =
             withId "ancestry"
 
         "/animalcompanions.aspx" ->
-            if Dict.get "ddvanced" queryParams == Just [ "true" ] then
+            if Dict.get "advanced" queryParams == Just [ "true" ] then
                 withId "animal-companion-advanced"
 
             else if Dict.get "specialized" queryParams == Just [ "true" ] then
