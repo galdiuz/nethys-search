@@ -3559,6 +3559,9 @@ urlToDocumentId url =
         "/eidolons.aspx" ->
             withId "eidolon"
 
+        "/elements.aspx" ->
+            withId "element"
+
         "/equipment.aspx" ->
             withId "equipment"
 
