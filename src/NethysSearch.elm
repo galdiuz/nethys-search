@@ -9267,22 +9267,42 @@ viewDefaultParams model searchModel =
     , viewActiveFilters False pageDefaultSearchModel
     , viewActiveSorts False pageDefaultSearchModel
     , Html.div
-        []
-        [ Html.text "Display: "
-        , Html.text
-            (case pageDefaultSearchModel.resultDisplay of
-                List ->
-                    "List"
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        ]
+        [ Html.div
+            []
+            [ Html.text "Display: "
+            , Html.text
+                (case pageDefaultSearchModel.resultDisplay of
+                    List ->
+                        "List"
 
-                Full ->
-                    "Full"
+                    Full ->
+                        "Full"
 
-                Table ->
-                    "Table"
+                    Table ->
+                        "Table"
 
-                Grouped ->
-                    "Grouped"
-            )
+                    Grouped ->
+                        "Grouped"
+                )
+            ]
+        , case pageDefaultSearchModel.resultDisplay of
+            Table ->
+                Html.div
+                    []
+                    [ Html.text "Columns: "
+                    , Html.text
+                        (pageDefaultSearchModel.tableColumns
+                            |> List.map String.Extra.humanize
+                            |> List.map toTitleCase
+                            |> String.join ", "
+                        )
+                    ]
+
+            _ ->
+                Html.text ""
         ]
     ]
 
