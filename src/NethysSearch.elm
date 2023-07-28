@@ -317,6 +317,7 @@ type alias Document =
     , domainSpell : Maybe String
     , duration : Maybe String
     , durationValue : Maybe Int
+    , elements : List String
     , familiarAbilities : List String
     , favoredWeapons : Maybe String
     , feats : Maybe String
@@ -5493,6 +5494,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "domain_spell_markdown" ] Decode.string <| \domainSpell ->
     Field.attemptAt [ "_source", "duration" ] Decode.int <| \durationValue ->
     Field.attemptAt [ "_source", "duration_raw" ] Decode.string <| \duration ->
+    Field.attemptAt [ "_source", "element" ] stringListDecoder <| \elements ->
     Field.attemptAt [ "_source", "familiar_ability" ] stringListDecoder <| \familiarAbilities ->
     Field.attemptAt [ "_source", "favored_weapon_markdown" ] Decode.string <| \favoredWeapons ->
     Field.attemptAt [ "_source", "feat_markdown" ] Decode.string <| \feats ->
@@ -5627,6 +5629,7 @@ documentDecoder =
         , domainSpell = domainSpell
         , duration = duration
         , durationValue = durationValue
+        , elements = Maybe.withDefault [] elements
         , familiarAbilities = Maybe.withDefault [] familiarAbilities
         , favoredWeapons = favoredWeapons
         , feats = feats
@@ -9738,6 +9741,7 @@ viewResultDisplayGrouped model searchModel =
                 , "alignment"
                 , "creature_family"
                 , "duration"
+                , "element"
                 , "heighten_level"
                 , "item_category"
                 , "item_subcategory"
@@ -10720,6 +10724,13 @@ viewSearchResultGridCell model document column =
             [ "duration" ] ->
                 maybeAsText document.duration
 
+            [ "element" ] ->
+                document.elements
+                    |> List.map toTitleCase
+                    |> String.join ", "
+                    |> Html.text
+                    |> List.singleton
+
             [ "favored_weapon" ] ->
                 maybeAsMarkdown document.favoredWeapons
 
@@ -11545,6 +11556,18 @@ groupDocumentsByField keys field documents =
                         )
                         document
                         dict
+
+                "element" ->
+                    if List.isEmpty document.elements then
+                        insertToListDict "" document dict
+
+                    else
+                        List.foldl
+                            (\element ->
+                                insertToListDict (String.toLower element) document
+                            )
+                            dict
+                            document.elements
 
                 "heighten_level" ->
                     if List.isEmpty document.heightenLevels then

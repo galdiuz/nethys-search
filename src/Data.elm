@@ -522,6 +522,7 @@ tableColumns =
     , "domain"
     , "domain_spell"
     , "duration"
+    , "element"
     , "favored_weapon"
     , "feat"
     , "follower_alignment"
