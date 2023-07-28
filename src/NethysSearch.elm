@@ -303,6 +303,7 @@ type alias Document =
     , components : List String
     , constitution : Maybe Int
     , cost : Maybe String
+    , creatureAbilities : List String
     , creatureFamily : Maybe String
     , creatureFamilyMarkdown : Maybe String
     , damage : Maybe String
@@ -5478,6 +5479,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "component" ] stringListDecoder <| \components ->
     Field.attemptAt [ "_source", "constitution" ] Decode.int <| \constitution ->
     Field.attemptAt [ "_source", "cost_markdown" ] Decode.string <| \cost ->
+    Field.attemptAt [ "_source", "creature_ability" ] stringListDecoder <| \creatureAbilities ->
     Field.attemptAt [ "_source", "creature_family" ] Decode.string <| \creatureFamily ->
     Field.attemptAt [ "_source", "creature_family_markdown" ] Decode.string <| \creatureFamilyMarkdown ->
     Field.attemptAt [ "_source", "damage" ] Decode.string <| \damage ->
@@ -5611,6 +5613,7 @@ documentDecoder =
         , components = Maybe.withDefault [] components
         , constitution = constitution
         , cost = cost
+        , creatureAbilities = Maybe.withDefault [] creatureAbilities
         , creatureFamily = creatureFamily
         , creatureFamilyMarkdown = creatureFamilyMarkdown
         , damage = damage
@@ -10638,6 +10641,13 @@ viewSearchResultGridCell model document column =
                 document.checkPenalty
                     |> Maybe.map numberWithSign
                     |> maybeAsText
+
+            [ "creature_ability" ] ->
+                document.creatureAbilities
+                    |> List.sort
+                    |> String.join ", "
+                    |> Html.text
+                    |> List.singleton
 
             [ "creature_family" ] ->
                 maybeAsMarkdown document.creatureFamilyMarkdown

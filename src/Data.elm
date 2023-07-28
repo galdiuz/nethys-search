@@ -510,6 +510,7 @@ tableColumns =
     , "component"
     , "constitution"
     , "cost"
+    , "creature_ability"
     , "creature_family"
     , "damage"
     , "defense_proficiency"
