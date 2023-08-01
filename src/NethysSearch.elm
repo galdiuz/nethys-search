@@ -28,6 +28,7 @@ import Markdown.Parser
 import Markdown.Renderer
 import Maybe.Extra
 import Process
+import Random
 import Regex
 import Result.Extra
 import String.Extra
@@ -76,6 +77,7 @@ type alias Model =
     , pageSize : Int
     , pageWidth : Int
     , previewLink : Maybe { documentId : String, elementPosition : Position, fragment : Maybe String }
+    , randomSeed : Int
     , resultBaseUrl : String
     , savedColumnConfigurations : Dict String (List String)
     , savedColumnConfigurationName : String
@@ -433,6 +435,7 @@ type alias Flags =
     , localStorage : Dict String String
     , noUi : Bool
     , pageId : String
+    , randomSeed : Int
     , removeFilters : List String
     , resultBaseUrl : String
     , showFilters : List String
@@ -453,6 +456,7 @@ defaultFlags =
     , localStorage = Dict.empty
     , noUi = False
     , pageId = ""
+    , randomSeed = 1
     , removeFilters = []
     , resultBaseUrl = "https://2e.aonprd.com/"
     , showFilters = [ "numbers", "pfs", "rarities", "traits", "types" ]
@@ -635,6 +639,7 @@ type Msg
     | LoadMorePressed Int
     | LocalStorageValueReceived Decode.Value
     | MenuOpenDelayPassed
+    | NewRandomSeedPressed
     | NoOp
     | OpenInNewTabChanged Bool
     | PageSizeChanged Int
@@ -643,6 +648,7 @@ type Msg
     | PfsFilterRemoved String
     | QueryChanged String
     | QueryTypeSelected QueryType
+    | RandomSeedGenerated Int
     | RarityFilterAdded String
     | RarityFilterRemoved String
     | RegionFilterAdded String
@@ -813,6 +819,7 @@ init flagsValue =
       , pageSize = 50
       , pageWidth = 0
       , previewLink = Nothing
+      , randomSeed = flags.randomSeed
       , resultBaseUrl =
             if String.endsWith "/" flags.resultBaseUrl then
                 String.dropRight 1 flags.resultBaseUrl
@@ -1701,6 +1708,11 @@ update msg model =
             , Cmd.none
             )
 
+        NewRandomSeedPressed ->
+            ( model
+            , Random.generate RandomSeedGenerated (Random.int 0 2147483647)
+            )
+
         NoOp ->
             ( model
             , Cmd.none
@@ -1770,6 +1782,17 @@ update msg model =
                 model
                 |> updateUrlWithSearchParams
             )
+
+        RandomSeedGenerated seed ->
+            ( { model | randomSeed = seed }
+            , Cmd.none
+            )
+                |> (if sortIsRandom model.searchModel then
+                        searchWithCurrentQuery LoadNewForce
+
+                    else
+                        identity
+                   )
 
         RarityFilterAdded rarity ->
             ( model
@@ -2472,14 +2495,19 @@ update msg model =
                 (\searchModel ->
                     { searchModel
                         | sort =
-                            if List.any (Tuple.first >> (==) field) searchModel.sort then
+                            if field == "random" then
+                                [ ( field, dir ) ]
+
+                            else if List.any (Tuple.first >> (==) field) searchModel.sort then
                                 List.Extra.updateIf
                                     (Tuple.first >> (==) field)
                                     (Tuple.mapSecond (\_ -> dir))
                                     searchModel.sort
+                                    |> List.Extra.remove ( "random", Asc )
 
                             else
                                 List.append searchModel.sort [ ( field, dir ) ]
+                                    |> List.Extra.remove ( "random", Asc )
                     }
                 )
                 model
@@ -3991,7 +4019,11 @@ getSearchModelQueryParams model searchModel =
       , searchModel.sort
             |> List.map
                 (\( field, dir ) ->
-                    field ++ "-" ++ sortDirToString dir
+                    if field == "random" then
+                        field
+
+                    else
+                        field ++ "-" ++ sortDirToString dir
                 )
       )
     , ( "display"
@@ -4064,41 +4096,54 @@ buildSearchBody model searchModel load =
             , Encode.object
                 [ ( "function_score"
                   , Encode.object
-                        [ buildSearchQuery model searchModel
-                        , ( "boost_mode", Encode.string "multiply" )
-                        , ( "functions"
-                          , Encode.list Encode.object
-                                [ [ ( "filter"
-                                    , Encode.object
-                                        [ ( "terms"
-                                          , Encode.object
-                                                [ ( "type"
-                                                  , Encode.list Encode.string
-                                                        [ "Ancestry", "Class" ]
-                                                  )
-                                                ]
-                                          )
-                                        ]
-                                    )
-                                  , ( "weight", Encode.float 1.1 )
-                                  ]
-                                , [ ( "filter"
-                                    , Encode.object
-                                        [ ( "terms"
-                                          , Encode.object
-                                                [ ( "type"
-                                                  , Encode.list Encode.string
-                                                        [ "Trait" ]
-                                                  )
-                                                ]
-                                          )
-                                        ]
-                                    )
-                                  , ( "weight", Encode.float 1.05 )
-                                  ]
-                                ]
-                          )
-                        ]
+                        (if sortIsRandom searchModel then
+                            [ buildSearchQuery model searchModel
+                            , ( "boost_mode", Encode.string "replace" )
+                            , ( "random_score"
+                              , Encode.object
+                                    [ ( "seed", Encode.int model.randomSeed )
+                                    , ( "field", Encode.string "_seq_no" )
+                                    ]
+                              )
+                            ]
+
+                         else
+                            [ buildSearchQuery model searchModel
+                            , ( "boost_mode", Encode.string "multiply" )
+                            , ( "functions"
+                              , Encode.list Encode.object
+                                    [ [ ( "filter"
+                                        , Encode.object
+                                            [ ( "terms"
+                                              , Encode.object
+                                                    [ ( "type"
+                                                      , Encode.list Encode.string
+                                                            [ "Ancestry", "Class" ]
+                                                      )
+                                                    ]
+                                              )
+                                            ]
+                                        )
+                                      , ( "weight", Encode.float 1.1 )
+                                      ]
+                                    , [ ( "filter"
+                                        , Encode.object
+                                            [ ( "terms"
+                                              , Encode.object
+                                                    [ ( "type"
+                                                      , Encode.list Encode.string
+                                                            [ "Trait" ]
+                                                      )
+                                                    ]
+                                              )
+                                            ]
+                                        )
+                                      , ( "weight", Encode.float 1.05 )
+                                      ]
+                                    ]
+                              )
+                            ]
+                        )
                 )
               ]
             )
@@ -4320,6 +4365,11 @@ sortDirFromString str =
 
         _ ->
             Nothing
+
+
+sortIsRandom : SearchModel -> Bool
+sortIsRandom searchModel =
+    searchModel.sort == [ ( "random", Asc ) ]
 
 
 buildSearchFilterTerms : Model -> SearchModel -> List (List ( String, Encode.Value ))
@@ -4792,7 +4842,11 @@ updateSearchModelFromParams params model searchModel =
                                         (sortDirFromString dir)
 
                                 _ ->
-                                    Nothing
+                                    if str == "random" then
+                                        Just ( str, Asc )
+
+                                    else
+                                        Nothing
                         )
                     )
                 |> Maybe.withDefault []
@@ -5229,6 +5283,7 @@ flagsDecoder =
     Field.attempt "localStorage" (Decode.dict Decode.string) <| \localStorage ->
     Field.attempt "noUi" Decode.bool <| \noUi ->
     Field.attempt "pageId" Decode.string <| \pageId ->
+    Field.attempt "randomSeed" Decode.int <| \randomSeed ->
     Field.attempt "removeFilters" (Decode.list Decode.string) <| \removeFilters ->
     Field.attempt "showFilters" (Decode.list Decode.string) <| \showFilters ->
     Field.attempt "windowHeight" Decode.int <| \windowHeight ->
@@ -5246,6 +5301,7 @@ flagsDecoder =
         , localStorage = Maybe.withDefault defaultFlags.localStorage localStorage
         , noUi = Maybe.withDefault defaultFlags.noUi noUi
         , pageId = Maybe.withDefault defaultFlags.pageId pageId
+        , randomSeed = Maybe.withDefault defaultFlags.randomSeed randomSeed
         , removeFilters = Maybe.withDefault defaultFlags.removeFilters removeFilters
         , resultBaseUrl = Maybe.withDefault defaultFlags.resultBaseUrl resultBaseUrl
         , showFilters = Maybe.withDefault defaultFlags.showFilters showFilters
@@ -7111,12 +7167,16 @@ viewActiveSorts canClick searchModel =
                             , HAE.attributeIf canClick (HE.onClick (SortRemoved field))
                             ]
                             [ Html.text
-                                (field
-                                    |> String.split "."
-                                    |> (::) (sortDirToString dir)
-                                    |> List.reverse
-                                    |> String.join " "
-                                    |> String.Extra.humanize
+                                (if field == "random" then
+                                    "Random"
+
+                                 else
+                                    field
+                                        |> String.split "."
+                                        |> (::) (sortDirToString dir)
+                                        |> List.reverse
+                                        |> String.join " "
+                                        |> String.Extra.humanize
                                 )
                             , getSortIcon field (Just dir)
                             ]
@@ -9903,23 +9963,35 @@ viewSortResults model searchModel =
                                 ]
                                 [ FontAwesome.view FontAwesome.Solid.times
                                 ]
-                            , Html.button
-                                [ HE.onClick (SortAdded field (if dir == Asc then Desc else Asc))
-                                ]
-                                [ getSortIcon field (Just dir)
-                                ]
-                            , Html.button
-                                [ HA.disabled (index == 0)
-                                , HE.onClick (SortOrderChanged index (index - 1))
-                                ]
-                                [ FontAwesome.view FontAwesome.Solid.chevronUp
-                                ]
-                            , Html.button
-                                [ HA.disabled (index + 1 == List.length searchModel.sort)
-                                , HE.onClick (SortOrderChanged index (index + 1))
-                                ]
-                                [ FontAwesome.view FontAwesome.Solid.chevronDown
-                                ]
+                            , if field == "random" then
+                                Html.text ""
+
+                              else
+                                Html.button
+                                    [ HE.onClick (SortAdded field (if dir == Asc then Desc else Asc))
+                                    ]
+                                    [ getSortIcon field (Just dir)
+                                    ]
+                            , if field == "random" then
+                                Html.text ""
+
+                              else
+                                Html.button
+                                    [ HA.disabled (index == 0)
+                                    , HE.onClick (SortOrderChanged index (index - 1))
+                                    ]
+                                    [ FontAwesome.view FontAwesome.Solid.chevronUp
+                                    ]
+                            , if field == "random" then
+                                Html.text ""
+
+                              else
+                                Html.button
+                                    [ HA.disabled (index + 1 == List.length searchModel.sort)
+                                    , HE.onClick (SortOrderChanged index (index + 1))
+                                    ]
+                                    [ FontAwesome.view FontAwesome.Solid.chevronDown
+                                    ]
                             , Html.text (sortFieldToLabel field)
                             ]
                     )
@@ -9950,6 +10022,36 @@ viewSortResults model searchModel =
                     )
                 )
             ]
+        ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        , HA.class "align-center"
+        ]
+        [ Html.button
+            [ HE.onClick
+                (if List.member ( "random", Asc ) searchModel.sort then
+                    (SortRemoved "random")
+
+                 else
+                    (SortAdded "random" Asc)
+                )
+            , HAE.attributeIf (List.member ( "random", Asc ) searchModel.sort) (HA.class "active")
+            ]
+            [ Html.text "Random sort" ]
+        , if sortIsRandom model.searchModel then
+            Html.text ("Current seed: " ++ String.fromInt model.randomSeed)
+
+          else
+            Html.text ""
+        , if sortIsRandom model.searchModel then
+            Html.button
+                [ HE.onClick NewRandomSeedPressed
+                ]
+                [ Html.text "New seed" ]
+
+          else
+            Html.text ""
         ]
     , Html.div
         []
