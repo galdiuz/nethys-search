@@ -6808,9 +6808,11 @@ viewActiveFilters canClick searchModel =
                                             , getTraitClass value
                                             , HAE.attributeIf canClick (HE.onClick (removeMsg value))
                                             ]
-                                            [ viewPfsIcon 16 value
-                                            , viewTextWithActionIcons (toTitleCase value)
-                                            ]
+                                            (List.append
+                                                [ viewPfsIcon 16 value
+                                                ]
+                                                (viewTextWithActionIcons (toTitleCase value))
+                                            )
                                     )
                                     list
                                 )
@@ -7240,7 +7242,9 @@ viewFilterActions model searchModel =
                             , HA.class "gap-tiny"
                             , HE.onClick (ActionsFilterAdded actions)
                             ]
-                            [ viewTextWithActionIcons actions
+                            [ Html.span
+                                []
+                                (viewTextWithActionIcons actions)
                             , viewFilterIcon (Dict.get actions searchModel.filteredActions)
                             ]
                     )
@@ -10406,23 +10410,26 @@ viewSingleSearchResult model document =
                 , HA.class "align-center"
                 , HA.class "nowrap"
                 ]
-                [ viewPfsIconWithLink 25 (Maybe.withDefault "" document.pfs)
-                , Html.a
-                    (List.append
-                        [ HA.href (getUrl model document)
-                        , HAE.attributeIf model.openInNewTab (HA.target "_blank")
+                (List.append
+                    [ viewPfsIconWithLink 25 (Maybe.withDefault "" document.pfs)
+                    , Html.a
+                        (List.append
+                            [ HA.href (getUrl model document)
+                            , HAE.attributeIf model.openInNewTab (HA.target "_blank")
+                            ]
+                            (linkEventAttributes document.url)
+                        )
+                        [ Html.text document.name
                         ]
-                        (linkEventAttributes document.url)
-                    )
-                    [ Html.text document.name
                     ]
-                , case ( document.actions, hasActionsInTitle ) of
-                    ( Just actions, True ) ->
-                        viewTextWithActionIcons (" " ++ actions)
+                    (case ( document.actions, hasActionsInTitle ) of
+                        ( Just actions, True ) ->
+                            viewTextWithActionIcons (" " ++ actions)
 
-                    _ ->
-                        Html.text ""
-                ]
+                        _ ->
+                            []
+                    )
+                )
             , Html.div
                 [ HA.class "title-type"
                 ]
@@ -10683,7 +10690,6 @@ viewSearchResultGridCell model document column =
                 document.actions
                     |> Maybe.withDefault ""
                     |> viewTextWithActionIcons
-                    |> List.singleton
 
             [ "advanced_apocryphal_spell" ] ->
                 maybeAsMarkdown document.advancedApocryphalSpell
@@ -11888,7 +11894,9 @@ viewGroupedTitle field value =
         Html.text "N/A"
 
     else if field == "actions.keyword" then
-        viewTextWithActionIcons value
+        Html.span
+            []
+            (viewTextWithActionIcons value)
 
     else if field == "alignment" then
         Html.text
@@ -12129,7 +12137,7 @@ markdownHtmlRenderer model titleLevel overrideRight =
     Markdown.Html.oneOf
         [ Markdown.Html.tag "actions"
             (\string _ ->
-                [ viewTextWithActionIcons string ]
+                viewTextWithActionIcons string
             )
             |> Markdown.Html.withAttribute "string"
         , Markdown.Html.tag "additional-info"
@@ -12659,36 +12667,7 @@ nonEmptyList list =
         Just list
 
 
-viewLabelAndText : String -> String -> Html msg
-viewLabelAndText label text =
-    Html.div
-        []
-        [ viewLabel label
-        , Html.text " "
-        , viewTextWithActionIcons text
-        ]
-
-
-viewLabelAndPluralizedText : String -> String -> List String -> Html msg
-viewLabelAndPluralizedText singular plural strings =
-    viewLabelAndText
-        (if List.length strings > 1 then
-            plural
-
-         else
-            singular
-        )
-        (String.join ", " strings)
-
-
-viewLabel : String -> Html msg
-viewLabel text =
-    Html.span
-        [ HA.class "bold" ]
-        [ Html.text text ]
-
-
-viewTextWithActionIcons : String -> Html msg
+viewTextWithActionIcons : String -> List (Html msg)
 viewTextWithActionIcons text =
     case
         replaceActionLigatures
@@ -12701,17 +12680,13 @@ viewTextWithActionIcons text =
             ]
     of
         [ single ] ->
-            Html.span
-                []
-                [ Html.text " "
-                , single
-                , Html.text " "
-                ]
+            [ Html.text " "
+            , single
+            , Html.text " "
+            ]
 
         multiple ->
-            Html.span
-                []
-                multiple
+            multiple
 
 
 replaceActionLigatures : String -> ( String, String ) -> List ( String, String ) -> List (Html msg)
@@ -13458,6 +13433,7 @@ css args =
         font-family: "Pathfinder-Icons";
         font-variant-caps: normal;
         font-weight: normal;
+        vertical-align: text-bottom;
     }
 
     .input-button {
