@@ -10791,6 +10791,9 @@ viewSearchResultGridCell model document column =
             [ "damage" ] ->
                 maybeAsText document.damage
 
+            [ "defense" ] ->
+                maybeAsMarkdown document.savingThrow
+
             [ "defense_proficiency" ] ->
                 [ Html.div
                     [ HA.class "column"

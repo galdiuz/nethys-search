@@ -536,6 +536,7 @@ tableColumns =
     , "creature_ability"
     , "creature_family"
     , "damage"
+    , "defense"
     , "defense_proficiency"
     , "deity"
     , "deity_category"
