@@ -227,7 +227,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , query = ""
     , queryType = Standard
     , removeFilters = removeFilters
-    , resultDisplay = List
+    , resultDisplay = Short
     , searchResultGroupAggs = Nothing
     , searchCreatureFamilies = ""
     , searchItemCategories = ""
@@ -553,7 +553,7 @@ type LoadType
 type ResultDisplay
     = Full
     | Grouped
-    | List
+    | Short
     | Table
 
 
@@ -1344,7 +1344,7 @@ update msg model =
                                     List.map
                                         (\d ->
                                             case model.searchModel.resultDisplay of
-                                                List ->
+                                                Short ->
                                                     parseDocumentSearchMarkdown d
 
                                                 Full ->
@@ -2173,7 +2173,7 @@ update msg model =
                 newModel =
                     { model
                         | documents =
-                            if value == List then
+                            if value == Short then
                                 Dict.map
                                     (\_ -> Result.map parseDocumentSearchMarkdown)
                                     model.documents
@@ -4055,8 +4055,8 @@ getSearchModelQueryParams model searchModel =
             Grouped ->
                 "grouped"
 
-            List ->
-                "list"
+            Short ->
+                "short"
 
             Table ->
                 "table"
@@ -4879,11 +4879,14 @@ updateSearchModelFromParams params model searchModel =
                 Just [ "grouped" ] ->
                     Grouped
 
+                Just [ "list" ] ->
+                    Short
+
                 Just [ "table" ] ->
                     Table
 
                 _ ->
-                    List
+                    Short
         , tableColumns =
             if Dict.get "display" params == Just [ "table" ] then
                 Dict.get "columns" params
@@ -9372,8 +9375,8 @@ viewDefaultParams model searchModel =
             [ Html.text "Display: "
             , Html.text
                 (case pageDefaultSearchModel.resultDisplay of
-                    List ->
-                        "List"
+                    Short ->
+                        "Short"
 
                     Full ->
                         "Full"
@@ -9412,11 +9415,11 @@ viewResultDisplay model searchModel =
         , HA.class "gap-medium"
         ]
         [ viewRadioButton
-            { checked = searchModel.resultDisplay == List
+            { checked = searchModel.resultDisplay == Short
             , enabled = True
             , name = "result-display"
-            , onInput = ResultDisplayChanged List
-            , text = "List"
+            , onInput = ResultDisplayChanged Short
+            , text = "Short"
             }
         , viewRadioButton
             { checked = searchModel.resultDisplay == Full
@@ -9445,8 +9448,8 @@ viewResultDisplay model searchModel =
         , HA.class "gap-small"
         ]
         (case searchModel.resultDisplay of
-            List ->
-                viewResultDisplayList model
+            Short ->
+                viewResultDisplayShort model
 
             Full ->
                 viewResultDisplayFull model
@@ -9460,11 +9463,11 @@ viewResultDisplay model searchModel =
     ]
 
 
-viewResultDisplayList : Model -> List (Html Msg)
-viewResultDisplayList model =
+viewResultDisplayShort : Model -> List (Html Msg)
+viewResultDisplayShort model =
     [ Html.h4
         []
-        [ Html.text "List configuration" ]
+        [ Html.text "Short configuration" ]
     , viewCheckbox
         { checked = model.showResultSpoilers
         , onCheck = ShowSpoilersChanged
@@ -9938,6 +9941,9 @@ viewResultDisplayGrouped model searchModel =
             }
         ]
 
+    , Html.h4
+        []
+        [ Html.text "Badge configuration" ]
     , Html.div
         [ HA.class "row"
         , HA.class "gap-medium"
@@ -9945,17 +9951,17 @@ viewResultDisplayGrouped model searchModel =
         [ viewCheckbox
             { checked = model.groupedShowPfs
             , onCheck = GroupedShowPfsIconChanged
-            , text = "Show PFS icons"
+            , text = "PFS icons"
             }
         , viewCheckbox
             { checked = model.groupedShowHeightenable
             , onCheck = GroupedShowHeightenableChanged
-            , text = "Show Heightenable"
+            , text = "Heightenable"
             }
         , viewCheckbox
             { checked = model.groupedShowRarity
             , onCheck = GroupedShowRarityChanged
-            , text = "Show Rarity"
+            , text = "Rarity"
             }
         ]
     ]
@@ -10330,8 +10336,8 @@ viewSearchResults model searchModel =
               ]
 
             , case searchModel.resultDisplay of
-                List ->
-                    viewSearchResultsList model searchModel remaining resultCount
+                Short ->
+                    viewSearchResultsShort model searchModel remaining resultCount
 
                 Full ->
                     viewSearchResultsFull model searchModel remaining
@@ -10372,8 +10378,8 @@ viewLoadMoreButtons model remaining =
         ]
 
 
-viewSearchResultsList : Model -> SearchModel -> Int -> Int -> List (Html Msg)
-viewSearchResultsList model searchModel remaining resultCount =
+viewSearchResultsShort : Model -> SearchModel -> Int -> Int -> List (Html Msg)
+viewSearchResultsShort model searchModel remaining resultCount =
     [ List.concatMap
         (\result ->
             case result of
