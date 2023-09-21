@@ -63,6 +63,7 @@ type alias Model =
     , globalAggregations : Maybe (Result Http.Error GlobalAggregations)
     , groupTraits : Bool
     , groupedDisplay : GroupedDisplay
+    , groupedShowHeightenable : Bool
     , groupedShowPfs : Bool
     , groupedShowRarity : Bool
     , groupedSort : GroupedSort
@@ -623,6 +624,7 @@ type Msg
     | GroupTraitsChanged Bool
     | GroupedDisplayChanged GroupedDisplay
     | GroupedLinkLayoutChanged GroupedLinkLayout
+    | GroupedShowHeightenableChanged Bool
     | GroupedShowPfsIconChanged Bool
     | GroupedShowRarityChanged Bool
     | GroupedSortChanged GroupedSort
@@ -805,6 +807,7 @@ init flagsValue =
       , globalAggregations = Nothing
       , groupTraits = False
       , groupedDisplay = Dim
+      , groupedShowHeightenable = True
       , groupedShowPfs = True
       , groupedShowRarity = True
       , groupedSort = Alphanum
@@ -1476,6 +1479,13 @@ update msg model =
                 )
                 model
                 |> updateUrlWithSearchParams
+            )
+
+        GroupedShowHeightenableChanged enabled ->
+            ( { model | groupedShowHeightenable = enabled }
+            , saveToLocalStorage
+                "grouped-show-heightenable"
+                (if enabled then "1" else "0")
             )
 
         GroupedShowPfsIconChanged enabled ->
@@ -3240,6 +3250,17 @@ updateModelFromLocalStorage ( key, value ) model =
 
                 "hide" ->
                     { model | groupedDisplay = Hide }
+
+                _ ->
+                    model
+
+        "grouped-show-heightenable" ->
+            case value of
+                "1" ->
+                    { model | groupedShowHeightenable = True }
+
+                "0" ->
+                    { model | groupedShowHeightenable = False }
 
                 _ ->
                     model
@@ -9927,6 +9948,11 @@ viewResultDisplayGrouped model searchModel =
             , text = "Show PFS icons"
             }
         , viewCheckbox
+            { checked = model.groupedShowHeightenable
+            , onCheck = GroupedShowHeightenableChanged
+            , text = "Show Heightenable"
+            }
+        , viewCheckbox
             { checked = model.groupedShowRarity
             , onCheck = GroupedShowRarityChanged
             , text = "Show Rarity"
@@ -11476,6 +11502,19 @@ viewSearchResultsGroupedLinkList model searchModel documents =
                 )
                 [ Html.text document.name ]
 
+        heightenableBadge : Document -> Html msg
+        heightenableBadge document =
+            if model.groupedShowHeightenable && List.length document.heightenLevels > 2 then
+                Html.div
+                    [ HA.style "vertical-align" "super"
+                    , HA.style "font-size" "10px"
+                    , HA.title "Heightenable"
+                    ]
+                    [ Html.text "H" ]
+
+            else
+                Html.text ""
+
         rarityBadge : Document -> Html msg
         rarityBadge document =
             if model.groupedShowRarity then
@@ -11485,6 +11524,7 @@ viewSearchResultsGroupedLinkList model searchModel documents =
                             [ HA.class "trait"
                             , HA.class "trait-uncommon"
                             , HA.class "traitbadge"
+                            , HA.title "Uncommon"
                             ]
                             [ Html.text "U" ]
 
@@ -11493,6 +11533,7 @@ viewSearchResultsGroupedLinkList model searchModel documents =
                             [ HA.class "trait"
                             , HA.class "trait-rare"
                             , HA.class "traitbadge"
+                            , HA.title "Rare"
                             ]
                             [ Html.text "R" ]
 
@@ -11501,6 +11542,7 @@ viewSearchResultsGroupedLinkList model searchModel documents =
                             [ HA.class "trait"
                             , HA.class "trait-unique"
                             , HA.class "traitbadge"
+                            , HA.title "Unique"
                             ]
                             [ Html.text "Q" ]
 
@@ -11530,6 +11572,7 @@ viewSearchResultsGroupedLinkList model searchModel documents =
                               else
                                   Html.text ""
                             , link document
+                            , heightenableBadge document
                             , rarityBadge document
                             ]
                     )
@@ -11554,6 +11597,7 @@ viewSearchResultsGroupedLinkList model searchModel documents =
                               else
                                 Html.text ""
                             , link document
+                            , heightenableBadge document
                             , rarityBadge document
                             ]
                     )
@@ -11577,11 +11621,15 @@ viewSearchResultsGroupedLinkList model searchModel documents =
                                     , Html.text " "
                                     , link document
                                     , Html.text " "
+                                    , heightenableBadge document
+                                    , Html.text " "
                                     , rarityBadge document
                                     ]
 
                                 else
                                     [ link document
+                                    , Html.text " "
+                                    , heightenableBadge document
                                     , Html.text " "
                                     , rarityBadge document
                                     ]
