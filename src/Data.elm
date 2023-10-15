@@ -420,7 +420,7 @@ sortFields =
     , ( "price", "price", True )
     , ( "primary_check", "primary_check.keyword", False )
     , ( "range", "range", True )
-    , ( "rarity", "rarity", False )
+    , ( "rarity", "rarity_id", True )
     , ( "reflex", "reflex", True )
     , ( "reflex_proficiency", "reflex_proficiency", False )
     , ( "region", "region", False )
