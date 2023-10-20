@@ -5124,15 +5124,33 @@ getAggregations ( model, cmd ) =
 
 buildAggregationsBody : SearchModel -> Encode.Value
 buildAggregationsBody searchModel =
-    encodeObjectMaybe
-        [ if String.isEmpty searchModel.fixedQueryString then
-            Nothing
+    Encode.object
+        [ ( "query"
+          , Encode.object
+                [ ( "bool"
+                  , encodeObjectMaybe
+                        [ if String.isEmpty searchModel.fixedQueryString then
+                            Nothing
 
-          else
-            ( "query"
-            , Encode.object (buildElasticsearchQueryStringQueryBody searchModel.fixedQueryString)
-            )
-                |> Just
+                          else
+                            ( "filter"
+                            , Encode.object (buildElasticsearchQueryStringQueryBody searchModel.fixedQueryString)
+                            )
+                                |> Just
+
+                        , ( "must_not"
+                          , Encode.object
+                                [ ( "term"
+                                  , Encode.object [ ( "exclude_from_search", Encode.bool True ) ]
+                                  )
+                                ]
+                          )
+                            |> Just
+                        ]
+                  )
+                ]
+          )
+
         , ( "aggs"
           , Encode.object
                 (List.append
@@ -5165,9 +5183,7 @@ buildAggregationsBody searchModel =
                     ]
                 )
           )
-            |> Just
         , ( "size", Encode.int 0 )
-            |> Just
         ]
 
 
@@ -5248,6 +5264,21 @@ buildGlobalAggregationsBody searchModel =
                     ]
                 ]
           )
+        , ( "query"
+          , Encode.object
+                [ ( "bool"
+                  , Encode.object
+                        [ ( "must_not"
+                          , Encode.object
+                                [ ( "term"
+                                  , Encode.object [ ( "exclude_from_search", Encode.bool True ) ]
+                                  )
+                                ]
+                          )
+                        ]
+                  )
+                ]
+          )
         , ( "size", Encode.int 0 )
         ]
 
@@ -5286,8 +5317,23 @@ buildSourcesAggregationBody =
         , ( "size", Encode.int 0 )
         , ( "query"
           , Encode.object
-                [ ( "match"
-                  , Encode.object [ ( "type", Encode.string "source" ) ]
+                [ ( "bool"
+                  , Encode.object
+                        [ ( "filter"
+                          , Encode.object
+                                [ ( "term"
+                                  , Encode.object [ ( "type", Encode.string "source" ) ]
+                                  )
+                                ]
+                          )
+                        , ( "must_not"
+                          , Encode.object
+                                [ ( "term"
+                                  , Encode.object [ ( "exclude_from_search", Encode.bool True ) ]
+                                  )
+                                ]
+                          )
+                        ]
                   )
                 ]
           )
