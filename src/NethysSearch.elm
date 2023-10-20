@@ -10425,7 +10425,7 @@ viewSingleSearchResult model document =
     let
         hasActionsInTitle : Bool
         hasActionsInTitle =
-            List.member document.category [ "action", "creature-ability", "feat" ]
+            List.member document.category [ "action", "creature-ability", "familiar-ability", "feat" ]
     in
     Html.section
         [ HA.class "column"
