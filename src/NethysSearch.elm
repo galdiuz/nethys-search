@@ -106,6 +106,7 @@ type alias SearchModel =
     , filteredArmorGroups : Dict String Bool
     , filteredComponents : Dict String Bool
     , filteredCreatureFamilies : Dict String Bool
+    , filteredDomains : Dict String Bool
     , filteredFromValues : Dict String String
     , filteredHands : Dict String Bool
     , filteredItemCategories : Dict String Bool
@@ -130,6 +131,7 @@ type alias SearchModel =
     , filteredWeaponGroups : Dict String Bool
     , filteredWeaponTypes : Dict String Bool
     , filterComponentsOperator : Bool
+    , filterDomainsOperator : Bool
     , filterSpoilers : Bool
     , filterTraditionsOperator : Bool
     , filterTraitsOperator : Bool
@@ -191,6 +193,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , filteredArmorGroups = Dict.empty
     , filteredComponents = Dict.empty
     , filteredCreatureFamilies = Dict.empty
+    , filteredDomains = Dict.empty
     , filteredFromValues = Dict.empty
     , filteredHands = Dict.empty
     , filteredItemCategories = Dict.empty
@@ -215,6 +218,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , filteredWeaponGroups = Dict.empty
     , filteredWeaponTypes = Dict.empty
     , filterComponentsOperator = True
+    , filterDomainsOperator = True
     , filterSpoilers = False
     , filterTraditionsOperator = True
     , filterTraitsOperator = True
@@ -470,6 +474,7 @@ defaultFlags =
 type alias Aggregations =
     { actions : List String
     , creatureFamilies : List String
+    , domains : List String
     , hands : List String
     , itemCategories : List String
     , itemSubcategories : List { category : String, name : String }
@@ -601,6 +606,8 @@ type Msg
     | CreatureFamilyFilterRemoved String
     | DebouncePassed Int
     | DeleteColumnConfigurationPressed
+    | DomainFilterAdded String
+    | DomainFilterRemoved String
     | GotAggregationsResult (Result Http.Error Aggregations)
     | GotBodySize Size
     | GotDocuments (List String) Bool (Result Http.Error (List (Result String Document)))
@@ -610,6 +617,7 @@ type Msg
     | GotSourcesAggregationResult (Result Http.Error (List Source))
     | FilterAbilityChanged String
     | FilterComponentsOperatorChanged Bool
+    | FilterDomainsOperatorChanged Bool
     | FilterResistanceChanged String
     | FilterSpeedChanged String
     | FilterSpoilersChanged Bool
@@ -664,6 +672,7 @@ type Msg
     | RemoveAllArmorGroupFiltersPressed
     | RemoveAllComponentFiltersPressed
     | RemoveAllCreatureFamilyFiltersPressed
+    | RemoveAllDomainFiltersPressed
     | RemoveAllHandFiltersPressed
     | RemoveAllItemCategoryFiltersPressed
     | RemoveAllItemSubcategoryFiltersPressed
@@ -1102,6 +1111,26 @@ update msg model =
             )
                 |> saveColumnConfigurationsToLocalStorage
 
+        DomainFilterAdded component ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredDomains = toggleBoolDict component searchModel.filteredDomains }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        DomainFilterRemoved component ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredDomains = Dict.remove component searchModel.filteredDomains }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
         FilterAbilityChanged value ->
             ( updateCurrentSearchModel
                 (\searchModel ->
@@ -1116,6 +1145,16 @@ update msg model =
             , updateCurrentSearchModel
                 (\searchModel ->
                     { searchModel | filterComponentsOperator = value }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        FilterDomainsOperatorChanged value ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filterDomainsOperator = value }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -1939,6 +1978,16 @@ update msg model =
             , updateCurrentSearchModel
                 (\searchModel ->
                     { searchModel | filteredCreatureFamilies = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        RemoveAllDomainFiltersPressed ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredDomains = Dict.empty }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -3898,6 +3947,19 @@ getSearchModelQueryParams model searchModel =
     , ( "exclude-creature-families"
       , boolDictExcluded searchModel.filteredCreatureFamilies
       )
+    , ( "include-domains"
+      , boolDictIncluded searchModel.filteredDomains
+      )
+    , ( "exclude-domains"
+      , boolDictExcluded searchModel.filteredDomains
+      )
+    , ( "domains-operator"
+      , if searchModel.filterDomainsOperator then
+            []
+
+        else
+            [ "or" ]
+      )
     , ( "include-hands"
       , boolDictIncluded searchModel.filteredHands
       )
@@ -4796,6 +4858,7 @@ updateSearchModelFromParams params model searchModel =
         , filteredArmorGroups = getBoolDictFromParams params "armor-groups"
         , filteredComponents = getBoolDictFromParams params "components"
         , filteredCreatureFamilies = getBoolDictFromParams params "creature-families"
+        , filteredDomains = getBoolDictFromParams params "domains"
         , filteredHands = getBoolDictFromParams params "hands"
         , filteredItemCategories = getBoolDictFromParams params "item-categories"
         , filteredItemSubcategories = getBoolDictFromParams params "item-subcategories"
@@ -4819,6 +4882,7 @@ updateSearchModelFromParams params model searchModel =
         , filteredWeaponTypes = getBoolDictFromParams params "weapon-types"
         , filterSpoilers = Dict.get "spoilers" params == Just [ "hide" ]
         , filterComponentsOperator = Dict.get "components-operator" params /= Just [ "or" ]
+        , filterDomainsOperator = Dict.get "domains-operator" params /= Just [ "or" ]
         , filterTraditionsOperator = Dict.get "traditions-operator" params /= Just [ "or" ]
         , filterTraitsOperator = Dict.get "traits-operator" params /= Just [ "or" ]
         , filteredFromValues =
@@ -5158,6 +5222,7 @@ buildAggregationsBody searchModel =
                         buildTermsAggregation
                         [ "actions.keyword"
                         , "creature_family"
+                        , "domain"
                         , "item_category"
                         , "hands.keyword"
                         , "region"
@@ -5457,6 +5522,10 @@ aggregationsDecoder =
         (aggregationBucketDecoder Decode.string)
         <| \creatureFamilies ->
     Field.requireAt
+        [ "aggregations", "domain" ]
+        (aggregationBucketDecoder Decode.string)
+        <| \domains ->
+    Field.requireAt
         [ "aggregations", "hands.keyword" ]
         (aggregationBucketDecoder Decode.string)
         <| \hands ->
@@ -5503,6 +5572,7 @@ aggregationsDecoder =
     Decode.succeed
         { actions = actions
         , creatureFamilies = creatureFamilies
+        , domains = domains
         , hands = hands
         , itemCategories = itemCategories
         , itemSubcategories = itemSubcategories
@@ -6532,6 +6602,11 @@ allFilters =
       , view = viewFilterCreatureFamilies
       , visibleIf = moreThanOneAggregation .creatureFamilies
       }
+    , { id = "domains"
+      , label = "Domains"
+      , view = viewFilterDomains
+      , visibleIf = moreThanOneAggregation .domains
+      }
     , { id = "item-categories"
       , label = "Item categories"
       , view = viewFilterItemCategories
@@ -6672,6 +6747,7 @@ filterFields searchModel =
     , ( "armor_group", searchModel.filteredArmorGroups, False )
     , ( "component", searchModel.filteredComponents, searchModel.filterComponentsOperator )
     , ( "creature_family", searchModel.filteredCreatureFamilies, False )
+    , ( "domain", searchModel.filteredDomains, searchModel.filterDomainsOperator )
     , ( "hands.keyword", searchModel.filteredHands, False )
     , ( "item_category", searchModel.filteredItemCategories, False )
     , ( "item_subcategory", searchModel.filteredItemSubcategories, False )
@@ -7002,6 +7078,21 @@ viewActiveFilters canClick searchModel =
                   , label = "Exclude creature families:"
                   , list = boolDictExcluded searchModel.filteredCreatureFamilies
                   , removeMsg = CreatureFamilyFilterRemoved
+                  }
+                , { class = Nothing
+                  , label =
+                        if searchModel.filterDomainsOperator then
+                            "Include all domains:"
+
+                        else
+                            "Include any domains:"
+                  , list = boolDictIncluded searchModel.filteredDomains
+                  , removeMsg = DomainFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude domains:"
+                  , list = boolDictExcluded searchModel.filteredDomains
+                  , removeMsg = DomainFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include hands:"
@@ -7512,6 +7603,65 @@ viewFilterCreatureFamilies model searchModel =
                         |> List.filter (String.toLower >> String.contains (String.toLower searchModel.searchCreatureFamilies))
                         |> List.sort
                     )
+
+            Just (Err _) ->
+                []
+
+            Nothing ->
+                [ viewScrollboxLoader ]
+        )
+    ]
+
+
+viewFilterDomains : Model -> SearchModel -> List (Html Msg)
+viewFilterDomains model searchModel =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "align-baseline"
+        , HA.class "gap-medium"
+        ]
+        [ Html.button
+            [ HA.style "align-self" "flex-start"
+            , HA.style "justify-self" "flex-start"
+            , HE.onClick RemoveAllDomainFiltersPressed
+            ]
+            [ Html.text "Reset selection" ]
+
+            , viewRadioButton
+                { checked = searchModel.filterDomainsOperator
+                , enabled = True
+                , name = "filter-domains"
+                , onInput = FilterDomainsOperatorChanged True
+                , text = "Include all (AND)"
+                }
+            , viewRadioButton
+                { checked = not searchModel.filterDomainsOperator
+                , enabled = True
+                , name = "filter-domains"
+                , onInput = FilterDomainsOperatorChanged False
+                , text = "Include any (OR)"
+                }
+        ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (case searchModel.aggregations of
+            Just (Ok { domains })->
+                (List.map
+                    (\domain ->
+                        Html.button
+                            [ HA.class "row"
+                            , HA.class "gap-tiny"
+                            , HE.onClick (DomainFilterAdded domain)
+                            ]
+                            [ Html.text (toTitleCase domain)
+                            , viewFilterIcon (Dict.get domain searchModel.filteredDomains)
+                            ]
+                    )
+                    (List.sort domains)
+                )
 
             Just (Err _) ->
                 []
