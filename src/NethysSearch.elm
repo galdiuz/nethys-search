@@ -8849,7 +8849,7 @@ viewFilterNumbers model searchModel =
                         ]
                 )
                 [ { field = "level"
-                  , hint = Nothing
+                  , hint = Just "/ Rank"
                   , step = "1"
                   , suffix = Nothing
                   }
@@ -8938,7 +8938,6 @@ viewFilterNumbers model searchModel =
                                 , "charisma"
                                 ]
                             )
-                        , Html.text "score"
                         ]
                     , Html.div
                         [ HA.class "row"
