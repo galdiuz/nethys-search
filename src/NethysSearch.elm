@@ -4,6 +4,7 @@ import Browser
 import Browser.Dom
 import Browser.Events
 import Data
+import Date
 import Dict exposing (Dict)
 import Dict.Extra
 import FontAwesome
@@ -57,6 +58,8 @@ type alias Model =
     { autofocus : Bool
     , autoQueryType : Bool
     , bodySize : Size
+    , browserDateFormat : String
+    , dateFormat : String
     , documents : Dict String (Result Http.Error Document)
     , elasticUrl : String
     , fixedParams : Dict String (List String)
@@ -432,6 +435,7 @@ type alias GroupBucket =
 
 type alias Flags =
     { autofocus : Bool
+    , browserDateFormat : String
     , currentUrl : String
     , defaultQuery : String
     , elasticUrl : String
@@ -453,6 +457,7 @@ type alias Flags =
 defaultFlags : Flags
 defaultFlags =
     { autofocus = False
+    , browserDateFormat = "yyyy-MM-dd"
     , currentUrl = "/"
     , defaultQuery = ""
     , elasticUrl = ""
@@ -604,6 +609,7 @@ type Msg
     | ComponentFilterRemoved String
     | CreatureFamilyFilterAdded String
     | CreatureFamilyFilterRemoved String
+    | DateFormatChanged String
     | DebouncePassed Int
     | DeleteColumnConfigurationPressed
     | DomainFilterAdded String
@@ -810,6 +816,8 @@ init flagsValue =
     ( { autofocus = flags.autofocus
       , autoQueryType = False
       , bodySize = { width = 0, height = 0 }
+      , browserDateFormat = flags.browserDateFormat
+      , dateFormat = "default"
       , documents = Dict.empty
       , elasticUrl = flags.elasticUrl
       , fixedParams = flags.fixedParams
@@ -1089,6 +1097,11 @@ update msg model =
                 )
                 model
                 |> updateUrlWithSearchParams
+            )
+
+        DateFormatChanged format ->
+            ( { model | dateFormat = format }
+            , saveToLocalStorage "date-format" format
             )
 
         DebouncePassed debounce ->
@@ -3289,6 +3302,9 @@ updateModelFromLocalStorage ( key, value ) model =
                 Err _ ->
                     model
 
+        "date-format" ->
+            { model | dateFormat = value }
+
         "grouped-display" ->
             case value of
                 "show" ->
@@ -5410,6 +5426,7 @@ flagsDecoder =
     Field.require "currentUrl" Decode.string <| \currentUrl ->
     Field.require "elasticUrl" Decode.string <| \elasticUrl ->
     Field.attempt "autofocus" Decode.bool <| \autofocus ->
+    Field.attempt "browserDateFormat" Decode.string <| \browserDateFormat ->
     Field.attempt "resultBaseUrl" Decode.string <| \resultBaseUrl ->
     Field.attempt "showHeader" Decode.bool <| \showHeader ->
     Field.attempt "defaultQuery" Decode.string <| \defaultQuery ->
@@ -5425,6 +5442,7 @@ flagsDecoder =
     Field.attempt "windowWidth" Decode.int <| \windowWidth ->
     Decode.succeed
         { autofocus = Maybe.withDefault defaultFlags.autofocus autofocus
+        , browserDateFormat = Maybe.withDefault defaultFlags.browserDateFormat browserDateFormat
         , currentUrl = currentUrl
         , defaultQuery = Maybe.withDefault defaultFlags.defaultQuery defaultQuery
         , elasticUrl = elasticUrl
@@ -6029,6 +6047,7 @@ mergeInlines block =
         inlineTags =
             [ "actions"
             , "br"
+            , "date"
             , "sup"
             ]
     in
@@ -9526,6 +9545,42 @@ viewGeneralSettings model searchModel =
         , onCheck = not >> LimitTableWidthChanged
         , text = "Tables always use full width"
         }
+    , Html.h4
+        []
+        [ Html.text "Date format" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        ]
+        [ viewRadioButton
+            { checked = model.dateFormat == "default"
+            , enabled = True
+            , name = "date-format"
+            , onInput = DateFormatChanged "default"
+            , text = "Browser default (" ++ model.browserDateFormat ++ ")"
+            }
+        , viewRadioButton
+            { checked = model.dateFormat == "yyyy-MM-dd"
+            , enabled = True
+            , name = "date-format"
+            , onInput = DateFormatChanged "yyyy-MM-dd"
+            , text = "yyyy-MM-dd"
+            }
+        , viewRadioButton
+            { checked = model.dateFormat == "MM/dd/yyyy"
+            , enabled = True
+            , name = "date-format"
+            , onInput = DateFormatChanged "MM/dd/yyyy"
+            , text = "MM/dd/yyyy"
+            }
+        , viewRadioButton
+            { checked = model.dateFormat == "dd/MM/yyyy"
+            , enabled = True
+            , name = "date-format"
+            , onInput = DateFormatChanged "dd/MM/yyyy"
+            , text = "dd/MM/yyyy"
+            }
+        ]
     ]
 
 
@@ -11260,7 +11315,9 @@ viewSearchResultGridCell model document column =
                 maybeAsText document.region
 
             [ "release_date" ] ->
-                maybeAsText document.releaseDate
+                document.releaseDate
+                    |> Maybe.map (formatDate model)
+                    |> maybeAsText
 
             [ "reload" ] ->
                 maybeAsText document.reload
@@ -11440,6 +11497,22 @@ maybeAsText maybeString =
         |> Maybe.withDefault ""
         |> Html.text
         |> List.singleton
+
+
+formatDate : Model -> String -> String
+formatDate model date =
+    let
+        format : String
+        format =
+            if model.dateFormat == "default" then
+                model.browserDateFormat
+
+            else
+                model.dateFormat
+    in
+    Date.fromIsoString date
+        |> Result.map (Date.format format)
+        |> Result.withDefault date
 
 
 viewSearchResultsGrouped : Model -> SearchModel -> Int -> List (Html Msg)
@@ -12436,6 +12509,14 @@ markdownHtmlRenderer model titleLevel overrideRight =
                     (List.concat children)
                 ]
             )
+        , Markdown.Html.tag "date"
+            (\value _ ->
+                [ Html.text " "
+                , Html.text (formatDate model value)
+                , Html.text " "
+                ]
+            )
+            |> Markdown.Html.withAttribute "value"
         , Markdown.Html.tag "document"
             (\id level titleRight _ ->
                 viewDocument
