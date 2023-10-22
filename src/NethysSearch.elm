@@ -10675,7 +10675,7 @@ viewSingleSearchResult model document =
     let
         hasActionsInTitle : Bool
         hasActionsInTitle =
-            List.member document.category [ "action", "creature-ability", "familiar-ability", "feat" ]
+            List.member document.category [ "action", "creature-ability", "familiar-ability", "feat", "spell" ]
     in
     Html.section
         [ HA.class "column"
@@ -10692,26 +10692,38 @@ viewSingleSearchResult model document =
                 , HA.class "align-center"
                 , HA.class "nowrap"
                 ]
-                (List.append
-                    [ viewPfsIconWithLink 25 (Maybe.withDefault "" document.pfs)
-                    , Html.a
-                        (List.append
-                            [ HA.href (getUrl model document)
-                            , HAE.attributeIf model.openInNewTab (HA.target "_blank")
+                [ viewPfsIconWithLink 25 (Maybe.withDefault "" document.pfs)
+                , Html.p
+                    []
+                    (List.append
+                        [ Html.a
+                            (List.append
+                                [ HA.href (getUrl model document)
+                                , HAE.attributeIf model.openInNewTab (HA.target "_blank")
+                                ]
+                                (linkEventAttributes document.url)
+                            )
+                            [ Html.text document.name
                             ]
-                            (linkEventAttributes document.url)
-                        )
-                        [ Html.text document.name
                         ]
-                    ]
-                    (case ( document.actions, hasActionsInTitle ) of
-                        ( Just actions, True ) ->
-                            viewTextWithActionIcons (" " ++ actions)
+                        (case ( document.actions, hasActionsInTitle ) of
+                            ( Just actions, True ) ->
+                                case String.uncons actions of
+                                    Just ( first, _ ) ->
+                                        if Char.isDigit first then
+                                            []
 
-                        _ ->
-                            []
+                                        else
+                                            viewTextWithActionIcons actions
+
+                                    _ ->
+                                        []
+
+                            _ ->
+                                []
+                        )
                     )
-                )
+                ]
             , Html.div
                 [ HA.class "title-type"
                 ]
@@ -12707,6 +12719,7 @@ markdownHtmlRenderer model titleLevel overrideRight =
                             [ HA.class "row"
                             , HA.class "gap-small"
                             , HA.class "align-center"
+                            , HA.class "nowrap"
                             ]
                             (List.concat
                                 [ case maybePfs of
@@ -13002,8 +13015,9 @@ nonEmptyList list =
 
 viewTextWithActionIcons : String -> List (Html msg)
 viewTextWithActionIcons text =
-    case
-        replaceActionLigatures
+    List.concat
+        [ [ Html.text " " ]
+        , replaceActionLigatures
             text
             ( "single action", "[one-action]" )
             [ ( "two actions", "[two-actions]" )
@@ -13011,15 +13025,8 @@ viewTextWithActionIcons text =
             , ( "reaction", "[reaction]" )
             , ( "free action", "[free-action]" )
             ]
-    of
-        [ single ] ->
-            [ Html.text " "
-            , single
-            , Html.text " "
-            ]
-
-        multiple ->
-            multiple
+        , [ Html.text " " ]
+        ]
 
 
 replaceActionLigatures : String -> ( String, String ) -> List ( String, String ) -> List (Html msg)
