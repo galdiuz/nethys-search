@@ -369,7 +369,7 @@ sortFields =
     [ ( "ability", "ability", False )
     , ( "ability_type", "ability_type", False )
     , ( "ac", "ac", True )
-    , ( "actions", "actions.keyword", False )
+    , ( "actions", "actions_number", True )
     , ( "alignment", "alignment", False )
     , ( "archetype", "archetype", False )
     , ( "area", "area.keyword", False )
