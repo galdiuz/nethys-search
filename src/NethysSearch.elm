@@ -13035,10 +13035,10 @@ replaceActionLigatures text ( find, replace ) rem =
         case String.split find (String.toLower text) of
             before :: after ->
                 List.concat
-                    [ if String.isEmpty before then
-                        []
-                      else
-                        [ Html.text before ]
+                    [ replaceActionLigatures
+                        before
+                        ( find, replace )
+                        rem
                     , [ Html.span
                             [ HA.class "icon-font" ]
                             [ Html.text replace ]
