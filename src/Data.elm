@@ -184,6 +184,7 @@ fields =
     , ( "primary_check", "Primary check of a ritual" )
     , ( "range", "[n] Range of spell or weapon in feet" )
     , ( "range_raw", "Range exactly as written" )
+    , ( "rank", "Alias for 'level'" )
     , ( "rarity", "Rarity" )
     , ( "ref", "[n] Alias for 'reflex_save'" )
     , ( "reflex", "[n] Alias for 'reflex_save'" )
@@ -302,10 +303,10 @@ predefinedColumnConfigurations =
     , { columns = [ "type", "aspect", "prerequisite", "trait" ]
       , label = "Relic gifts"
       }
-    , { columns = [ "level", "heighten", "school", "trait", "primary_check", "secondary_casters", "secondary_check", "cost", "actions", "target", "range", "area", "duration", "rarity", "pfs" ]
+    , { columns = [ "rank", "heighten", "school", "trait", "primary_check", "secondary_casters", "secondary_check", "cost", "actions", "target", "range", "area", "duration", "rarity", "pfs" ]
       , label = "Rituals"
       }
-    , { columns = [ "type", "level", "heighten", "tradition", "school", "trait", "actions", "component", "trigger", "target", "range", "area", "duration", "saving_throw", "rarity", "pfs" ]
+    , { columns = [ "type", "rank", "heighten", "tradition", "school", "trait", "actions", "component", "trigger", "target", "range", "area", "duration", "saving_throw", "rarity", "pfs" ]
       , label = "Spells"
       }
     , { columns = [ "weapon_type", "weapon_category", "weapon_group", "trait", "damage", "hands", "range", "reload", "bulk", "price" ]
@@ -420,6 +421,7 @@ sortFields =
     , ( "price", "price", True )
     , ( "primary_check", "primary_check.keyword", False )
     , ( "range", "range", True )
+    , ( "rank", "rank", True )
     , ( "rarity", "rarity_id", True )
     , ( "reflex", "reflex", True )
     , ( "reflex_proficiency", "reflex_proficiency", False )
@@ -579,6 +581,7 @@ tableColumns =
     , "price"
     , "primary_check"
     , "range"
+    , "rank"
     , "rarity"
     , "reflex"
     , "region"

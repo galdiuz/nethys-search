@@ -339,6 +339,7 @@ type alias Document =
     , hardness : Maybe String
     , hazardType : Maybe String
     , heighten : List String
+    , heightenGroups : List String
     , heightenLevels : List Int
     , hp : Maybe String
     , iconImage : Maybe String
@@ -5720,6 +5721,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "hardness_raw" ] Decode.string <| \hardness ->
     Field.attemptAt [ "_source", "hazard_type" ] Decode.string <| \hazardType ->
     Field.attemptAt [ "_source", "heighten" ] stringListDecoder <| \heighten ->
+    Field.attemptAt [ "_source", "heighten_group" ] stringListDecoder <| \heightenGroups ->
     Field.attemptAt [ "_source", "heighten_level" ] (Decode.list Decode.int) <| \heightenLevels ->
     Field.attemptAt [ "_source", "hp_raw" ] Decode.string <| \hp ->
     Field.attemptAt [ "_source", "icon_image" ] Decode.string <| \iconImage ->
@@ -5855,6 +5857,7 @@ documentDecoder =
         , hardness = hardness
         , hazardType = hazardType
         , heighten = Maybe.withDefault [] heighten
+        , heightenGroups = Maybe.withDefault [] heightenGroups
         , heightenLevels = Maybe.withDefault [] heightenLevels
         , hp = hp
         , iconImage = iconImage
@@ -10080,13 +10083,14 @@ viewResultDisplayGrouped model searchModel =
                 , "creature_family"
                 , "duration"
                 , "element"
-                , "heighten_level"
+                , "heighten_group"
                 , "item_category"
                 , "item_subcategory"
                 , "level"
                 , "hands"
                 , "pfs"
                 , "range"
+                , "rank"
                 , "rarity"
                 , "school"
                 , "size"
@@ -11310,6 +11314,11 @@ viewSearchResultGridCell model document column =
             [ "range" ] ->
                 maybeAsText document.range
 
+            [ "rank" ] ->
+                document.level
+                    |> Maybe.map toOrdinal
+                    |> maybeAsText
+
             [ "rarity" ] ->
                 document.rarity
                     |> Maybe.map toTitleCase
@@ -11511,6 +11520,26 @@ maybeAsText maybeString =
         |> List.singleton
 
 
+toOrdinal : Int -> String
+toOrdinal n =
+    if ( modBy 100 (abs n) ) // 10 == 1 then
+        String.fromInt n ++ "th"
+
+    else
+        case modBy 10 (abs n) of
+            1 ->
+                String.fromInt n ++ "st"
+
+            2 ->
+                String.fromInt n ++ "nd"
+
+            3 ->
+                String.fromInt n ++ "rd"
+
+            _ ->
+                String.fromInt n ++ "th"
+
+
 formatDate : Model -> String -> String
 formatDate model date =
     let
@@ -11611,7 +11640,7 @@ viewSearchResultsGrouped model searchModel remaining =
              else
                 groupDocumentsByField keys searchModel.groupField1 allDocuments
                     |> Dict.toList
-                    |> sortGroupedList model "" counts
+                    |> sortGroupedList model searchModel.groupField1 "" counts
             )
         )
 
@@ -11694,7 +11723,7 @@ viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1 =
             )
             (groupDocumentsByField keys field2 documents1
                 |> Dict.toList
-                |> sortGroupedList model (key1 ++ "--") counts
+                |> sortGroupedList model field2 (key1 ++ "--") counts
             )
         )
 
@@ -11766,7 +11795,7 @@ viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2 =
             )
             (groupDocumentsByField keys field3 documents2
                 |> Dict.toList
-                |> sortGroupedList model (key1 ++ "--" ++ key2 ++ "--") counts
+                |> sortGroupedList model field3 (key1 ++ "--" ++ key2 ++ "--") counts
             )
         )
 
@@ -11790,7 +11819,7 @@ viewSearchResultsGroupedLinkList model searchModel documents =
 
         heightenableBadge : Document -> Html msg
         heightenableBadge document =
-            if model.groupedShowHeightenable && List.length document.heightenLevels > 2 then
+            if model.groupedShowHeightenable && List.length document.heightenLevels >= 2 then
                 Html.div
                     [ HA.style "vertical-align" "super"
                     , HA.style "font-size" "10px"
@@ -12026,6 +12055,18 @@ groupDocumentsByField keys field documents =
                             dict
                             document.heightenLevels
 
+                "heighten_group" ->
+                    if List.isEmpty document.heightenGroups then
+                        insertToListDict "" document dict
+
+                    else
+                        List.foldl
+                            (\group ->
+                                insertToListDict (String.toLower group) document
+                            )
+                            dict
+                            document.heightenGroups
+
                 "item_category" ->
                     insertToListDict
                         (document.itemCategory
@@ -12065,6 +12106,15 @@ groupDocumentsByField keys field documents =
                 "range" ->
                     insertToListDict
                         (document.rangeValue
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
+
+                "rank" ->
+                    insertToListDict
+                        (document.level
                             |> Maybe.map String.fromInt
                             |> Maybe.withDefault ""
                         )
@@ -12173,8 +12223,8 @@ groupDocumentsByField keys field documents =
         documents
 
 
-sortGroupedList : Model -> String -> Dict String Int -> List ( String, List a ) -> List ( String, List a )
-sortGroupedList model keyPrefix counts list =
+sortGroupedList : Model -> String -> String -> Dict String Int -> List ( String, List a ) -> List ( String, List a )
+sortGroupedList model field keyPrefix counts list =
     List.sortWith
         (\( k1, v1 ) ( k2, v2 ) ->
             case model.groupedSort of
@@ -12189,8 +12239,7 @@ sortGroupedList model keyPrefix counts list =
                                     LT
 
                                 _ ->
-                                    Maybe.map2 compare (String.toInt k1) (String.toInt k2)
-                                        |> Maybe.withDefault (compare k1 k2)
+                                    compareAlphanum field k1 k2
 
                         ( 0, _ ) ->
                             GT
@@ -12207,8 +12256,7 @@ sortGroupedList model keyPrefix counts list =
                                     LT
 
                                 _ ->
-                                    Maybe.map2 compare (String.toInt k1) (String.toInt k2)
-                                        |> Maybe.withDefault (compare k1 k2)
+                                    compareAlphanum field k1 k2
 
                 CountLoaded ->
                     compare (List.length v2) (List.length v1)
@@ -12223,6 +12271,25 @@ sortGroupedList model keyPrefix counts list =
                         )
         )
         list
+
+
+compareAlphanum : String -> String -> String -> Order
+compareAlphanum field a b =
+    case field of
+        "heighten_group" ->
+            Maybe.map2 compare (getIntFromString a) (getIntFromString b)
+                |> Maybe.withDefault (compare a b)
+
+        _ ->
+            Maybe.map2 compare (String.toInt a) (String.toInt b)
+                |> Maybe.withDefault (compare a b)
+
+
+getIntFromString : String -> Maybe Int
+getIntFromString str =
+    str
+        |> String.filter Char.isDigit
+        |> String.toInt
 
 
 viewGroupedTitle : String -> String -> Html msg
@@ -12271,6 +12338,14 @@ viewGroupedTitle field value =
         case String.toInt value of
             Just range ->
                 Html.text (rangeToString range)
+
+            Nothing ->
+                Html.text value
+
+    else if field == "rank" then
+        case String.toInt value of
+            Just rank ->
+                Html.text (toOrdinal rank ++ " rank")
 
             Nothing ->
                 Html.text value
