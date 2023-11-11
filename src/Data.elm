@@ -205,6 +205,7 @@ fields =
     , ( "sense", "Senses" )
     , ( "size", "Size" )
     , ( "skill", "Related skills" )
+    , ( "skill_mod.<type>", "[n] Skill modifier of <type>. Valid types are acrobatics, arcana, athletics, crafting, deception, diplomacy, intimidation, medicine, nature, occultism, performance, religion, society, stealth, survival, thievery. Use skill_mod.\\* to match any type." )
     , ( "skill_proficiency", "A class's starting skill proficiencies" )
     , ( "source", "Source book name" )
     , ( "source_raw", "Source book exactly as written incl. page" )
