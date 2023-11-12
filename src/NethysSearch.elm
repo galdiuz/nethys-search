@@ -87,6 +87,7 @@ type alias Model =
     , savedColumnConfigurationName : String
     , searchModel : SearchModel
     , showHeader : Bool
+    , showLegacyFilters : Bool
     , showResultAdditionalInfo : Bool
     , showResultSpoilers : Bool
     , showResultSummary : Bool
@@ -723,6 +724,7 @@ type Msg
     | ShowAdditionalInfoChanged Bool
     | ShowAllFilters
     | ShowFilterBox String Bool
+    | ShowLegacyFiltersChanged Bool
     | ShowMenuPressed Bool
     | ShowSpoilersChanged Bool
     | ShowSummaryChanged Bool
@@ -857,6 +859,7 @@ init flagsValue =
                 , removeFilters = flags.removeFilters
                 }
       , showHeader = flags.showHeader
+      , showLegacyFilters = True
       , showResultAdditionalInfo = True
       , showResultSpoilers = True
       , showResultSummary = True
@@ -2476,6 +2479,13 @@ update msg model =
             , Cmd.none
             )
 
+        ShowLegacyFiltersChanged value ->
+            ( { model | showLegacyFilters = value }
+            , saveToLocalStorage
+                "show-legacy-filters"
+                (if value then "1" else "0")
+            )
+
         ShowMenuPressed show ->
             ( { model
                 | menuOpen = show
@@ -3463,6 +3473,17 @@ updateModelFromLocalStorage ( key, value ) model =
 
                 "0" ->
                     { model | showResultAdditionalInfo = False }
+
+                _ ->
+                    model
+
+        "show-legacy-filters" ->
+            case value of
+                "1" ->
+                    { model | showLegacyFilters = True }
+
+                "0" ->
+                    { model | showLegacyFilters = False }
 
                 _ ->
                     model
@@ -6463,7 +6484,7 @@ viewFilters model searchModel =
     let
         availableFilters : List FilterBox
         availableFilters =
-            allFilters
+            allFilters model
                 |> List.filter (\filter -> not (List.member filter.id searchModel.removeFilters))
                 |> List.filter (\filter -> filter.visibleIf searchModel)
 
@@ -6546,7 +6567,7 @@ viewFilters model searchModel =
             [ HA.class "column"
             , HA.class "gap-small"
             ]
-            (allFilters ++ allOptions
+            (allFilters model ++ allOptions
                 |> List.filterMap
                     (\filterBox ->
                         case List.Extra.elemIndex filterBox.id searchModel.visibleFilterBoxes of
@@ -6594,8 +6615,8 @@ viewOptionBox model searchModel filter =
         ]
 
 
-allFilters : List FilterBox
-allFilters =
+allFilters : Model -> List FilterBox
+allFilters model =
     [ { id = "numbers"
       , label = "Numbers"
       , view = viewFilterNumbers
@@ -6609,7 +6630,7 @@ allFilters =
     , { id = "alignments"
       , label = "Alignments"
       , view = viewFilterAlignments
-      , visibleIf = \_ -> True
+      , visibleIf = \_ -> model.showLegacyFilters
       }
     , { id = "armor"
       , label = "Armor"
@@ -6624,7 +6645,7 @@ allFilters =
     , { id = "components"
       , label = "Casting components"
       , view = viewFilterComponents
-      , visibleIf = \_ -> True
+      , visibleIf = \_ -> model.showLegacyFilters
       }
     , { id = "creature-families"
       , label = "Creature families"
@@ -6652,7 +6673,7 @@ allFilters =
     , { id = "schools"
       , label = "Magic schools"
       , view = viewFilterMagicSchools
-      , visibleIf = \_ -> True
+      , visibleIf = \_ -> model.showLegacyFilters
       }
     , { id = "pfs"
       , label = "PFS"
@@ -9519,6 +9540,11 @@ viewGeneralSettings model searchModel =
         { checked = model.openInNewTab
         , onCheck = OpenInNewTabChanged
         , text = "Links open in new tab"
+        }
+    , viewCheckbox
+        { checked = model.showLegacyFilters
+        , onCheck = ShowLegacyFiltersChanged
+        , text = "Show legacy filters (alignment, casting components, spell schools)"
         }
     , Html.h4
         []
