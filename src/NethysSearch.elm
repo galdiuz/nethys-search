@@ -72,6 +72,7 @@ type alias Model =
     , groupedShowPfs : Bool
     , groupedShowRarity : Bool
     , groupedSort : GroupedSort
+    , legacyMode : Bool
     , limitTableWidth : Bool
     , linkPreviewsEnabled : Bool
     , menuOpen : Bool
@@ -82,7 +83,7 @@ type alias Model =
     , pageId : String
     , pageSize : Int
     , pageWidth : Int
-    , previewLink : Maybe { documentId : String, elementPosition : Position, fragment : Maybe String }
+    , previewLink : Maybe PreviewLink
     , randomSeed : Int
     , resultBaseUrl : String
     , savedColumnConfigurations : Dict String (List String)
@@ -285,6 +286,14 @@ type alias SearchResultWithDocuments =
     }
 
 
+type alias PreviewLink =
+    { documentId : String
+    , elementPosition : Position
+    , fragment : Maybe String
+    , noRedirect : Bool
+    }
+
+
 type alias Document =
     { id : String
     , category : String
@@ -356,8 +365,9 @@ type alias Document =
     , itemCategory : Maybe String
     , itemSubcategory : Maybe String
     , languages : Maybe String
-    , lessons : Maybe String
+    , legacyId : Maybe String
     , lessonType : Maybe String
+    , lessons : Maybe String
     , level : Maybe Int
     , markdown : Markdown
     , mysteries : Maybe String
@@ -381,6 +391,7 @@ type alias Document =
     , region : Maybe String
     , releaseDate : Maybe String
     , reload : Maybe String
+    , remasterId : Maybe String
     , requiredAbilities : Maybe String
     , requirements : Maybe String
     , resistanceValues : Maybe DamageTypeValues
@@ -453,6 +464,7 @@ type alias Flags =
     , elasticUrl : String
     , fixedParams : Dict String (List String)
     , fixedQueryString : String
+    , legacyMode : Bool
     , localStorage : Dict String String
     , noUi : Bool
     , pageId : String
@@ -475,6 +487,7 @@ defaultFlags =
     , elasticUrl = ""
     , fixedParams = Dict.empty
     , fixedQueryString = ""
+    , legacyMode = False
     , localStorage = Dict.empty
     , noUi = False
     , pageId = ""
@@ -843,6 +856,7 @@ init flagsValue =
       , groupedShowPfs = True
       , groupedShowRarity = True
       , groupedSort = Alphanum
+      , legacyMode = flags.legacyMode
       , limitTableWidth = False
       , linkPreviewsEnabled = True
       , menuOpen = False
@@ -1397,6 +1411,21 @@ update msg model =
 
                     else
                         []
+
+                legacyId : List String
+                legacyId =
+                    case model.previewLink of
+                        Just { documentId } ->
+                            result
+                                |> Result.withDefault []
+                                |> List.filterMap Result.toMaybe
+                                |> List.Extra.find (.id >> (==) documentId)
+                                |> Maybe.andThen (if model.legacyMode then .legacyId else .remasterId)
+                                |> Maybe.Extra.toList
+                                |> List.filter (\id -> not (Dict.member id model.documents))
+
+                        Nothing ->
+                            []
             in
             ( { model
                 | documents =
@@ -1425,7 +1454,7 @@ update msg model =
 
                   else
                     fetchDocuments model fetchLinks childDocumentIds
-                , fetchDocuments model False linkDocumentIds
+                , fetchDocuments model False (linkDocumentIds ++ legacyId)
                 ]
             )
 
@@ -1772,7 +1801,11 @@ update msg model =
 
                 documentsWithParsedMarkdown : Dict String (Result Http.Error Document)
                 documentsWithParsedMarkdown =
-                    parseMarkdownAndCollectIdsToFetch (Maybe.Extra.toList documentId) [] model.documents
+                    parseMarkdownAndCollectIdsToFetch
+                        (Maybe.Extra.toList documentId)
+                        []
+                        model.documents
+                        model.legacyMode
                         |> Tuple.first
             in
             ( { model
@@ -1785,6 +1818,11 @@ update msg model =
                                     { documentId = id
                                     , fragment = Maybe.andThen .fragment parsedUrl
                                     , elementPosition = position
+                                    , noRedirect =
+                                        parsedUrl
+                                            |> Maybe.andThen .query
+                                            |> Maybe.map (String.contains "NoRedirect=1")
+                                            |> Maybe.withDefault False
                                     }
                                 )
 
@@ -1804,7 +1842,11 @@ update msg model =
             let
                 idsToLoad : List String
                 idsToLoad =
-                    parseMarkdownAndCollectIdsToFetch [ documentId ] [] model.documents
+                    parseMarkdownAndCollectIdsToFetch
+                        [ documentId ]
+                        []
+                        model.documents
+                        model.legacyMode
                         |> Tuple.second
             in
             if Maybe.map .documentId model.previewLink == Just documentId then
@@ -3223,24 +3265,45 @@ parseMarkdownAndCollectIdsToFetch :
     List String
     -> List String
     -> Dict String (Result Http.Error Document)
+    -> Bool
     -> ( Dict String (Result Http.Error Document) , List String )
-parseMarkdownAndCollectIdsToFetch idsToCheck idsToFetch documents =
+parseMarkdownAndCollectIdsToFetch idsToCheck idsToFetch documents legacyMode =
     case idsToCheck of
         id :: remainingToCheck ->
             let
-                documentWithParsedMarkdown : Maybe Document
-                documentWithParsedMarkdown =
-                    Dict.get id documents
-                        |> Maybe.andThen Result.toMaybe
-                        |> Maybe.map parseDocumentMarkdown
+                idToWorkWith : String
+                idToWorkWith =
+                    case Dict.get id documents of
+                        Just (Ok doc) ->
+                            case ( legacyMode, doc.legacyId, doc.remasterId ) of
+                                ( True, Just legacyId, _ ) ->
+                                    legacyId
+
+                                ( True, Nothing, _ ) ->
+                                    id
+
+                                ( False, _, Just remasterId ) ->
+                                    remasterId
+
+                                ( False, _, _ ) ->
+                                    id
+
+                        _ ->
+                            id
 
                 fetchCurrentId : List String
                 fetchCurrentId =
-                    if Dict.member id documents then
+                    if Dict.member idToWorkWith documents then
                         []
 
                     else
-                        [ id ]
+                        [ idToWorkWith ]
+
+                documentWithParsedMarkdown : Maybe Document
+                documentWithParsedMarkdown =
+                    Dict.get idToWorkWith documents
+                        |> Maybe.andThen Result.toMaybe
+                        |> Maybe.map parseDocumentMarkdown
 
                 childDocumentIds : List String
                 childDocumentIds =
@@ -3264,10 +3327,11 @@ parseMarkdownAndCollectIdsToFetch idsToCheck idsToFetch documents =
                 (remainingToCheck ++ childrenIdsToCheck)
                 (idsToFetch ++ childrenIdsToFetch ++ fetchCurrentId)
                 (Dict.update
-                    id
+                    idToWorkWith
                     (Maybe.map (Result.map (\doc -> Maybe.withDefault doc documentWithParsedMarkdown)))
                     documents
                 )
+                legacyMode
 
         [] ->
             ( documents, idsToFetch )
@@ -4269,6 +4333,8 @@ getSearchModelQueryParams model searchModel =
 searchFields : List String
 searchFields =
     [ "name"
+    , "legacy_name"
+    , "remaster_name"
     , "text^0.1"
     , "trait_raw"
     , "type"
@@ -4684,6 +4750,27 @@ buildSearchFilterTerms model searchModel =
 
           else
             [ buildElasticsearchQueryStringQueryBody searchModel.fixedQueryString ]
+
+        , [ [ ( "bool"
+              , Encode.object
+                    [ ( "must_not"
+                      , Encode.object
+                            [ ( "exists"
+                              , Encode.object
+                                    [ ( "field"
+                                      , if model.legacyMode then
+                                            Encode.string "legacy_id"
+
+                                        else
+                                            Encode.string "remaster_id"
+                                      )
+                                    ]
+                              )
+                            ]
+                      )
+                    ]
+            )
+          ] ]
         ]
 
 
@@ -4801,6 +4888,26 @@ buildStandardQueryBody queryString =
       ]
     , [ ( "match_phrase_prefix"
         , Encode.object
+            [ ( "legacy_name.sayt"
+              , Encode.object
+                    [ ( "query", Encode.string queryString )
+                    ]
+              )
+            ]
+        )
+      ]
+    , [ ( "match_phrase_prefix"
+        , Encode.object
+            [ ( "remaster_name.sayt"
+              , Encode.object
+                    [ ( "query", Encode.string queryString )
+                    ]
+              )
+            ]
+        )
+      ]
+    , [ ( "match_phrase_prefix"
+        , Encode.object
             [ ( "text.sayt"
               , Encode.object
                     [ ( "query", Encode.string queryString )
@@ -4813,6 +4920,18 @@ buildStandardQueryBody queryString =
     , [ ( "term"
         , Encode.object
             [ ( "name", Encode.string queryString )
+            ]
+        )
+      ]
+    , [ ( "term"
+        , Encode.object
+            [ ( "legacy_name", Encode.string queryString )
+            ]
+        )
+      ]
+    , [ ( "term"
+        , Encode.object
+            [ ( "remaster_name", Encode.string queryString )
             ]
         )
       ]
@@ -5529,6 +5648,7 @@ flagsDecoder =
     Field.attempt "defaultQuery" Decode.string <| \defaultQuery ->
     Field.attempt "fixedParams" Decode.string <| \fixedParams ->
     Field.attempt "fixedQueryString" Decode.string <| \fixedQueryString ->
+    Field.attempt "legacyMode" Decode.bool <| \legacyMode ->
     Field.attempt "localStorage" (Decode.dict Decode.string) <| \localStorage ->
     Field.attempt "noUi" Decode.bool <| \noUi ->
     Field.attempt "pageId" Decode.string <| \pageId ->
@@ -5548,6 +5668,7 @@ flagsDecoder =
                 |> Maybe.map queryToParamsDict
                 |> Maybe.withDefault defaultFlags.fixedParams
         , fixedQueryString = Maybe.withDefault defaultFlags.fixedQueryString fixedQueryString
+        , legacyMode = Maybe.withDefault defaultFlags.legacyMode legacyMode
         , localStorage = Maybe.withDefault defaultFlags.localStorage localStorage
         , noUi = Maybe.withDefault defaultFlags.noUi noUi
         , pageId = Maybe.withDefault defaultFlags.pageId pageId
@@ -5835,6 +5956,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "item_category" ] Decode.string <| \itemCategory ->
     Field.attemptAt [ "_source", "item_subcategory" ] Decode.string <| \itemSubcategory ->
     Field.attemptAt [ "_source", "language_markdown" ] Decode.string <| \languages ->
+    Field.attemptAt [ "_source", "legacy_id" ] Decode.string <| \legacyId ->
     Field.attemptAt [ "_source", "lesson_markdown" ] Decode.string <| \lessons ->
     Field.attemptAt [ "_source", "lesson_type" ] Decode.string <| \lessonType ->
     Field.attemptAt [ "_source", "level" ] Decode.int <| \level ->
@@ -5860,6 +5982,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "region" ] Decode.string <| \region->
     Field.attemptAt [ "_source", "release_date" ] Decode.string <| \releaseDate ->
     Field.attemptAt [ "_source", "reload_raw" ] Decode.string <| \reload ->
+    Field.attemptAt [ "_source", "remaster_id" ] Decode.string <| \remasterId ->
     Field.attemptAt [ "_source", "required_abilities" ] Decode.string <| \requiredAbilities ->
     Field.attemptAt [ "_source", "requirement_markdown" ] Decode.string <| \requirements ->
     Field.attemptAt [ "_source", "resistance" ] damageTypeValuesDecoder <| \resistanceValues ->
@@ -5977,8 +6100,9 @@ documentDecoder =
         , itemCategory = itemCategory
         , itemSubcategory = itemSubcategory
         , languages = languages
-        , lessons = lessons
+        , legacyId = legacyId
         , lessonType = lessonType
+        , lessons = lessons
         , level = level
         , markdown = NotParsed (Maybe.withDefault "" markdown)
         , mysteries = mysteries
@@ -6002,6 +6126,7 @@ documentDecoder =
         , region = region
         , releaseDate = releaseDate
         , reload = reload
+        , remasterId = remasterId
         , requiredAbilities = requiredAbilities
         , requirements = requirements
         , resistanceValues = resistanceValues
@@ -6433,8 +6558,8 @@ viewLinkPreview : Model -> Html Msg
 viewLinkPreview model =
     case model.previewLink of
         Just link ->
-            case Dict.get link.documentId model.documents of
-                Just (Ok doc) ->
+            case getPreviewDocument model link of
+                Just doc ->
                     let
                         top : Int
                         top =
@@ -6483,6 +6608,33 @@ viewLinkPreview model =
 
         Nothing ->
             Html.text ""
+
+
+getPreviewDocument : Model -> PreviewLink -> Maybe Document
+getPreviewDocument model link =
+    case Dict.get link.documentId model.documents of
+        Just (Ok doc) ->
+            if link.noRedirect then
+                Just doc
+
+            else
+                case ( model.legacyMode, doc.legacyId, doc.remasterId ) of
+                    ( True, Just legacyId, _ ) ->
+                        Dict.get legacyId model.documents
+                            |> Maybe.andThen Result.toMaybe
+
+                    ( True, Nothing, _ ) ->
+                        Just doc
+
+                    ( False, _, Just remasterId ) ->
+                        Dict.get remasterId model.documents
+                            |> Maybe.andThen Result.toMaybe
+
+                    ( False, _, _ ) ->
+                        Just doc
+
+        _ ->
+            Nothing
 
 
 viewDocument : Model -> String -> Int -> Maybe String -> List (Html Msg)
