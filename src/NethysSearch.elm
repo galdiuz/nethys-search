@@ -128,6 +128,7 @@ type alias SearchModel =
     , filteredStrongestSaves : Dict String Bool
     , filteredToValues : Dict String String
     , filteredTraditions : Dict String Bool
+    , filteredTraitGroups : Dict String Bool
     , filteredTraits : Dict String Bool
     , filteredTypes : Dict String Bool
     , filteredWeakestSaves : Dict String Bool
@@ -215,6 +216,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , filteredStrongestSaves = Dict.empty
     , filteredToValues = Dict.empty
     , filteredTraditions = Dict.empty
+    , filteredTraitGroups = Dict.empty
     , filteredTraits = Dict.empty
     , filteredTypes = Dict.empty
     , filteredWeakestSaves = Dict.empty
@@ -755,8 +757,8 @@ type Msg
     | TraditionFilterAdded String
     | TraditionFilterRemoved String
     | TraitGroupDeselectPressed (List String)
-    | TraitGroupExcludePressed (List String)
-    | TraitGroupIncludePressed (List String)
+    | TraitGroupFilterAdded String
+    | TraitGroupFilterRemoved String
     | TraitFilterAdded String
     | TraitFilterRemoved String
     | TypeFilterAdded String
@@ -2164,7 +2166,10 @@ update msg model =
             ( model
             , updateCurrentSearchModel
                 (\searchModel ->
-                    { searchModel | filteredTraits = Dict.empty }
+                    { searchModel
+                        | filteredTraits = Dict.empty
+                        , filteredTraitGroups = Dict.empty
+                    }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -2881,37 +2886,21 @@ update msg model =
                 |> updateUrlWithSearchParams
             )
 
-        TraitGroupExcludePressed traits ->
+        TraitGroupFilterAdded group ->
             ( model
             , updateCurrentSearchModel
                 (\searchModel ->
-                    { searchModel
-                        | filteredTraits =
-                            List.foldl
-                                (\trait ->
-                                    Dict.insert trait False
-                                )
-                                searchModel.filteredTraits
-                                traits
-                    }
+                    { searchModel | filteredTraitGroups = toggleBoolDict group searchModel.filteredTraitGroups }
                 )
                 model
                 |> updateUrlWithSearchParams
             )
 
-        TraitGroupIncludePressed traits ->
+        TraitGroupFilterRemoved group ->
             ( model
             , updateCurrentSearchModel
                 (\searchModel ->
-                    { searchModel
-                        | filteredTraits =
-                            List.foldl
-                                (\trait ->
-                                    Dict.insert trait True
-                                )
-                                searchModel.filteredTraits
-                                traits
-                    }
+                    { searchModel | filteredTraitGroups = Dict.remove group searchModel.filteredTraitGroups }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -3917,25 +3906,6 @@ getSearchModelQueryParams model searchModel =
                 ElasticsearchQueryString ->
                     [ "eqs" ]
       )
-    , ( "include-traits"
-      , boolDictIncluded searchModel.filteredTraits
-      )
-    , ( "exclude-traits"
-      , boolDictExcluded searchModel.filteredTraits
-      )
-    , ( "traits-operator"
-      , if searchModel.filterTraitsOperator then
-            []
-
-        else
-            [ "or" ]
-      )
-    , ( "include-types"
-      , boolDictIncluded searchModel.filteredTypes
-      )
-    , ( "exclude-types"
-      , boolDictExcluded searchModel.filteredTypes
-      )
     , ( "include-attributes"
       , boolDictIncluded searchModel.filteredAttributes
       )
@@ -4094,6 +4064,31 @@ getSearchModelQueryParams model searchModel =
 
         else
             [ "or" ]
+      )
+    , ( "include-trait-groups"
+      , boolDictIncluded searchModel.filteredTraitGroups
+      )
+    , ( "exclude-trait-groups"
+      , boolDictExcluded searchModel.filteredTraitGroups
+      )
+    , ( "include-traits"
+      , boolDictIncluded searchModel.filteredTraits
+      )
+    , ( "exclude-traits"
+      , boolDictExcluded searchModel.filteredTraits
+      )
+    , ( "traits-operator"
+      , if searchModel.filterTraitsOperator then
+            []
+
+        else
+            [ "or" ]
+      )
+    , ( "include-types"
+      , boolDictIncluded searchModel.filteredTypes
+      )
+    , ( "exclude-types"
+      , boolDictExcluded searchModel.filteredTypes
       )
     , ( "include-weakest-saves"
       , boolDictIncluded searchModel.filteredWeakestSaves
@@ -4913,6 +4908,7 @@ updateSearchModelFromParams params model searchModel =
         , filteredSources = getBoolDictFromParams params "sources"
         , filteredStrongestSaves = getBoolDictFromParams params "strongest-saves"
         , filteredTraditions = getBoolDictFromParams params "traditions"
+        , filteredTraitGroups = getBoolDictFromParams params "trait-groups"
         , filteredTraits = getBoolDictFromParams params "traits"
         , filteredTypes = getBoolDictFromParams params "types"
         , filteredWeakestSaves = getBoolDictFromParams params "weakest-saves"
@@ -5372,7 +5368,14 @@ buildGlobalAggregationsBody searchModel =
           , Encode.object
                 [ ( "bool"
                   , Encode.object
-                        [ ( "must_not"
+                        [ ( "must"
+                          , Encode.object
+                                [ ( "term"
+                                  , Encode.object [ ( "type", Encode.string "trait" ) ]
+                                  )
+                                ]
+                          )
+                        , ( "must_not"
                           , Encode.object
                                 [ ( "term"
                                   , Encode.object [ ( "exclude_from_search", Encode.bool True ) ]
@@ -6813,6 +6816,7 @@ filterFields searchModel =
     , ( "source_category", searchModel.filteredSourceCategories, False )
     , ( "strongest_save", searchModel.filteredStrongestSaves, False )
     , ( "tradition", searchModel.filteredTraditions, searchModel.filterTraditionsOperator )
+    , ( "trait_group", searchModel.filteredTraitGroups, searchModel.filterTraitsOperator )
     , ( "trait", searchModel.filteredTraits, searchModel.filterTraitsOperator )
     , ( "type", searchModel.filteredTypes, False )
     , ( "weakest_save", searchModel.filteredWeakestSaves, False )
@@ -7014,47 +7018,7 @@ viewActiveFilters canClick searchModel =
                                 )
                             )
                 )
-                [ { class = Just "trait"
-                  , label =
-                        if searchModel.filterTraitsOperator then
-                            "Include all traits:"
-
-                        else
-                            "Include any trait:"
-                  , list = boolDictIncluded searchModel.filteredTraits
-                  , removeMsg = TraitFilterRemoved
-                  }
-                , { class = Just "trait"
-                  , label = "Exclude traits:"
-                  , list = boolDictExcluded searchModel.filteredTraits
-                  , removeMsg = TraitFilterRemoved
-                  }
-                , { class = Just "filter-type"
-                  , label = "Include types:"
-                  , list = boolDictIncluded searchModel.filteredTypes
-                  , removeMsg = TypeFilterRemoved
-                  }
-                , { class = Just "filter-type"
-                  , label = "Exclude types:"
-                  , list = boolDictExcluded searchModel.filteredTypes
-                  , removeMsg = TypeFilterRemoved
-                  }
-                , { class = Nothing
-                  , label =
-                        if searchModel.filterTraditionsOperator then
-                            "Include all traditions:"
-
-                        else
-                            "Include any tradition:"
-                  , list = boolDictIncluded searchModel.filteredTraditions
-                  , removeMsg = TraditionFilterRemoved
-                  }
-                , { class = Nothing
-                  , label = "Exclude traditions:"
-                  , list = boolDictExcluded searchModel.filteredTraditions
-                  , removeMsg = TraditionFilterRemoved
-                  }
-                , { class = Nothing
+                [ { class = Nothing
                   , label = "Include actions:"
                   , list = boolDictIncluded searchModel.filteredActions
                   , removeMsg = ActionsFilterRemoved
@@ -7273,6 +7237,61 @@ viewActiveFilters canClick searchModel =
                   , label = "Exclude strongest saves:"
                   , list = boolDictExcluded searchModel.filteredStrongestSaves
                   , removeMsg = StrongestSaveFilterRemoved
+                  }
+                , { class = Nothing
+                  , label =
+                        if searchModel.filterTraditionsOperator then
+                            "Include all traditions:"
+
+                        else
+                            "Include any tradition:"
+                  , list = boolDictIncluded searchModel.filteredTraditions
+                  , removeMsg = TraditionFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude traditions:"
+                  , list = boolDictExcluded searchModel.filteredTraditions
+                  , removeMsg = TraditionFilterRemoved
+                  }
+                , { class = Just "trait"
+                  , label =
+                        if searchModel.filterTraitsOperator then
+                            "Include all traits:"
+
+                        else
+                            "Include any trait:"
+                  , list = boolDictIncluded searchModel.filteredTraits
+                  , removeMsg = TraitFilterRemoved
+                  }
+                , { class = Just "trait"
+                  , label = "Exclude traits:"
+                  , list = boolDictExcluded searchModel.filteredTraits
+                  , removeMsg = TraitFilterRemoved
+                  }
+                , { class = Nothing
+                  , label =
+                        if searchModel.filterTraitsOperator then
+                            "Include all trait groups:"
+
+                        else
+                            "Include any trait group:"
+                  , list = boolDictIncluded searchModel.filteredTraitGroups
+                  , removeMsg = TraitGroupFilterRemoved
+                  }
+                , { class = Nothing
+                  , label = "Exclude trait groups:"
+                  , list = boolDictExcluded searchModel.filteredTraitGroups
+                  , removeMsg = TraitGroupFilterRemoved
+                  }
+                , { class = Just "filter-type"
+                  , label = "Include types:"
+                  , list = boolDictIncluded searchModel.filteredTypes
+                  , removeMsg = TypeFilterRemoved
+                  }
+                , { class = Just "filter-type"
+                  , label = "Exclude types:"
+                  , list = boolDictExcluded searchModel.filteredTypes
+                  , removeMsg = TypeFilterRemoved
                   }
                 , { class = Nothing
                   , label = "Include weakest saves:"
@@ -8516,15 +8535,22 @@ viewFilterTraits model searchModel =
                                     [ Html.h4
                                         []
                                         [ Html.text (toTitleCase group) ]
+                                    , if group /= "uncategorized" then
+                                        Html.button
+                                            [ HA.class "row"
+                                            , HA.class "gap-tiny"
+                                            , HE.onClick (TraitGroupFilterAdded group)
+                                            ]
+                                            [ Html.text "Filter group"
+                                            , viewFilterIcon (Dict.get group searchModel.filteredTraitGroups)
+                                            ]
+
+                                      else
+                                        Html.text ""
                                     , Html.button
-                                        [ HE.onClick (TraitGroupIncludePressed traits) ]
-                                        [ Html.text "Include group" ]
-                                    , Html.button
-                                        [ HE.onClick (TraitGroupExcludePressed traits) ]
-                                        [ Html.text "Exclude group" ]
-                                    , Html.button
-                                        [ HE.onClick (TraitGroupDeselectPressed traits) ]
-                                        [ Html.text "Deselect group" ]
+                                        [ HE.onClick (TraitGroupDeselectPressed traits)
+                                        ]
+                                        [ Html.text "Reset group selection" ]
                                     ]
                                 , Html.div
                                     [ HA.class "row"
