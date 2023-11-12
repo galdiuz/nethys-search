@@ -3,8 +3,8 @@ module Data exposing (..)
 import String.Extra
 
 
-abilities : List String
-abilities =
+attributes : List String
+attributes =
     [ "strength"
     , "dexterity"
     , "constitution"
@@ -84,9 +84,9 @@ damageTypes =
 
 fields : List ( String, String )
 fields =
-    [ ( "ability", "Related abilities or ability boosts" )
-    , ( "ability_boost", "Alias for 'ability'" )
-    , ( "ability_flaw", "Ancestry ability flaw" )
+    [ ( "ability", "Alias for 'attribute'" )
+    , ( "ability_boost", "Alias for 'attribute'" )
+    , ( "ability_flaw", "Alias for 'attribute_flaw'" )
     , ( "ability_type", "Familiar ability type (Familiar / Master)" )
     , ( "ac", "[n] Armor class of an armor, creature, or shield" )
     , ( "access", "Access requirements" )
@@ -103,6 +103,9 @@ fields =
     , ( "armor_group", "Armor group" )
     , ( "aspect", "Relic gift aspect type" )
     , ( "attack_proficiency", "A class's attack proficiencies" )
+    , ( "attribute", "Related abilities or ability boosts" )
+    , ( "attribute_boost", "Alias for 'attribute'" )
+    , ( "attribute_flaw", "Ancestry attribute flaw" )
     , ( "base_item", "Base item of a specific magic item" )
     , ( "bloodline", "Sorcerer bloodlines associated with a spell" )
     , ( "bloodline_spell", "Sorcerer bloodline's spells" )
@@ -368,8 +371,7 @@ skills =
 
 sortFields : List ( String, String, Bool )
 sortFields =
-    [ ( "ability", "ability", False )
-    , ( "ability_type", "ability_type", False )
+    [ ( "ability_type", "ability_type", False )
     , ( "ac", "ac", True )
     , ( "actions", "actions_number", True )
     , ( "alignment", "alignment", False )
@@ -378,6 +380,7 @@ sortFields =
     , ( "armor_category", "armor_category", False )
     , ( "armor_group", "armor_group", False )
     , ( "aspect", "aspect", False )
+    , ( "attribute", "attribute", False )
     , ( "base_item", "base_item.keyword", False )
     , ( "bloodline", "bloodline", False )
     , ( "bulk", "bulk", True )
@@ -512,10 +515,7 @@ sourceCategories =
 
 tableColumns : List String
 tableColumns =
-    [ "ability"
-    , "ability_boost"
-    , "ability_flaw"
-    , "ability_type"
+    [ "ability_type"
     , "ac"
     , "actions"
     , "advanced_apocryphal_spell"
@@ -528,6 +528,9 @@ tableColumns =
     , "armor_group"
     , "aspect"
     , "attack_proficiency"
+    , "attribute"
+    , "attribute_boost"
+    , "attribute_flaw"
     , "base_item"
     , "bloodline"
     , "bulk"

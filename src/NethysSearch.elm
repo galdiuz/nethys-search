@@ -102,7 +102,7 @@ type alias SearchModel =
     , alwaysShowFilters : List String
     , debounce : Int
     , defaultQuery : String
-    , filteredAbilities : Dict String Bool
+    , filteredAttributes : Dict String Bool
     , filteredActions : Dict String Bool
     , filteredAlignments : Dict String Bool
     , filteredArmorCategories : Dict String Bool
@@ -160,11 +160,11 @@ type alias SearchModel =
     , selectedColumnResistance : String
     , selectedColumnSpeed : String
     , selectedColumnWeakness : String
-    , selectedFilterAbility : String
+    , selectedFilterAttribute : String
     , selectedFilterResistance : String
     , selectedFilterSpeed : String
     , selectedFilterWeakness : String
-    , selectedSortAbility : String
+    , selectedSortAttribute : String
     , selectedSortResistance : String
     , selectedSortSpeed : String
     , selectedSortWeakness : String
@@ -189,7 +189,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , alwaysShowFilters = alwaysShowFilters
     , debounce = 0
     , defaultQuery = defaultQuery
-    , filteredAbilities = Dict.empty
+    , filteredAttributes = Dict.empty
     , filteredActions = Dict.empty
     , filteredAlignments = Dict.empty
     , filteredArmorCategories = Dict.empty
@@ -247,11 +247,11 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , selectedColumnResistance = "acid"
     , selectedColumnSpeed = "land"
     , selectedColumnWeakness = "acid"
-    , selectedFilterAbility = "strength"
+    , selectedFilterAttribute = "strength"
     , selectedFilterResistance = "acid"
     , selectedFilterSpeed = "land"
     , selectedFilterWeakness = "acid"
-    , selectedSortAbility = "strength"
+    , selectedSortAttribute = "strength"
     , selectedSortResistance = "acid"
     , selectedSortSpeed = "land"
     , selectedSortWeakness = "acid"
@@ -286,8 +286,6 @@ type alias Document =
     , name : String
     , type_ : String
     , url : String
-    , abilities : List String
-    , abilityFlaws : List String
     , abilityType : Maybe String
     , ac : Maybe Int
     , actions : Maybe String
@@ -301,8 +299,10 @@ type alias Document =
     , area : Maybe String
     , armorCategory : Maybe String
     , armorGroup : Maybe String
-    , attackProficiencies : List String
     , aspect : Maybe String
+    , attackProficiencies : List String
+    , attributeFlaws : List String
+    , attributes : List String
     , baseItems : Maybe String
     , bloodlines : Maybe String
     , breadcrumbs : Maybe String
@@ -592,9 +592,7 @@ type SortDir
 
 
 type Msg
-    = AbilityFilterAdded String
-    | AbilityFilterRemoved String
-    | ActionsFilterAdded String
+    = ActionsFilterAdded String
     | ActionsFilterRemoved String
     | AlignmentFilterAdded String
     | AlignmentFilterRemoved String
@@ -602,6 +600,8 @@ type Msg
     | ArmorCategoryFilterRemoved String
     | ArmorGroupFilterAdded String
     | ArmorGroupFilterRemoved String
+    | AttributeFilterAdded String
+    | AttributeFilterRemoved String
     | AutoQueryTypeChanged Bool
     | ColumnResistanceChanged String
     | ColumnSpeedChanged String
@@ -622,7 +622,7 @@ type Msg
     | GotGroupAggregationsResult (Result Http.Error SearchResultWithDocuments)
     | GotSearchResult (Result Http.Error SearchResultWithDocuments)
     | GotSourcesAggregationResult (Result Http.Error (List Source))
-    | FilterAbilityChanged String
+    | FilterAttributeChanged String
     | FilterComponentsOperatorChanged Bool
     | FilterDomainsOperatorChanged Bool
     | FilterResistanceChanged String
@@ -672,11 +672,11 @@ type Msg
     | RegionFilterRemoved String
     | ReloadFilterAdded String
     | ReloadFilterRemoved String
-    | RemoveAllAbilityFiltersPressed
     | RemoveAllActionsFiltersPressed
     | RemoveAllAlignmentFiltersPressed
     | RemoveAllArmorCategoryFiltersPressed
     | RemoveAllArmorGroupFiltersPressed
+    | RemoveAllAttributeFiltersPressed
     | RemoveAllComponentFiltersPressed
     | RemoveAllCreatureFamilyFiltersPressed
     | RemoveAllDomainFiltersPressed
@@ -731,7 +731,7 @@ type Msg
     | SizeFilterRemoved String
     | SkillFilterAdded String
     | SkillFilterRemoved String
-    | SortAbilityChanged String
+    | SortAttributeChanged String
     | SortAdded String SortDir
     | SortOrderChanged Int Int
     | SortRemoved String
@@ -923,26 +923,6 @@ linkEnteredDecoder =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        AbilityFilterAdded abilities ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredAbilities = toggleBoolDict abilities searchModel.filteredAbilities }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        AbilityFilterRemoved abilities ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredAbilities = Dict.remove abilities searchModel.filteredAbilities }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
         ActionsFilterAdded actions ->
             ( model
             , updateCurrentSearchModel
@@ -1018,6 +998,26 @@ update msg model =
             , updateCurrentSearchModel
                 (\searchModel ->
                     { searchModel | filteredArmorGroups = Dict.remove group searchModel.filteredArmorGroups }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        AttributeFilterAdded attributes ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredAttributes = toggleBoolDict attributes searchModel.filteredAttributes }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        AttributeFilterRemoved attributes ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredAttributes = Dict.remove attributes searchModel.filteredAttributes }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -1145,10 +1145,10 @@ update msg model =
                 |> updateUrlWithSearchParams
             )
 
-        FilterAbilityChanged value ->
+        FilterAttributeChanged value ->
             ( updateCurrentSearchModel
                 (\searchModel ->
-                    { searchModel | selectedFilterAbility = value }
+                    { searchModel | selectedFilterAttribute = value }
                 )
                 model
             , Cmd.none
@@ -1927,16 +1927,6 @@ update msg model =
                 |> updateUrlWithSearchParams
             )
 
-        RemoveAllAbilityFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredAbilities = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
         RemoveAllActionsFiltersPressed ->
             ( model
             , updateCurrentSearchModel
@@ -1972,6 +1962,16 @@ update msg model =
             , updateCurrentSearchModel
                 (\searchModel ->
                     { searchModel | filteredArmorGroups = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        RemoveAllAttributeFiltersPressed ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredAttributes = Dict.empty }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -2549,10 +2549,10 @@ update msg model =
                 |> updateUrlWithSearchParams
             )
 
-        SortAbilityChanged value ->
+        SortAttributeChanged value ->
             ( updateCurrentSearchModel
                 (\searchModel ->
-                    { searchModel | selectedSortAbility = value }
+                    { searchModel | selectedSortAttribute = value }
                 )
                 model
             , Cmd.none
@@ -3915,11 +3915,11 @@ getSearchModelQueryParams model searchModel =
     , ( "exclude-types"
       , boolDictExcluded searchModel.filteredTypes
       )
-    , ( "include-abilities"
-      , boolDictIncluded searchModel.filteredAbilities
+    , ( "include-attributes"
+      , boolDictIncluded searchModel.filteredAttributes
       )
-    , ( "exclude-abilities"
-      , boolDictExcluded searchModel.filteredAbilities
+    , ( "exclude-attributes"
+      , boolDictExcluded searchModel.filteredAttributes
       )
     , ( "include-actions"
       , boolDictIncluded searchModel.filteredActions
@@ -4868,7 +4868,8 @@ updateSearchModelFromParams params model searchModel =
 
                     else
                         Standard
-        , filteredAbilities = getBoolDictFromParams params "abilities"
+        , filteredAttributes = getBoolDictFromParams params "abilities"
+            |> Dict.union (getBoolDictFromParams params "attributes")
         , filteredActions = getBoolDictFromParams params "actions"
         , filteredAlignments = getBoolDictFromParams params "alignments"
         , filteredArmorCategories = getBoolDictFromParams params "armor-categories"
@@ -5457,6 +5458,13 @@ flagsDecoder =
         , pageId = Maybe.withDefault defaultFlags.pageId pageId
         , randomSeed = Maybe.withDefault defaultFlags.randomSeed randomSeed
         , removeFilters = Maybe.withDefault defaultFlags.removeFilters removeFilters
+            |> (\filters ->
+                if List.member "abilities" filters then
+                    "attributes" :: filters
+
+                else
+                    filters
+               )
         , resultBaseUrl = Maybe.withDefault defaultFlags.resultBaseUrl resultBaseUrl
         , showFilters = Maybe.withDefault defaultFlags.showFilters showFilters
         , showHeader = Maybe.withDefault defaultFlags.showHeader showHeader
@@ -5667,9 +5675,6 @@ documentDecoder =
     Field.requireAt [ "_source", "name" ] Decode.string <| \name ->
     Field.requireAt [ "_source", "type" ] Decode.string <| \type_ ->
     Field.requireAt [ "_source", "url" ] Decode.string <| \url ->
-    Field.attemptAt [ "_source", "ability" ] stringListDecoder <| \abilities ->
-    Field.attemptAt [ "_source", "ability_boost" ] stringListDecoder <| \abilityBoosts ->
-    Field.attemptAt [ "_source", "ability_flaw" ] stringListDecoder <| \abilityFlaws ->
     Field.attemptAt [ "_source", "ability_type" ] Decode.string <| \abilityType ->
     Field.attemptAt [ "_source", "ac" ] Decode.int <| \ac ->
     Field.attemptAt [ "_source", "actions" ] Decode.string <| \actions ->
@@ -5685,6 +5690,8 @@ documentDecoder =
     Field.attemptAt [ "_source", "armor_group_markdown" ] Decode.string <| \armorGroup ->
     Field.attemptAt [ "_source", "aspect" ] Decode.string <| \aspect ->
     Field.attemptAt [ "_source", "attack_proficiency" ] stringListDecoder <| \attackProficiencies ->
+    Field.attemptAt [ "_source", "attribute_flaw" ] stringListDecoder <| \attributeFlaws ->
+    Field.attemptAt [ "_source", "attribute" ] stringListDecoder <| \attributes ->
     Field.attemptAt [ "_source", "base_item_markdown" ] Decode.string <| \baseItems ->
     Field.attemptAt [ "_source", "bloodline_markdown" ] Decode.string <| \bloodlines ->
     Field.attemptAt [ "_source", "breadcrumbs" ] Decode.string <| \breadcrumbs ->
@@ -5804,8 +5811,6 @@ documentDecoder =
         , name = name
         , type_ = type_
         , url = url
-        , abilities = Maybe.withDefault [] abilities
-        , abilityFlaws = Maybe.withDefault [] abilityFlaws
         , abilityType = abilityType
         , ac = ac
         , actions = actions
@@ -5821,6 +5826,8 @@ documentDecoder =
         , armorGroup = armorGroup
         , aspect = aspect
         , attackProficiencies = Maybe.withDefault [] attackProficiencies
+        , attributeFlaws = Maybe.withDefault [] attributeFlaws
+        , attributes = Maybe.withDefault [] attributes
         , baseItems = baseItems
         , bloodlines = bloodlines
         , breadcrumbs = breadcrumbs
@@ -6594,11 +6601,6 @@ allFilters =
       , view = viewFilterNumbers
       , visibleIf = \_ -> True
       }
-    , { id = "abilities"
-      , label = "Abilities (Boosts)"
-      , view = viewFilterAbilities
-      , visibleIf = \_ -> True
-      }
     , { id = "actions"
       , label = "Actions / Cast time"
       , view = viewFilterActions
@@ -6613,6 +6615,11 @@ allFilters =
       , label = "Armor"
       , view = viewFilterArmor
       , visibleIf = getAggregation .types >> List.member "armor"
+      }
+    , { id = "attributes"
+      , label = "Attributes (Boosts)"
+      , view = viewFilterAttributes
+      , visibleIf = \_ -> True
       }
     , { id = "components"
       , label = "Casting components"
@@ -6762,11 +6769,11 @@ moreThanOneAggregation fun searchModel =
 
 filterFields : SearchModel -> List ( String, Dict String Bool, Bool )
 filterFields searchModel =
-    [ ( "ability", searchModel.filteredAbilities, False )
-    , ( "actions.keyword", searchModel.filteredActions, False )
+    [ ( "actions.keyword", searchModel.filteredActions, False )
     , ( "alignment", searchModel.filteredAlignments, False )
     , ( "armor_category", searchModel.filteredArmorCategories, False )
     , ( "armor_group", searchModel.filteredArmorGroups, False )
+    , ( "attribute", searchModel.filteredAttributes, False )
     , ( "component", searchModel.filteredComponents, searchModel.filterComponentsOperator )
     , ( "creature_family", searchModel.filteredCreatureFamilies, False )
     , ( "domain", searchModel.filteredDomains, searchModel.filterDomainsOperator )
@@ -7037,14 +7044,14 @@ viewActiveFilters canClick searchModel =
                   , removeMsg = ActionsFilterRemoved
                   }
                 , { class = Nothing
-                  , label = "Include abilities:"
-                  , list = boolDictIncluded searchModel.filteredAbilities
-                  , removeMsg = AbilityFilterRemoved
+                  , label = "Include attributes:"
+                  , list = boolDictIncluded searchModel.filteredAttributes
+                  , removeMsg = AttributeFilterRemoved
                   }
                 , { class = Nothing
-                  , label = "Exclude abilities:"
-                  , list = boolDictExcluded searchModel.filteredAbilities
-                  , removeMsg = AbilityFilterRemoved
+                  , label = "Exclude attributes:"
+                  , list = boolDictExcluded searchModel.filteredAttributes
+                  , removeMsg = AttributeFilterRemoved
                   }
                 , { class = Just "trait trait-alignment"
                   , label = "Include alignments:"
@@ -7371,15 +7378,15 @@ viewActiveSorts canClick searchModel =
             )
 
 
-viewFilterAbilities : Model -> SearchModel -> List (Html Msg)
-viewFilterAbilities model searchModel =
+viewFilterAttributes : Model -> SearchModel -> List (Html Msg)
+viewFilterAttributes model searchModel =
     [ Html.div
         [ HA.class "row"
         , HA.class "align-baseline"
         , HA.class "gap-medium"
         ]
         [ Html.button
-            [ HE.onClick RemoveAllAbilityFiltersPressed ]
+            [ HE.onClick RemoveAllAttributeFiltersPressed ]
             [ Html.text "Reset selection" ]
         ]
     , Html.div
@@ -7388,17 +7395,17 @@ viewFilterAbilities model searchModel =
         , HA.class "scrollbox"
         ]
         (List.map
-            (\ability ->
+            (\attribute ->
                 Html.button
                     [ HA.class "row"
                     , HA.class "gap-tiny"
-                    , HE.onClick (AbilityFilterAdded ability)
+                    , HE.onClick (AttributeFilterAdded attribute)
                     ]
-                    [ Html.text (toTitleCase ability)
-                    , viewFilterIcon (Dict.get ability searchModel.filteredAbilities)
+                    [ Html.text (toTitleCase attribute)
+                    , viewFilterIcon (Dict.get attribute searchModel.filteredAttributes)
                     ]
             )
-            Data.abilities
+            Data.attributes
         )
     ]
 
@@ -8942,14 +8949,14 @@ viewFilterNumbers model searchModel =
                         ]
                         [ Html.select
                             [ HA.class "input-container"
-                            , HA.value searchModel.selectedFilterAbility
-                            , HE.onInput FilterAbilityChanged
+                            , HA.value searchModel.selectedFilterAttribute
+                            , HE.onInput FilterAttributeChanged
                             ]
                             (List.map
-                                (\ability ->
+                                (\attribute ->
                                     Html.option
-                                        [ HA.value ability ]
-                                        [ Html.text (sortFieldToLabel ability)
+                                        [ HA.value attribute ]
+                                        [ Html.text (sortFieldToLabel attribute)
                                         ]
                                 )
                                 [ "strength"
@@ -8974,8 +8981,8 @@ viewFilterNumbers model searchModel =
                             [ Html.input
                                 [ HA.type_ "number"
                                 , HA.step "1"
-                                , HA.value (Maybe.withDefault "" (Dict.get searchModel.selectedFilterAbility searchModel.filteredFromValues))
-                                , HE.onInput (FilteredFromValueChanged searchModel.selectedFilterAbility)
+                                , HA.value (Maybe.withDefault "" (Dict.get searchModel.selectedFilterAttribute searchModel.filteredFromValues))
+                                , HE.onInput (FilteredFromValueChanged searchModel.selectedFilterAttribute)
                                 ]
                                 []
                             ]
@@ -8988,8 +8995,8 @@ viewFilterNumbers model searchModel =
                             [ Html.input
                                 [ HA.type_ "number"
                                 , HA.step "1"
-                                , HA.value (Maybe.withDefault "" (Dict.get searchModel.selectedFilterAbility searchModel.filteredToValues))
-                                , HE.onInput (FilteredToValueChanged searchModel.selectedFilterAbility)
+                                , HA.value (Maybe.withDefault "" (Dict.get searchModel.selectedFilterAttribute searchModel.filteredToValues))
+                                , HE.onInput (FilteredToValueChanged searchModel.selectedFilterAttribute)
                                 ]
                                 []
                             ]
@@ -10077,9 +10084,9 @@ viewResultDisplayGrouped model searchModel =
                         , Html.text (toTitleCase (String.Extra.humanize field))
                         ]
                 )
-                [ "ability"
-                , "actions"
+                [ "actions"
                 , "alignment"
+                , "attribute"
                 , "creature_family"
                 , "duration"
                 , "element"
@@ -10959,19 +10966,19 @@ viewSearchResultGridCell model document column =
         ]
         (case String.split "." column of
             [ "ability" ] ->
-                document.abilities
+                document.attributes
                     |> String.join ", "
                     |> Html.text
                     |> List.singleton
 
             [ "ability_boost" ] ->
-                document.abilities
+                document.attributes
                     |> String.join ", "
                     |> Html.text
                     |> List.singleton
 
             [ "ability_flaw" ] ->
-                document.abilityFlaws
+                document.attributeFlaws
                     |> String.join ", "
                     |> Html.text
                     |> List.singleton
@@ -11032,6 +11039,24 @@ viewSearchResultGridCell model document column =
                         document.attackProficiencies
                     )
                 ]
+
+            [ "attribute" ] ->
+                document.attributes
+                    |> String.join ", "
+                    |> Html.text
+                    |> List.singleton
+
+            [ "attribute_boost" ] ->
+                document.attributes
+                    |> String.join ", "
+                    |> Html.text
+                    |> List.singleton
+
+            [ "attribute_flaw" ] ->
+                document.attributeFlaws
+                    |> String.join ", "
+                    |> Html.text
+                    |> List.singleton
 
             [ "base_item" ] ->
                 maybeAsMarkdown document.baseItems
@@ -11984,16 +12009,16 @@ groupDocumentsByField keys field documents =
         (\document dict ->
             case field of
                 "ability" ->
-                    if List.isEmpty document.abilities then
+                    if List.isEmpty document.attributes then
                         insertToListDict "" document dict
 
                     else
                         List.foldl
-                            (\ability ->
-                                insertToListDict (String.toLower ability) document
+                            (\attribute ->
+                                insertToListDict (String.toLower attribute) document
                             )
                             dict
-                            (List.Extra.unique document.abilities)
+                            (List.Extra.unique document.attributes)
 
                 "actions" ->
                     insertToListDict
@@ -12012,6 +12037,18 @@ groupDocumentsByField keys field documents =
                         )
                         document
                         dict
+
+                "attribute" ->
+                    if List.isEmpty document.attributes then
+                        insertToListDict "" document dict
+
+                    else
+                        List.foldl
+                            (\attribute ->
+                                insertToListDict (String.toLower attribute) document
+                            )
+                            dict
+                            (List.Extra.unique document.attributes)
 
                 "creature_family" ->
                     insertToListDict
