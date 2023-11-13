@@ -266,7 +266,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , sortHasChanged = False
     , tableColumns = []
     , tracker = Nothing
-    , visibleFilterBoxes = []
+    , visibleFilterBoxes = [ "whats-new" ]
     }
 
 
@@ -2596,7 +2596,13 @@ update msg model =
                     }
                 )
                 model
-            , Cmd.none
+            , if not show && id == "whats-new" then
+                saveToLocalStorage
+                    "seen-whats-new"
+                    (String.fromInt whatsNewVersion)
+
+              else
+                Cmd.none
             )
 
         ShowLegacyFiltersChanged value ->
@@ -3585,6 +3591,25 @@ updateModelFromLocalStorage ( key, value ) model =
                 Just width ->
                     if List.member width Data.allPageWidths || width == 0 then
                         { model | pageWidth = width }
+
+                    else
+                        model
+
+                Nothing ->
+                    model
+
+        "seen-whats-new" ->
+            case String.toInt value of
+                Just version ->
+                    if version >= whatsNewVersion then
+                        updateCurrentSearchModel
+                            (\searchModel ->
+                                { searchModel
+                                    | visibleFilterBoxes =
+                                        List.Extra.remove "whats-new" searchModel.visibleFilterBoxes
+                                }
+                            )
+                            model
 
                     else
                         model
@@ -7027,6 +7052,11 @@ allOptions =
       , view = viewDefaultParams
       , visibleIf = \_ -> True
       }
+    , { id = "whats-new"
+      , label = "What's new?"
+      , view = viewWhatsNew
+      , visibleIf = \_ -> True
+      }
     ]
 
 
@@ -9970,6 +10000,54 @@ viewDefaultParams model searchModel =
             _ ->
                 Html.text ""
         ]
+    ]
+
+
+whatsNewVersion : Int
+whatsNewVersion =
+    1
+
+
+viewWhatsNew : Model -> SearchModel -> List (Html Msg)
+viewWhatsNew model _ =
+    [ Html.div
+        [ HA.class "no-ul-margin" ]
+        ("""
+        - Added option under _General settings_ to hide legacy filters.
+        - Added table data export functionality. Found under _Result display_ when set to Table, where you can export to CSV or JSON.
+        - List display option renamed to Short.
+        - Date format is now configurable under _General settings_. Defaults to your browser's default format.
+        - Removed Cantrip and Focus types, they now use the Spell type. Use the respective traits or the new `spell_type` field to filter.
+        - Actions, rarities, and sizes are now sorted "numerically" instead of alphabetically.
+        - Items with no bulk are now treated as 0 bulk.
+        - Added domain filter buttons.
+        - Added trait group filter buttons.
+        - New/changed fields:
+            - `attribute` (new)
+            - `attribute_boost` (new: alias for `attribute`)
+            - `attribute_flaw` (new)
+            - `defense` (new: alias for `saving_throw`)
+            - `element` (changed: spells in the elementalist spell list without an elemental trait are now matched by `element:universal`)
+            - `legacy_name` (new: name of legacy equivalent)
+            - `pantheon` (new)
+            - `pantheon_member` (new)
+            - `rank` (new: alias for `level`)
+            - `remaster_name` (new: name of remaster equivalent)
+            - `spell_type` (new: matches Cantrip / Focus / Spell)
+            - `skill_mod` (new: can be used to find creatures with a specific skill modifier, except lore skills for technical reasons)
+            - `trait_group` (changed: is now indexed on everything, e.g. `type:feat trait_group:ancestry` matches all feats with an ancestry trait)
+
+        - Added grouped display group options:
+            - Deity Category
+            - Heighten Group (groups spells by heightenable rank)
+            - Pantheon
+        """
+            |> String.Extra.unindent
+            |> Markdown.Parser.parse
+            |> Result.withDefault []
+            |> Markdown.Renderer.render Markdown.Renderer.defaultHtmlRenderer
+            |> Result.withDefault []
+        )
     ]
 
 
@@ -14903,7 +14981,7 @@ css args =
         pointer-events: none;
     }
 
-    .monospace {
+    .monospace, code {
         background-color: var(--color-box-bg-alt);
         font-family: monospace;
         font-size: var(--font-normal);
@@ -14911,6 +14989,10 @@ css args =
 
     .nowrap {
         flex-wrap: nowrap;
+    }
+
+    .no-ul-margin ul {
+        margin: 0;
     }
 
     .option-container {
