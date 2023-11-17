@@ -3,10 +3,12 @@ port module NethysSearch exposing (main)
 import Browser
 import Browser.Dom
 import Browser.Events
+import Csv.Encode
 import Data
 import Date
 import Dict exposing (Dict)
 import Dict.Extra
+import File.Download
 import FontAwesome
 import FontAwesome.Attributes
 import FontAwesome.Regular
@@ -618,6 +620,8 @@ type Msg
     | DeleteColumnConfigurationPressed
     | DomainFilterAdded String
     | DomainFilterRemoved String
+    | ExportAsCsvPressed
+    | ExportAsJsonPressed
     | GotAggregationsResult (Result Http.Error Aggregations)
     | GotBodySize Size
     | GotDocuments (List String) Bool (Result Http.Error (List (Result String Document)))
@@ -1148,6 +1152,67 @@ update msg model =
                 )
                 model
                 |> updateUrlWithSearchParams
+            )
+
+        ExportAsCsvPressed ->
+            ( model
+            , model.searchModel.searchResults
+                |> List.concatMap
+                    (\result ->
+                        case result of
+                            Ok r ->
+                                r.documentIds
+                                    |> List.filterMap (\id -> Dict.get id model.documents)
+                                    |> List.filterMap Result.toMaybe
+
+                            Err _ ->
+                                []
+                    )
+                |> Csv.Encode.encode
+                    { encoder =
+                        Csv.Encode.withFieldNames
+                            (\document ->
+                                List.map
+                                    (\column ->
+                                        ( column
+                                        , searchResultGridCellToString model document column
+                                        )
+                                    )
+                                    ("name" :: model.searchModel.tableColumns)
+                            )
+                    , fieldSeparator = ','
+                    }
+                |> File.Download.string "table-data.csv" "text/csv"
+            )
+
+        ExportAsJsonPressed ->
+            ( model
+            , model.searchModel.searchResults
+                |> List.concatMap
+                    (\result ->
+                        case result of
+                            Ok r ->
+                                r.documentIds
+                                    |> List.filterMap (\id -> Dict.get id model.documents)
+                                    |> List.filterMap Result.toMaybe
+
+                            Err _ ->
+                                []
+                    )
+                |> Encode.list
+                    (\document ->
+                        List.map
+                            (\column ->
+                                ( column
+                                , searchResultGridCellToString model document column
+                                    |> Encode.string
+                                )
+                            )
+                            ("name" :: model.searchModel.tableColumns)
+                            |> Encode.object
+                    )
+                |> Encode.encode 0
+                |> File.Download.string "table-data.json" "application/json"
             )
 
         FilterAttributeChanged value ->
@@ -9978,6 +10043,31 @@ viewResultDisplayTable model searchModel =
             )
             (Dict.keys model.savedColumnConfigurations)
         )
+
+    , Html.h4
+        []
+        [ Html.text "Export table data" ]
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.text "Note that only loaded rows are exported. If you want to include all rows make sure to load everything first."
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
+            ]
+            [ Html.button
+                [ HA.style "align-self" "flex-start"
+                , HE.onClick ExportAsCsvPressed
+                ]
+                [ Html.text "Export as CSV" ]
+            , Html.button
+                [ HA.style "align-self" "flex-start"
+                , HE.onClick ExportAsJsonPressed
+                ]
+                [ Html.text "Export as JSON" ]
+            ]
+        ]
     ]
 
 
@@ -10978,7 +11068,7 @@ viewSearchResultGrid model searchModel =
             ]
         , Html.tbody
             []
-            (List.map
+            (List.concatMap
                 (\result ->
                     case result of
                         Ok r ->
@@ -10999,7 +11089,6 @@ viewSearchResultGrid model searchModel =
                             []
                 )
                 searchModel.searchResults
-                |> List.concat
             )
         ]
 
@@ -11595,6 +11684,483 @@ maybeAsText maybeString =
         |> Maybe.withDefault ""
         |> Html.text
         |> List.singleton
+
+
+searchResultGridCellToString : Model -> Document -> String -> String
+searchResultGridCellToString model document column =
+    case String.split "." column of
+        [ "ability" ] ->
+            document.attributes
+                |> String.join ", "
+
+        [ "ability_boost" ] ->
+            document.attributes
+                |> String.join ", "
+
+        [ "ability_flaw" ] ->
+            document.attributeFlaws
+                |> String.join ", "
+
+        [ "ability_type" ] ->
+            maybeAsString document.abilityType
+
+        [ "ac" ] ->
+            document.ac
+                |> Maybe.map String.fromInt
+                |> maybeAsString
+
+        [ "actions" ] ->
+            maybeAsString document.actions
+
+        [ "advanced_apocryphal_spell" ] ->
+            maybeAsStringWithoutMarkdown document.advancedApocryphalSpell
+
+        [ "advanced_domain_spell" ] ->
+            maybeAsStringWithoutMarkdown document.advancedDomainSpell
+
+        [ "alignment" ] ->
+            maybeAsString document.alignment
+
+        [ "apocryphal_spell" ] ->
+            maybeAsStringWithoutMarkdown document.apocryphalSpell
+
+        [ "archetype" ] ->
+            maybeAsString document.archetype
+
+        [ "area" ] ->
+            maybeAsString document.area
+
+        [ "armor_category" ] ->
+            maybeAsString document.armorCategory
+
+        [ "armor_group" ] ->
+            maybeAsStringWithoutMarkdown document.armorGroup
+
+        [ "aspect" ] ->
+            document.aspect
+                |> maybeAsString
+                |> toTitleCase
+
+        [ "attack_proficiency" ] ->
+            document.attackProficiencies
+                |> String.join "\n"
+
+        [ "attribute" ] ->
+            document.attributes
+                |> String.join ", "
+
+        [ "attribute_boost" ] ->
+            document.attributes
+                |> String.join ", "
+
+        [ "attribute_flaw" ] ->
+            document.attributeFlaws
+                |> String.join ", "
+
+        [ "base_item" ] ->
+            maybeAsStringWithoutMarkdown document.baseItems
+
+        [ "bloodline" ] ->
+            maybeAsStringWithoutMarkdown document.bloodlines
+
+        [ "bulk" ] ->
+            maybeAsString document.bulk
+
+        [ "charisma" ] ->
+            document.charisma
+                |> Maybe.map numberWithSign
+                |> maybeAsString
+
+        [ "check_penalty" ] ->
+            document.checkPenalty
+                |> Maybe.map numberWithSign
+                |> maybeAsString
+
+        [ "creature_ability" ] ->
+            document.creatureAbilities
+                |> List.sort
+                |> String.join ", "
+
+        [ "creature_family" ] ->
+            maybeAsStringWithoutMarkdown document.creatureFamilyMarkdown
+
+        [ "complexity" ] ->
+            maybeAsString document.complexity
+
+        [ "component" ] ->
+            document.components
+                |> List.map toTitleCase
+                |> String.join ", "
+
+        [ "constitution" ] ->
+            document.constitution
+                |> Maybe.map numberWithSign
+                |> maybeAsString
+
+        [ "cost" ] ->
+            maybeAsStringWithoutMarkdown document.cost
+
+        [ "deity" ] ->
+            maybeAsStringWithoutMarkdown document.deities
+
+        [ "deity_category" ] ->
+            maybeAsString document.deityCategory
+
+        [ "damage" ] ->
+            maybeAsString document.damage
+
+        [ "defense" ] ->
+            maybeAsStringWithoutMarkdown document.savingThrow
+
+        [ "defense_proficiency" ] ->
+            document.defenseProficiencies
+                |> String.join "\n"
+
+        [ "dexterity" ] ->
+            document.dexterity
+                |> Maybe.map numberWithSign
+                |> maybeAsString
+
+        [ "dex_cap" ] ->
+            document.dexCap
+                |> Maybe.map numberWithSign
+                |> maybeAsString
+
+        [ "divine_font" ] ->
+            document.divineFonts
+                |> List.map toTitleCase
+                |> String.join " or "
+
+        [ "domain" ] ->
+            maybeAsStringWithoutMarkdown document.domains
+
+        [ "domain_spell" ] ->
+            maybeAsStringWithoutMarkdown document.domainSpell
+
+        [ "duration" ] ->
+            maybeAsString document.duration
+
+        [ "element" ] ->
+            document.elements
+                |> List.map toTitleCase
+                |> String.join ", "
+
+        [ "favored_weapon" ] ->
+            maybeAsStringWithoutMarkdown document.favoredWeapons
+
+        [ "feat" ] ->
+            maybeAsStringWithoutMarkdown document.feats
+
+        [ "follower_alignment" ] ->
+            document.followerAlignments
+                |> String.join ", "
+
+        [ "fortitude" ] ->
+            document.fort
+                |> Maybe.map numberWithSign
+                |> maybeAsString
+
+        [ "fortitude_proficiency" ] ->
+            maybeAsString document.fortitudeProficiency
+
+        [ "frequency" ] ->
+            maybeAsString document.frequency
+
+        [ "hands" ] ->
+            maybeAsString document.hands
+
+        [ "hardness" ] ->
+            maybeAsString document.hardness
+
+        [ "hazard_type" ] ->
+            maybeAsString document.hazardType
+
+        [ "heighten" ] ->
+            document.heighten
+                |> String.join ", "
+
+        [ "heighten_level" ] ->
+            document.heightenLevels
+                |> List.map String.fromInt
+                |> String.join ", "
+
+        [ "hp" ] ->
+            maybeAsString document.hp
+
+        [ "icon_image" ] ->
+            ""
+
+        [ "image" ] ->
+            ""
+
+        [ "immunity" ] ->
+            maybeAsStringWithoutMarkdown document.immunities
+
+        [ "intelligence" ] ->
+            document.intelligence
+                |> Maybe.map numberWithSign
+                |> maybeAsString
+
+        [ "item_category" ] ->
+            maybeAsString document.itemCategory
+
+        [ "item_subcategory" ] ->
+            maybeAsString document.itemSubcategory
+
+        [ "language" ] ->
+            maybeAsStringWithoutMarkdown document.languages
+
+        [ "lesson" ] ->
+            maybeAsStringWithoutMarkdown document.lessons
+
+        [ "level" ] ->
+            document.level
+                |> Maybe.map String.fromInt
+                |> maybeAsString
+
+        [ "mystery" ] ->
+            maybeAsStringWithoutMarkdown document.mysteries
+
+        [ "name" ] ->
+            document.name
+
+        [ "onset" ] ->
+            maybeAsString document.onset
+
+        [ "patron_theme" ] ->
+            maybeAsStringWithoutMarkdown document.patronThemes
+
+        [ "perception" ] ->
+            document.perception
+                |> Maybe.map numberWithSign
+                |> maybeAsString
+
+        [ "perception_proficiency" ] ->
+            maybeAsString document.perceptionProficiency
+
+        [ "pfs" ] ->
+            document.pfs
+                |> Maybe.withDefault ""
+
+        [ "plane_category" ] ->
+            maybeAsString document.planeCategory
+
+        [ "prerequisite" ] ->
+            maybeAsStringWithoutMarkdown document.prerequisites
+
+        [ "price" ] ->
+            maybeAsString document.price
+
+        [ "primary_check" ] ->
+            maybeAsStringWithoutMarkdown document.primaryCheck
+
+        [ "range" ] ->
+            maybeAsString document.range
+
+        [ "rank" ] ->
+            document.level
+                |> Maybe.map toOrdinal
+                |> maybeAsString
+
+        [ "rarity" ] ->
+            document.rarity
+                |> Maybe.map toTitleCase
+                |> maybeAsString
+
+        [ "reflex" ] ->
+            document.ref
+                |> Maybe.map numberWithSign
+                |> maybeAsString
+
+        [ "reflex_proficiency" ] ->
+            maybeAsString document.reflexProficiency
+
+        [ "region" ] ->
+            maybeAsString document.region
+
+        [ "release_date" ] ->
+            document.releaseDate
+                |> Maybe.map (formatDate model)
+                |> maybeAsString
+
+        [ "reload" ] ->
+            maybeAsString document.reload
+
+        [ "requirement" ] ->
+            maybeAsStringWithoutMarkdown document.requirements
+
+        [ "resistance" ] ->
+            maybeAsStringWithoutMarkdown document.resistances
+
+        [ "resistance", type_ ] ->
+            document.resistanceValues
+                |> Maybe.andThen (getDamageTypeValue type_)
+                |> Maybe.map String.fromInt
+                |> maybeAsString
+
+        [ "saving_throw" ] ->
+            maybeAsStringWithoutMarkdown document.savingThrow
+
+        [ "school" ] ->
+            document.school
+                |> Maybe.map toTitleCase
+                |> maybeAsString
+
+        [ "secondary_casters" ] ->
+            maybeAsString document.secondaryCasters
+
+        [ "secondary_check" ] ->
+            maybeAsStringWithoutMarkdown document.secondaryChecks
+
+        [ "sense" ] ->
+            maybeAsStringWithoutMarkdown document.senses
+
+        [ "size" ] ->
+            document.sizes
+                |> String.join ", "
+
+        [ "skill" ] ->
+            maybeAsStringWithoutMarkdown document.skills
+
+        [ "skill_proficiency" ] ->
+            document.skillProficiencies
+                |> String.join "\n"
+
+        [ "source" ] ->
+            maybeAsStringWithoutMarkdown document.sources
+
+        [ "source_category" ] ->
+            maybeAsString document.sourceCategory
+
+        [ "source_group" ] ->
+            maybeAsString document.sourceGroup
+
+        [ "speed" ] ->
+            maybeAsStringWithoutMarkdown document.speed
+
+        [ "speed", type_ ] ->
+            document.speedValues
+                |> Maybe.andThen (getSpeedTypeValue type_)
+                |> Maybe.map String.fromInt
+                |> maybeAsString
+
+        [ "speed_penalty" ] ->
+            maybeAsString document.speedPenalty
+
+        [ "spell" ] ->
+            maybeAsStringWithoutMarkdown document.spell
+
+        [ "spoilers" ] ->
+            maybeAsString document.spoilers
+
+        [ "stage" ] ->
+            maybeAsStringWithoutMarkdown document.stages
+
+        [ "strength" ] ->
+            document.strength
+                |> Maybe.map numberWithSign
+                |> maybeAsString
+
+        [ "strength_req" ] ->
+            document.strength
+                |> Maybe.map String.fromInt
+                |> maybeAsString
+
+        [ "strongest_save" ] ->
+            document.strongestSaves
+                |> List.filter (\s -> not (List.member s [ "fort", "ref" ]))
+                |> List.map toTitleCase
+                |> String.join ", "
+
+        [ "summary" ] ->
+            maybeAsStringWithoutMarkdown document.summary
+
+        [ "target" ] ->
+            maybeAsStringWithoutMarkdown document.targets
+
+        [ "tradition" ] ->
+            maybeAsStringWithoutMarkdown document.traditions
+
+        [ "trait" ] ->
+            maybeAsStringWithoutMarkdown document.traits
+
+        [ "trigger" ] ->
+            maybeAsStringWithoutMarkdown document.trigger
+
+        [ "type" ] ->
+            document.type_
+
+        [ "usage" ] ->
+            maybeAsStringWithoutMarkdown document.usage
+
+        [ "vision" ] ->
+            maybeAsString document.vision
+
+        [ "weapon_category" ] ->
+            maybeAsString document.weaponCategory
+
+        [ "weapon_group" ] ->
+            maybeAsStringWithoutMarkdown document.weaponGroupMarkdown
+
+        [ "weapon_type" ] ->
+            maybeAsString document.weaponType
+
+        [ "weakest_save" ] ->
+            document.weakestSaves
+                |> List.filter (\s -> not (List.member s [ "fort", "ref" ]))
+                |> List.map toTitleCase
+                |> String.join ", "
+
+        [ "weakness" ] ->
+            maybeAsStringWithoutMarkdown document.weaknesses
+
+        [ "weakness", type_ ] ->
+            document.weaknessValues
+                |> Maybe.andThen (getDamageTypeValue type_)
+                |> Maybe.map String.fromInt
+                |> maybeAsString
+
+        [ "will" ] ->
+            document.will
+                |> Maybe.map numberWithSign
+                |> maybeAsString
+
+        [ "will_proficiency" ] ->
+            maybeAsString document.willProficiency
+
+        [ "wisdom" ] ->
+            document.wisdom
+                |> Maybe.map numberWithSign
+                |> maybeAsString
+
+        _ ->
+            ""
+
+
+maybeAsString : Maybe String -> String
+maybeAsString maybeString =
+    maybeString
+        |> Maybe.withDefault ""
+
+
+maybeAsStringWithoutMarkdown : Maybe String -> String
+maybeAsStringWithoutMarkdown maybeString =
+    let
+        markdownLinkRegex : Regex.Regex
+        markdownLinkRegex =
+            Regex.fromString "\\[(.+?)\\]\\(.+?\\)"
+                |> Maybe.withDefault Regex.never
+    in
+    maybeString
+        |> Maybe.withDefault ""
+        |> Regex.replace
+            markdownLinkRegex
+            (\match ->
+                match.submatches
+                    |> List.head
+                    |> Maybe.Extra.join
+                    |> Maybe.withDefault match.match
+            )
 
 
 toOrdinal : Int -> String
