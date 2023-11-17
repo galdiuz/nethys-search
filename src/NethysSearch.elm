@@ -398,6 +398,7 @@ type alias Document =
     , speedPenalty : Maybe String
     , spell : Maybe String
     , spellList : Maybe String
+    , spellType : Maybe String
     , spoilers : Maybe String
     , stages : Maybe String
     , strength : Maybe Int
@@ -5871,6 +5872,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "speed_penalty" ] Decode.string <| \speedPenalty ->
     Field.attemptAt [ "_source", "spell_markdown" ] Decode.string <| \spell ->
     Field.attemptAt [ "_source", "spell_list" ] Decode.string <| \spellList ->
+    Field.attemptAt [ "_source", "spell_type" ] Decode.string <| \spellType ->
     Field.attemptAt [ "_source", "spoilers" ] Decode.string <| \spoilers ->
     Field.attemptAt [ "_source", "stage_markdown" ] Decode.string <| \stages ->
     Field.attemptAt [ "_source", "strength" ] Decode.int <| \strength ->
@@ -6007,6 +6009,7 @@ documentDecoder =
         , speedValues = speedValues
         , spell = spell
         , spellList = spellList
+        , spellType = spellType
         , spoilers = spoilers
         , stages = stages
         , strength = strength
@@ -10226,31 +10229,7 @@ viewResultDisplayGrouped model searchModel =
                         , Html.text (toTitleCase (String.Extra.humanize field))
                         ]
                 )
-                [ "actions"
-                , "alignment"
-                , "attribute"
-                , "creature_family"
-                , "duration"
-                , "element"
-                , "heighten_group"
-                , "item_category"
-                , "item_subcategory"
-                , "level"
-                , "hands"
-                , "pfs"
-                , "range"
-                , "rank"
-                , "rarity"
-                , "school"
-                , "size"
-                , "source"
-                , "tradition"
-                , "trait"
-                , "type"
-                , "weapon_category"
-                , "weapon_group"
-                , "weapon_type"
-                ]
+                Data.groupFields
             )
         ]
 
@@ -10880,7 +10859,7 @@ viewSingleSearchResult model document =
             , Html.div
                 [ HA.class "title-type"
                 ]
-                [ Html.text document.type_
+                [ Html.text (Maybe.withDefault document.type_ document.spellType)
                 , case document.level of
                     Just level ->
                         Html.text (" " ++ String.fromInt level)
@@ -11585,6 +11564,9 @@ viewSearchResultGridCell model document column =
 
             [ "spell" ] ->
                 maybeAsMarkdown document.spell
+
+            [ "spell_type" ] ->
+                maybeAsText document.spellType
 
             [ "spoilers" ] ->
                 maybeAsText document.spoilers
@@ -12813,6 +12795,15 @@ groupDocumentsByField keys field documents =
                         )
                         dict
                         document.sourceList
+
+                "spell_type" ->
+                    insertToListDict
+                        (document.spellType
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        document
+                        dict
 
                 "tradition" ->
                     if List.isEmpty document.traditionList then

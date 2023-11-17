@@ -218,6 +218,7 @@ fields =
     , ( "speed_raw", "Speed exactly as written" )
     , ( "speed_penalty", "Speed penalty of armor or shield" )
     , ( "spell", "Related spells" )
+    , ( "spell_type", "Spell type ( Spell / Cantrip / Focus )" )
     , ( "spoilers", "Adventure path name if there is a spoiler warning on the page" )
     , ( "stage", "Stages of a disease or poison" )
     , ( "stealth", "Hazard stealth" )
@@ -246,6 +247,36 @@ fields =
     , ( "will_save", "[n] Will save" )
     , ( "wis", "[n] Alias for 'wisdom'" )
     , ( "wisdom", "[n] Wisdom" )
+    ]
+
+
+groupFields : List String
+groupFields =
+    [ "actions"
+    , "alignment"
+    , "attribute"
+    , "creature_family"
+    , "duration"
+    , "element"
+    , "heighten_group"
+    , "item_category"
+    , "item_subcategory"
+    , "level"
+    , "hands"
+    , "pfs"
+    , "range"
+    , "rank"
+    , "rarity"
+    , "school"
+    , "size"
+    , "source"
+    , "spell_type"
+    , "tradition"
+    , "trait"
+    , "type"
+    , "weapon_category"
+    , "weapon_group"
+    , "weapon_type"
     ]
 
 
@@ -310,7 +341,7 @@ predefinedColumnConfigurations =
     , { columns = [ "rank", "heighten", "school", "trait", "primary_check", "secondary_casters", "secondary_check", "cost", "actions", "target", "range", "area", "duration", "rarity", "pfs" ]
       , label = "Rituals"
       }
-    , { columns = [ "type", "rank", "heighten", "tradition", "school", "trait", "actions", "component", "trigger", "target", "range", "area", "duration", "saving_throw", "rarity", "pfs" ]
+    , { columns = [ "spell_type", "rank", "heighten", "tradition", "school", "trait", "actions", "component", "trigger", "target", "range", "area", "duration", "defense", "rarity", "pfs" ]
       , label = "Spells"
       }
     , { columns = [ "weapon_type", "weapon_category", "weapon_group", "trait", "damage", "hands", "range", "reload", "bulk", "price" ]
@@ -441,6 +472,7 @@ sortFields =
     , ( "source_category", "source_category", False )
     , ( "source_group", "source_group", False )
     , ( "speed_penalty", "speed_penalty.keyword", False )
+    , ( "spell_type", "spell_type", False )
     , ( "spoilers", "spoilers", False )
     , ( "strength", "strength", True )
     , ( "strength_req", "strength", True )
@@ -606,6 +638,7 @@ tableColumns =
     , "speed"
     , "speed_penalty"
     , "spell"
+    , "spell_type"
     , "spoilers"
     , "stage"
     , "strength"
