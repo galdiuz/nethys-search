@@ -299,6 +299,7 @@ type alias Document =
     , advancedDomainSpell : Maybe String
     , alignment : Maybe String
     , ammunition : Maybe String
+    , anathemas : Maybe String
     , apocryphalSpell : Maybe String
     , archetype : Maybe String
     , area : Maybe String
@@ -332,6 +333,7 @@ type alias Document =
     , domainSpell : Maybe String
     , duration : Maybe String
     , durationValue : Maybe Int
+    , edicts : Maybe String
     , elements : List String
     , familiarAbilities : List String
     , favoredWeapons : Maybe String
@@ -360,6 +362,9 @@ type alias Document =
     , markdown : Markdown
     , mysteries : Maybe String
     , onset : Maybe String
+    , pantheons : List String
+    , pantheonMarkdown : Maybe String
+    , pantheonMembers : Maybe String
     , patronThemes : Maybe String
     , perception : Maybe Int
     , perceptionProficiency : Maybe String
@@ -5773,6 +5778,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "advanced_domain_spell_markdown" ] Decode.string <| \advancedDomainSpell ->
     Field.attemptAt [ "_source", "alignment" ] Decode.string <| \alignment ->
     Field.attemptAt [ "_source", "ammunition" ] Decode.string <| \ammunition ->
+    Field.attemptAt [ "_source", "anathema" ] Decode.string <| \anathemas ->
     Field.attemptAt [ "_source", "apocryphal_spell_markdown" ] Decode.string <| \apocryphalSpell ->
     Field.attemptAt [ "_source", "archetype" ] Decode.string <| \archetype ->
     Field.attemptAt [ "_source", "area" ] Decode.string <| \area ->
@@ -5806,6 +5812,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "domain_spell_markdown" ] Decode.string <| \domainSpell ->
     Field.attemptAt [ "_source", "duration" ] Decode.int <| \durationValue ->
     Field.attemptAt [ "_source", "duration_raw" ] Decode.string <| \duration ->
+    Field.attemptAt [ "_source", "edict" ] Decode.string <| \edicts ->
     Field.attemptAt [ "_source", "element" ] stringListDecoder <| \elements ->
     Field.attemptAt [ "_source", "familiar_ability" ] stringListDecoder <| \familiarAbilities ->
     Field.attemptAt [ "_source", "favored_weapon_markdown" ] Decode.string <| \favoredWeapons ->
@@ -5834,6 +5841,9 @@ documentDecoder =
     Field.attemptAt [ "_source", "markdown" ] Decode.string <| \markdown ->
     Field.attemptAt [ "_source", "mystery_markdown" ] Decode.string <| \mysteries ->
     Field.attemptAt [ "_source", "onset_raw" ] Decode.string <| \onset ->
+    Field.attemptAt [ "_source", "pantheon" ] stringListDecoder <| \pantheons ->
+    Field.attemptAt [ "_source", "pantheon_markdown" ] Decode.string <| \pantheonMarkdown ->
+    Field.attemptAt [ "_source", "pantheon_member_markdown" ] Decode.string <| \pantheonMembers ->
     Field.attemptAt [ "_source", "patron_theme_markdown" ] Decode.string <| \patronThemes ->
     Field.attemptAt [ "_source", "perception" ] Decode.int <| \perception ->
     Field.attemptAt [ "_source", "perception_proficiency" ] Decode.string <| \perceptionProficiency ->
@@ -5910,6 +5920,7 @@ documentDecoder =
         , advancedDomainSpell = advancedDomainSpell
         , alignment = alignment
         , ammunition = ammunition
+        , anathemas = anathemas
         , apocryphalSpell = apocryphalSpell
         , archetype = archetype
         , area = area
@@ -5943,6 +5954,7 @@ documentDecoder =
         , domainSpell = domainSpell
         , duration = duration
         , durationValue = durationValue
+        , edicts = edicts
         , elements = Maybe.withDefault [] elements
         , familiarAbilities = Maybe.withDefault [] familiarAbilities
         , favoredWeapons = favoredWeapons
@@ -5971,6 +5983,9 @@ documentDecoder =
         , markdown = NotParsed (Maybe.withDefault "" markdown)
         , mysteries = mysteries
         , onset = onset
+        , pantheons = Maybe.withDefault [] pantheons
+        , pantheonMarkdown = pantheonMarkdown
+        , pantheonMembers = pantheonMembers
         , patronThemes = patronThemes
         , perception = perception
         , perceptionProficiency = perceptionProficiency
@@ -11125,6 +11140,9 @@ viewSearchResultGridCell model document column =
             [ "alignment" ] ->
                 maybeAsText document.alignment
 
+            [ "anathema" ] ->
+                maybeAsText document.anathemas
+
             [ "apocryphal_spell" ] ->
                 maybeAsMarkdown document.apocryphalSpell
 
@@ -11278,6 +11296,9 @@ viewSearchResultGridCell model document column =
             [ "duration" ] ->
                 maybeAsText document.duration
 
+            [ "edict" ] ->
+                maybeAsText document.edicts
+
             [ "element" ] ->
                 document.elements
                     |> List.map toTitleCase
@@ -11421,6 +11442,12 @@ viewSearchResultGridCell model document column =
 
             [ "onset" ] ->
                 maybeAsText document.onset
+
+            [ "pantheon" ] ->
+                maybeAsMarkdown document.pantheonMarkdown
+
+            [ "pantheon_member" ] ->
+                maybeAsMarkdown document.pantheonMembers
 
             [ "patron_theme" ] ->
                 maybeAsMarkdown document.patronThemes
@@ -11703,6 +11730,9 @@ searchResultGridCellToString model document column =
         [ "alignment" ] ->
             maybeAsString document.alignment
 
+        [ "anathema" ] ->
+            maybeAsString document.anathemas
+
         [ "apocryphal_spell" ] ->
             maybeAsStringWithoutMarkdown document.apocryphalSpell
 
@@ -11822,6 +11852,9 @@ searchResultGridCellToString model document column =
         [ "duration" ] ->
             maybeAsString document.duration
 
+        [ "edict" ] ->
+            maybeAsString document.edicts
+
         [ "element" ] ->
             document.elements
                 |> List.map toTitleCase
@@ -11908,6 +11941,12 @@ searchResultGridCellToString model document column =
 
         [ "onset" ] ->
             maybeAsString document.onset
+
+        [ "pantheon" ] ->
+            maybeAsStringWithoutMarkdown document.pantheonMarkdown
+
+        [ "pantheon_member" ] ->
+            maybeAsStringWithoutMarkdown document.pantheonMembers
 
         [ "patron_theme" ] ->
             maybeAsStringWithoutMarkdown document.patronThemes
@@ -12659,6 +12698,14 @@ groupDocumentsByField keys field documents =
                         document
                         dict
 
+                "deity_category" ->
+                    insertToListDict
+                        (document.deityCategory
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
+
                 "duration" ->
                     insertToListDict
                         (document.durationValue
@@ -12730,6 +12777,18 @@ groupDocumentsByField keys field documents =
                         )
                         document
                         dict
+
+                "pantheon" ->
+                    if List.isEmpty document.pantheons then
+                        insertToListDict "" document dict
+
+                    else
+                        List.foldl
+                            (\pantheon ->
+                                insertToListDict (String.toLower pantheon) document
+                            )
+                            dict
+                            document.pantheons
 
                 "pfs" ->
                     insertToListDict

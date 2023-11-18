@@ -96,6 +96,7 @@ fields =
     , ( "advanced_apocryphal_spell", "Advanced apocryphal domain spell" )
     , ( "alignment", "Alignment" )
     , ( "ammunition", "Ammunition type used by a weapon" )
+    , ( "anathema", "Deity anathemas" )
     , ( "apocryphal_spell", "Apocryphal domain spell" )
     , ( "archetype", "Archetypes associated with a feat" )
     , ( "area", "Area of a spell" )
@@ -140,6 +141,7 @@ fields =
     , ( "domain_spell", "Domain spells" )
     , ( "duration", "[n] Duration of spell, ritual, or poison, in seconds" )
     , ( "duration_raw", "Duration exactly as written" )
+    , ( "edict", "Deity edicts" )
     , ( "element", "Element traits" )
     , ( "familiar_ability", "Abilities granted by specific familiars" )
     , ( "favored_weapon", "Deity's favored weapon" )
@@ -175,6 +177,8 @@ fields =
     , ( "npc", "Is creature an NPC? (true / false)" )
     , ( "onset", "[n] Onset of a disease or poison in seconds" )
     , ( "onset_raw", "Onset exactly as written" )
+    , ( "pantheon", "Pantheons a deity is part of" )
+    , ( "pantheon_member", "Deities part of a pantheon" )
     , ( "patron_theme", "Witch patron themes associated with a spell" )
     , ( "per", "[n] Alias for 'perception'" )
     , ( "perception", "[n] Perception" )
@@ -256,6 +260,7 @@ groupFields =
     , "alignment"
     , "attribute"
     , "creature_family"
+    , "deity_category"
     , "duration"
     , "element"
     , "heighten_group"
@@ -263,6 +268,7 @@ groupFields =
     , "item_subcategory"
     , "level"
     , "hands"
+    , "pantheon"
     , "pfs"
     , "range"
     , "rank"
@@ -608,6 +614,8 @@ tableColumns =
     , "level"
     , "mystery"
     , "onset"
+    , "pantheon"
+    , "pantheon_member"
     , "patron_theme"
     , "perception"
     , "perception_proficiency"
