@@ -66,6 +66,7 @@ damageTypes =
     , "fire"
     , "force"
     , "good"
+    , "holy"
     , "lawful"
     , "mental"
     , "negative"
@@ -78,7 +79,9 @@ damageTypes =
     , "silver"
     , "slashing"
     , "sonic"
+    , "spirit"
     , "splash"
+    , "unholy"
     ]
 
 
