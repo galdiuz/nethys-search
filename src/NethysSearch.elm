@@ -402,6 +402,7 @@ type alias Document =
     , secondaryCasters : Maybe String
     , secondaryChecks : Maybe String
     , senses : Maybe String
+    , sizeIds : List Int
     , sizes : List String
     , skills : Maybe String
     , skillProficiencies : List String
@@ -5875,6 +5876,15 @@ sourcesDecoder =
     Decode.at [ "hits", "hits" ] (Decode.list (Decode.field "_source" documentDecoder))
 
 
+intListDecoder : Decode.Decoder (List Int)
+intListDecoder =
+    Decode.oneOf
+        [ Decode.list Decode.int
+        , Decode.int
+            |> Decode.map List.singleton
+        ]
+
+
 stringListDecoder : Decode.Decoder (List String)
 stringListDecoder =
     Decode.oneOf
@@ -5993,6 +6003,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "secondary_casters_raw" ] Decode.string <| \secondaryCasters ->
     Field.attemptAt [ "_source", "secondary_check_markdown" ] Decode.string <| \secondaryChecks ->
     Field.attemptAt [ "_source", "sense_markdown" ] Decode.string <| \senses ->
+    Field.attemptAt [ "_source", "size_id" ] intListDecoder <| \sizeIds ->
     Field.attemptAt [ "_source", "size" ] stringListDecoder <| \sizes ->
     Field.attemptAt [ "_source", "skill_markdown" ] Decode.string <| \skills ->
     Field.attemptAt [ "_source", "skill_proficiency" ] stringListDecoder <| \skillProficiencies ->
@@ -6137,6 +6148,7 @@ documentDecoder =
         , secondaryCasters = secondaryCasters
         , secondaryChecks = secondaryChecks
         , senses = senses
+        , sizeIds = Maybe.withDefault [] sizeIds
         , sizes = Maybe.withDefault [] sizes
         , skills = skills
         , skillProficiencies = Maybe.withDefault [] skillProficiencies
@@ -12988,16 +13000,16 @@ groupDocumentsByField keys field documents =
                         dict
 
                 "size" ->
-                    if List.isEmpty document.sizes then
+                    if List.isEmpty document.sizeIds then
                         insertToListDict "" document dict
 
                     else
                         List.foldl
                             (\size ->
-                                insertToListDict (String.toLower size) document
+                                insertToListDict (String.fromInt size) document
                             )
                             dict
-                            document.sizes
+                            document.sizeIds
 
                 "source" ->
                     List.foldl
@@ -13206,6 +13218,29 @@ viewGroupedTitle field value =
 
             Nothing ->
                 Html.text value
+
+    else if field == "size" then
+        case value of
+            "1" ->
+                Html.text "Tiny"
+
+            "2" ->
+                Html.text "Small"
+
+            "3" ->
+                Html.text "Medium"
+
+            "4" ->
+                Html.text "Large"
+
+            "5" ->
+                Html.text "Huge"
+
+            "6" ->
+                Html.text "Gargantuan"
+
+            _ ->
+                Html.text "N/A"
 
     else
         Html.text (toTitleCase value)

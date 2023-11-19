@@ -473,7 +473,7 @@ sortFields =
     , ( "school", "school", False )
     , ( "secondary_casters", "secondary_casters", False )
     , ( "secondary_check", "secondary_check.keyword", False )
-    , ( "size", "size", False )
+    , ( "size", "size_id", True )
     , ( "source", "source", False )
     , ( "source_category", "source_category", False )
     , ( "source_group", "source_group", False )
