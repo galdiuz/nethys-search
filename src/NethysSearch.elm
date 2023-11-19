@@ -386,6 +386,7 @@ type alias Document =
     , range : Maybe String
     , rangeValue : Maybe Int
     , rarity : Maybe String
+    , rarityId : Maybe Int
     , ref : Maybe Int
     , reflexProficiency : Maybe String
     , region : Maybe String
@@ -4562,9 +4563,13 @@ buildGroupAggs searchModel =
 
 mapSortFieldToElastic : String -> String
 mapSortFieldToElastic field =
-    List.Extra.find (Tuple3.first >> (==) field) Data.sortFields
-        |> Maybe.map Tuple3.second
-        |> Maybe.withDefault field
+    if field == "actions" then
+        "actions.keyword"
+
+    else
+        List.Extra.find (Tuple3.first >> (==) field) Data.sortFields
+            |> Maybe.map Tuple3.second
+            |> Maybe.withDefault field
 
 
 getValidSortFields : List ( String, SortDir ) -> List ( String, SortDir )
@@ -5987,6 +5992,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "range" ] Decode.int <| \rangeValue ->
     Field.attemptAt [ "_source", "range_raw" ] Decode.string <| \range ->
     Field.attemptAt [ "_source", "rarity" ] Decode.string <| \rarity ->
+    Field.attemptAt [ "_source", "rarity_id" ] Decode.int <| \rarityId ->
     Field.attemptAt [ "_source", "reflex_save" ] Decode.int <| \ref ->
     Field.attemptAt [ "_source", "reflex_proficiency" ] Decode.string <| \reflexProficiency ->
     Field.attemptAt [ "_source", "region" ] Decode.string <| \region->
@@ -6132,6 +6138,7 @@ documentDecoder =
         , range = range
         , rangeValue = rangeValue
         , rarity = rarity
+        , rarityId = rarityId
         , ref = ref
         , reflexProficiency = reflexProficiency
         , region = region
@@ -12827,7 +12834,6 @@ groupDocumentsByField keys field documents =
                     insertToListDict
                         (document.actions
                             |> Maybe.withDefault ""
-                            |> String.toLower
                         )
                         document
                         dict
@@ -12983,9 +12989,9 @@ groupDocumentsByField keys field documents =
 
                 "rarity" ->
                     insertToListDict
-                        (document.rarity
+                        (document.rarityId
+                            |> Maybe.map String.fromInt
                             |> Maybe.withDefault ""
-                            |> String.toLower
                         )
                         document
                         dict
@@ -13145,6 +13151,9 @@ sortGroupedList model field keyPrefix counts list =
 compareAlphanum : String -> String -> String -> Order
 compareAlphanum field a b =
     case field of
+        "actions" ->
+            compare (actionsToInt a) (actionsToInt b)
+
         "heighten_group" ->
             Maybe.map2 compare (getIntFromString a) (getIntFromString b)
                 |> Maybe.withDefault (compare a b)
@@ -13161,12 +13170,42 @@ getIntFromString str =
         |> String.toInt
 
 
+actionsToInt : String -> Int
+actionsToInt value =
+    let
+        multiplier : Int
+        multiplier =
+            List.Extra.find
+                (\(str, _) ->
+                    String.contains str value
+                )
+                [ ( "free action", 0 )
+                , ( "reaction", 1 )
+                , ( "single action", 2 )
+                , ( "two actions", 4 )
+                , ( "three actions", 6 )
+                , ( "round", 6 )
+                , ( "minute", 60 )
+                , ( "hour", 60 * 60 )
+                , ( "day", 60 * 60 * 24 )
+                , ( "week", 60 * 60 * 24 * 7 )
+                , ( "month", 60 * 60 * 24 * 30 )
+                , ( "year", 60 * 60 * 24 * 365 )
+                ]
+                |> Maybe.map Tuple.second
+                |> Maybe.withDefault 1
+    in
+    getIntFromString value
+        |> Maybe.withDefault 1
+        |> (*) multiplier
+
+
 viewGroupedTitle : String -> String -> Html msg
 viewGroupedTitle field value =
     if value == "" then
         Html.text "N/A"
 
-    else if field == "actions.keyword" then
+    else if field == "actions" then
         Html.span
             []
             (viewTextWithActionIcons value)
@@ -13219,6 +13258,23 @@ viewGroupedTitle field value =
             Nothing ->
                 Html.text value
 
+    else if field == "rarity" then
+        case value of
+            "1" ->
+                Html.text "Common"
+
+            "2" ->
+                Html.text "Uncommon"
+
+            "3" ->
+                Html.text "Rare"
+
+            "4" ->
+                Html.text "Unique"
+
+            _ ->
+                Html.text value
+
     else if field == "size" then
         case value of
             "1" ->
@@ -13240,7 +13296,7 @@ viewGroupedTitle field value =
                 Html.text "Gargantuan"
 
             _ ->
-                Html.text "N/A"
+                Html.text value
 
     else
         Html.text (toTitleCase value)
