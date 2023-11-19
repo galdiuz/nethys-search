@@ -10163,6 +10163,21 @@ viewResultDisplayTable model searchModel =
                                 >> String.replace "_" " "
                                 >> String.contains (String.toLower searchModel.searchTableColumns)
                             )
+                        |> List.filter
+                            (\field ->
+                                if model.showLegacyFilters then
+                                    True
+
+                                else
+                                    List.member
+                                        field
+                                        [ "alignment"
+                                        , "component"
+                                        , "follower_alignment"
+                                        , "school"
+                                        ]
+                                        |> not
+                            )
                     )
                 )
             ]
@@ -10415,7 +10430,21 @@ viewResultDisplayGrouped model searchModel =
                         , Html.text (toTitleCase (String.Extra.humanize field))
                         ]
                 )
-                Data.groupFields
+                (Data.groupFields
+                    |> List.filter
+                        (\field ->
+                            if model.showLegacyFilters then
+                                True
+
+                            else
+                                List.member
+                                    field
+                                    [ "alignment"
+                                    , "school"
+                                    ]
+                                    |> not
+                        )
+                )
             )
         ]
 
