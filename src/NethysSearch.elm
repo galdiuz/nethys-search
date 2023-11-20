@@ -321,7 +321,8 @@ type alias Document =
     , baseItems : Maybe String
     , bloodlines : Maybe String
     , breadcrumbs : Maybe String
-    , bulk : Maybe String
+    , bulk : Maybe Float
+    , bulkRaw : Maybe String
     , charisma : Maybe Int
     , checkPenalty : Maybe Int
     , complexity : Maybe String
@@ -5952,7 +5953,8 @@ documentDecoder =
     Field.attemptAt [ "_source", "base_item_markdown" ] Decode.string <| \baseItems ->
     Field.attemptAt [ "_source", "bloodline_markdown" ] Decode.string <| \bloodlines ->
     Field.attemptAt [ "_source", "breadcrumbs" ] Decode.string <| \breadcrumbs ->
-    Field.attemptAt [ "_source", "bulk_raw" ] Decode.string <| \bulk ->
+    Field.attemptAt [ "_source", "bulk" ] Decode.float <| \bulk ->
+    Field.attemptAt [ "_source", "bulk_raw" ] Decode.string <| \bulkRaw ->
     Field.attemptAt [ "_source", "charisma" ] Decode.int <| \charisma ->
     Field.attemptAt [ "_source", "check_penalty" ] Decode.int <| \checkPenalty ->
     Field.attemptAt [ "_source", "complexity" ] Decode.string <| \complexity ->
@@ -6099,6 +6101,7 @@ documentDecoder =
         , bloodlines = bloodlines
         , breadcrumbs = breadcrumbs
         , bulk = bulk
+        , bulkRaw = bulkRaw
         , charisma = charisma
         , checkPenalty = checkPenalty
         , complexity = complexity
@@ -10038,6 +10041,10 @@ viewWhatsNew model _ =
             - `trait_group` (changed: is now indexed on everything, e.g. `type:feat trait_group:ancestry` matches all feats with an ancestry trait)
 
         - Added grouped display group options:
+            - AC
+            - Armor Category
+            - Armor Group
+            - Bulk
             - Deity Category
             - Heighten Group (groups spells by heightenable rank)
             - Pantheon
@@ -11481,7 +11488,7 @@ viewSearchResultGridCell model document column =
                 maybeAsMarkdown document.bloodlines
 
             [ "bulk" ] ->
-                maybeAsText document.bulk
+                maybeAsText document.bulkRaw
 
             [ "charisma" ] ->
                 document.charisma
@@ -12054,7 +12061,7 @@ searchResultGridCellToString model document column =
             maybeAsStringWithoutMarkdown document.bloodlines
 
         [ "bulk" ] ->
-            maybeAsString document.bulk
+            maybeAsString document.bulkRaw
 
         [ "charisma" ] ->
             document.charisma
@@ -12937,6 +12944,15 @@ groupDocumentsByField keys field documents =
                             dict
                             (List.Extra.unique document.attributes)
 
+                "ac" ->
+                    insertToListDict
+                        (document.ac
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
+
                 "actions" ->
                     insertToListDict
                         (document.actions
@@ -12954,6 +12970,24 @@ groupDocumentsByField keys field documents =
                         document
                         dict
 
+                "armor_category" ->
+                    insertToListDict
+                        (document.armorCategory
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        document
+                        dict
+
+                "armor_group" ->
+                    insertToListDict
+                        (document.armorGroup
+                            |> maybeAsStringWithoutMarkdown
+                            |> String.toLower
+                        )
+                        document
+                        dict
+
                 "attribute" ->
                     if List.isEmpty document.attributes then
                         insertToListDict "" document dict
@@ -12965,6 +12999,15 @@ groupDocumentsByField keys field documents =
                             )
                             dict
                             (List.Extra.unique document.attributes)
+
+                "bulk" ->
+                    insertToListDict
+                        (document.bulk
+                            |> Maybe.map String.fromFloat
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
 
                 "creature_family" ->
                     insertToListDict
@@ -13261,9 +13304,42 @@ compareAlphanum field a b =
         "actions" ->
             compare (actionsToInt a) (actionsToInt b)
 
+        "armor_category" ->
+            let
+                armorCategoryToInt : String -> Int
+                armorCategoryToInt category =
+                    List.Extra.find
+                        (Tuple.first >> String.toLower >> (==) category)
+                        [ ( "unarmored", 0 )
+                        , ( "light", 1 )
+                        , ( "medium", 2 )
+                        , ( "heavy", 3 )
+                        ]
+                        |> Maybe.map Tuple.second
+                        |> Maybe.withDefault 4
+            in
+            compare (armorCategoryToInt a) (armorCategoryToInt b)
+
         "heighten_group" ->
             Maybe.map2 compare (getIntFromString a) (getIntFromString b)
                 |> Maybe.withDefault (compare a b)
+
+        "weapon_category" ->
+            let
+                weaponCategoryToInt : String -> Int
+                weaponCategoryToInt category =
+                    List.Extra.find
+                        (Tuple.first >> String.toLower >> (==) category)
+                        [ ( "unarmed", 0 )
+                        , ( "simple", 1 )
+                        , ( "martial", 2 )
+                        , ( "advanced", 3 )
+                        , ( "ammunition", 3 )
+                        ]
+                        |> Maybe.map Tuple.second
+                        |> Maybe.withDefault 5
+            in
+            compare (weaponCategoryToInt a) (weaponCategoryToInt b)
 
         _ ->
             Maybe.map2 compare (String.toInt a) (String.toInt b)
@@ -13312,6 +13388,9 @@ viewGroupedTitle field value =
     if value == "" then
         Html.text "N/A"
 
+    else if field == "ac" then
+        Html.text (value ++ " AC")
+
     else if field == "actions" then
         Html.span
             []
@@ -13324,6 +13403,13 @@ viewGroupedTitle field value =
                 |> Maybe.withDefault value
                 |> toTitleCase
             )
+
+    else if field == "bulk" then
+        if value == "0.1" then
+            Html.text "L bulk"
+
+        else
+            Html.text (value ++ " bulk")
 
     else if field == "duration" then
         case String.toInt value of

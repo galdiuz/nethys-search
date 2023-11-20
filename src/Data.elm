@@ -259,9 +259,13 @@ fields =
 
 groupFields : List String
 groupFields =
-    [ "actions"
+    [ "ac"
+    , "actions"
     , "alignment"
+    , "armor_category"
+    , "armor_group"
     , "attribute"
+    , "bulk"
     , "creature_family"
     , "deity_category"
     , "duration"
