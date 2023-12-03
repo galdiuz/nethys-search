@@ -6920,7 +6920,7 @@ allFilters model =
     , { id = "armor"
       , label = "Armor"
       , view = viewFilterArmor
-      , visibleIf = getAggregation .types >> List.member "armor"
+      , visibleIf = getAggregation .itemSubcategories >> List.any (.name >> (==) "base armor")
       }
     , { id = "attributes"
       , label = "Attributes (Boosts)"
@@ -7018,7 +7018,7 @@ allFilters model =
     , { id = "weapons"
       , label = "Weapons"
       , view = viewFilterWeapons
-      , visibleIf = getAggregation .types >> List.member "weapon"
+      , visibleIf = moreThanOneAggregation .weaponGroups
       }
     ]
 
@@ -10017,10 +10017,11 @@ viewWhatsNew model _ =
         [ HA.class "no-ul-margin" ]
         ("""
         - Added option under _General settings_ to hide legacy filters.
-        - Added table data export functionality. Found under _Result display_ when set to Table, where you can export to CSV or JSON.
-        - List display option renamed to Short.
+        - Added table data export functionality. Found under _Result display_ when set to "Table", where you can export to CSV or JSON.
+        - "List" display option renamed to "Short". The old name made more sense when there only was it and "Table", but now "Grouped" is probably more list-y than "Short".
         - Date format is now configurable under _General settings_. Defaults to your browser's default format.
-        - Removed Cantrip and Focus types, they now use the Spell type. Use the respective traits or the new `spell_type` field to filter.
+        - Removed Cantrip and Focus types; they now use the "Spell" type. You can use the respective traits or the new `spell_type` field to filter them. The goal of this change is to reduce confusion. A user might've thought that filtering for "Spell" would give them all spells including cantrips, which it now will.
+        - Removed "Armor", "Shield", and "Weapon" types; they now use the "Item" type. You can use item categories to filter them. Same reasoning as above, but in regards to specific variants.
         - Actions, rarities, and sizes are now sorted "numerically" instead of alphabetically.
         - Items with no bulk are now treated as 0 bulk.
         - Added domain filter buttons.
@@ -11159,7 +11160,26 @@ viewSingleSearchResult model document =
             , Html.div
                 [ HA.class "title-type"
                 ]
-                [ Html.text (Maybe.withDefault document.type_ document.spellType)
+                [ case document.type_ of
+                    "Item" ->
+                        case document.itemSubcategory of
+                            Just "Base Armor" ->
+                                Html.text "Armor"
+
+                            Just "Base Shields" ->
+                                Html.text "Shield"
+
+                            Just "Base Weapons" ->
+                                Html.text "Weapon"
+
+                            _ ->
+                                Html.text document.type_
+
+                    "Spell" ->
+                        Html.text (Maybe.withDefault document.type_ document.spellType)
+
+                    _ ->
+                        Html.text document.type_
                 , case document.level of
                     Just level ->
                         Html.text (" " ++ String.fromInt level)
