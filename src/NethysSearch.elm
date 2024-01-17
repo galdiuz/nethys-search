@@ -12663,6 +12663,12 @@ viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1 =
                         )
                     )
                 |> Dict.fromList
+
+        groupedDocuments : List ( String, List Document )
+        groupedDocuments =
+            groupDocumentsByField keys field2 documents1
+                |> Dict.toList
+                |> sortGroupedList model field2 (key1 ++ "--") counts
     in
     Html.div
         [ HA.class "column"
@@ -12675,23 +12681,27 @@ viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1 =
                     , HA.class "gap-small"
                     , HAE.attributeIf (List.length documents2 == 0) (groupedDisplayAttribute model)
                     ]
-                    [ Html.h2
-                        [ HA.class "title" ]
-                        [ Html.div
-                            []
-                            [ viewGroupedTitle field2 key2
+                    [ if List.length groupedDocuments == 1 && key2 == "" then
+                        Html.text ""
+
+                      else
+                        Html.h2
+                            [ HA.class "title" ]
+                            [ Html.div
+                                []
+                                [ viewGroupedTitle field2 key2
+                                ]
+                            , Html.div
+                                []
+                                [ Html.text (String.fromInt (List.length documents2))
+                                , Html.text "/"
+                                , Html.text
+                                    (Dict.get (key1 ++ "--" ++ key2) counts
+                                        |> Maybe.withDefault 0
+                                        |> String.fromInt
+                                    )
+                                ]
                             ]
-                        , Html.div
-                            []
-                            [ Html.text (String.fromInt (List.length documents2))
-                            , Html.text "/"
-                            , Html.text
-                                (Dict.get (key1 ++ "--" ++ key2) counts
-                                    |> Maybe.withDefault 0
-                                    |> String.fromInt
-                                )
-                            ]
-                        ]
                     , case searchModel.groupField3 of
                         Just field3 ->
                             viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2
@@ -12700,10 +12710,7 @@ viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1 =
                             viewSearchResultsGroupedLinkList model searchModel documents2
                     ]
             )
-            (groupDocumentsByField keys field2 documents1
-                |> Dict.toList
-                |> sortGroupedList model field2 (key1 ++ "--") counts
-            )
+            groupedDocuments
         )
 
 
@@ -12739,6 +12746,12 @@ viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2 =
                         )
                     )
                 |> Dict.fromList
+
+        groupedDocuments : List ( String, List Document )
+        groupedDocuments =
+            groupDocumentsByField keys field3 documents2
+                |> Dict.toList
+                |> sortGroupedList model field3 (key1 ++ "--" ++ key2 ++ "--") counts
     in
     Html.div
         [ HA.class "column"
@@ -12751,31 +12764,32 @@ viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2 =
                     , HA.class "gap-small"
                     , HAE.attributeIf (List.length documents3 == 0) (groupedDisplayAttribute model)
                     ]
-                    [ Html.h3
-                        [ HA.class "title"
-                        ]
-                        [ Html.div
-                            []
-                            [ viewGroupedTitle field3 key3
+                    [ if List.length groupedDocuments == 1 && key3 == "" then
+                        Html.text ""
+
+                      else
+                        Html.h3
+                            [ HA.class "title"
                             ]
-                        , Html.div
-                            []
-                            [ Html.text (String.fromInt (List.length documents3))
-                            , Html.text "/"
-                            , Html.text
-                                (Dict.get (key1 ++ "--" ++ key2 ++ "--" ++ key3) counts
-                                    |> Maybe.withDefault 0
-                                    |> String.fromInt
-                                )
+                            [ Html.div
+                                []
+                                [ viewGroupedTitle field3 key3
+                                ]
+                            , Html.div
+                                []
+                                [ Html.text (String.fromInt (List.length documents3))
+                                , Html.text "/"
+                                , Html.text
+                                    (Dict.get (key1 ++ "--" ++ key2 ++ "--" ++ key3) counts
+                                        |> Maybe.withDefault 0
+                                        |> String.fromInt
+                                    )
+                                ]
                             ]
-                        ]
                     , viewSearchResultsGroupedLinkList model searchModel documents3
                     ]
             )
-            (groupDocumentsByField keys field3 documents2
-                |> Dict.toList
-                |> sortGroupedList model field3 (key1 ++ "--" ++ key2 ++ "--") counts
-            )
+            groupedDocuments
         )
 
 
