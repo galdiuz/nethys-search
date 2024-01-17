@@ -10030,35 +10030,35 @@ viewWhatsNew model _ =
         - Added table data export functionality. Found under _Result display_ when set to "Table", where you can export to CSV or JSON.
         - "List" display option renamed to "Short". The old name made more sense when there only was it and "Table", but now "Grouped" is probably more list-y than "Short".
         - Date format is now configurable under _General settings_. Defaults to your browser's default format.
-        - Removed Cantrip and Focus types; they now use the "Spell" type. You can use the respective traits or the new `spell_type` field to filter them. The goal of this change is to reduce confusion. A user might've thought that filtering for "Spell" would give them all spells including cantrips, which it now will.
+        - Removed "Cantrip" and "Focus" types; they now use the "Spell" type. You can use the respective traits or the new `spell_type` field to filter them. The goal of this change is to reduce confusion. A user might've thought that filtering for "Spell" would give them all spells including cantrips, which it now will.
         - Removed "Armor", "Shield", and "Weapon" types; they now use the "Item" type. You can use item categories to filter them. Same reasoning as above, but in regards to specific variants.
         - Actions, rarities, and sizes are now sorted "numerically" instead of alphabetically.
         - Items with no bulk are now treated as 0 bulk.
         - Added domain filter buttons.
         - Added trait group filter buttons.
+        - In "Grouped" display "N/A" group headers are no longer displayed if they're the sole group on that level. This reduces clutter when grouping on item category + item subcategory, for example.
         - New/changed fields:
-            - `attribute` (new)
-            - `attribute_boost` (new: alias for `attribute`)
-            - `attribute_flaw` (new)
-            - `defense` (new: alias for `saving_throw`)
+            - `ac` (changed: now available as a grouped field)
+            - `armor_category` (changed: now available as a grouped field)
+            - `armor_group` (changed: now available as a grouped field)
+            - `attribute` (new: available as table column)
+            - `attribute_boost` (new: alias for `attribute`, available as table column)
+            - `attribute_flaw` (new: available as a table column)
+            - `bulk` (changed: now available as a grouped field)
+            - `deity_category` (changed: now available as a grouped field)
+            - `defense` (new: alias for `saving_throw`, available as a table column)
             - `element` (changed: spells in the elementalist spell list without an elemental trait are now matched by `element:universal`)
+            - `heighten_group` (new: for grouping spells by heightenable rank)
             - `legacy_name` (new: name of legacy equivalent)
-            - `pantheon` (new)
-            - `pantheon_member` (new)
-            - `rank` (new: alias for `level`)
+            - `pantheon` (new: available as a table column)
+            - `pantheon_member` (new: available as a table column)
+            - `rank` (new: alias for `level`, available as a table column and grouped field)
             - `remaster_name` (new: name of remaster equivalent)
-            - `spell_type` (new: matches Cantrip / Focus / Spell)
+            - `spell_type` (new: matches Cantrip / Focus / Spell, available as a table column)
             - `skill_mod` (new: can be used to find creatures with a specific skill modifier, except lore skills for technical reasons)
             - `trait_group` (changed: is now indexed on everything, e.g. `type:feat trait_group:ancestry` matches all feats with an ancestry trait)
+            - `url` (changed: now available as a table column)
 
-        - Added grouped display group options:
-            - AC
-            - Armor Category
-            - Armor Group
-            - Bulk
-            - Deity Category
-            - Heighten Group (groups spells by heightenable rank)
-            - Pantheon
         """
             |> String.Extra.unindent
             |> Markdown.Parser.parse
@@ -11952,6 +11952,18 @@ viewSearchResultGridCell model document column =
             [ "type" ] ->
                 [ Html.text document.type_ ]
 
+            [ "url" ] ->
+                [ Html.a
+                    (List.append
+                        [ HA.href (getUrl model document)
+                        , HAE.attributeIf model.openInNewTab (HA.target "_blank")
+                        ]
+                        (linkEventAttributes (getUrl model document))
+                    )
+                    [ Html.text document.url
+                    ]
+                ]
+
             [ "usage" ] ->
                 maybeAsMarkdown document.usage
 
@@ -12425,6 +12437,9 @@ searchResultGridCellToString model document column =
 
         [ "type" ] ->
             document.type_
+
+        [ "url" ] ->
+            document.url
 
         [ "usage" ] ->
             maybeAsStringWithoutMarkdown document.usage

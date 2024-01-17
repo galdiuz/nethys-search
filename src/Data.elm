@@ -665,6 +665,7 @@ tableColumns =
     , "trait"
     , "trigger"
     , "type"
+    , "url"
     , "usage"
     , "vision"
     , "weakest_save"
