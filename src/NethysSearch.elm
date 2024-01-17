@@ -139,6 +139,7 @@ type alias SearchModel =
     , filteredWeaponCategories : Dict String Bool
     , filteredWeaponGroups : Dict String Bool
     , filteredWeaponTypes : Dict String Bool
+    , filterApCreatures : Bool
     , filterComponentsOperator : Bool
     , filterDomainsOperator : Bool
     , filterSpoilers : Bool
@@ -227,6 +228,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , filteredWeaponCategories = Dict.empty
     , filteredWeaponGroups = Dict.empty
     , filteredWeaponTypes = Dict.empty
+    , filterApCreatures = False
     , filterComponentsOperator = True
     , filterDomainsOperator = True
     , filterSpoilers = False
@@ -654,6 +656,7 @@ type Msg
     | GotGroupAggregationsResult (Result Http.Error SearchResultWithDocuments)
     | GotSearchResult (Result Http.Error SearchResultWithDocuments)
     | GotSourcesAggregationResult (Result Http.Error (List Source))
+    | FilterApCreaturesChanged Bool
     | FilterAttributeChanged String
     | FilterComponentsOperatorChanged Bool
     | FilterDomainsOperatorChanged Bool
@@ -1240,6 +1243,16 @@ update msg model =
                     )
                 |> Encode.encode 0
                 |> File.Download.string "table-data.json" "application/json"
+            )
+
+        FilterApCreaturesChanged value ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filterApCreatures = value }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         FilterAttributeChanged value ->
@@ -4291,6 +4304,13 @@ getSearchModelQueryParams model searchModel =
             |> Dict.toList
             |> List.map (\( field, value ) -> field ++ ":" ++ value)
       )
+    , ( "ap-creatures"
+      , if searchModel.filterApCreatures then
+            [ "hide" ]
+
+        else
+            []
+      )
     , ( "spoilers"
       , if searchModel.filterSpoilers then
             [ "hide" ]
@@ -4893,6 +4913,19 @@ buildSearchMustNotTerms model searchModel =
             )
             (boolDictExcluded searchModel.filteredSourceCategories)
 
+        , if searchModel.filterApCreatures then
+            [ ( "query_string"
+              , Encode.object
+                    [ ( "query", Encode.string "!(type:creature source_category:\"adventure paths\")" )
+                    , ( "default_operator", Encode.string "AND" )
+                    ]
+              )
+            ]
+                |> List.singleton
+
+          else
+            []
+
         , if searchModel.filterSpoilers then
             [ ( "exists"
               , Encode.object
@@ -5145,6 +5178,7 @@ updateSearchModelFromParams params model searchModel =
         , filteredWeaponCategories = getBoolDictFromParams params "weapon-categories"
         , filteredWeaponGroups = getBoolDictFromParams params "weapon-groups"
         , filteredWeaponTypes = getBoolDictFromParams params "weapon-types"
+        , filterApCreatures = Dict.get "ap-creatures" params == Just [ "hide" ]
         , filterSpoilers = Dict.get "spoilers" params == Just [ "hide" ]
         , filterComponentsOperator = Dict.get "components-operator" params /= Just [ "or" ]
         , filterDomainsOperator = Dict.get "domains-operator" params /= Just [ "or" ]
@@ -7200,8 +7234,13 @@ currentQueryAsComplex searchModel =
                     ""
         )
         (mergeFromToValues searchModel)
+    , if searchModel.filterApCreatures then
+        [ "!(type:creature source_category:\"adventure paths\")" ]
+
+      else
+        []
     , if searchModel.filterSpoilers then
-        [ "NOT spoilers:*" ]
+        [ "!spoilers:*" ]
 
       else
         []
@@ -7631,10 +7670,20 @@ viewActiveFilters canClick searchModel =
                   , removeMsg = WeaponTypeFilterRemoved
                   }
                 , { class = Nothing
+                  , label = "AP creatures:"
+                  , list =
+                        if searchModel.filterApCreatures then
+                            [ "Hidden" ]
+
+                        else
+                            []
+                  , removeMsg = \_ -> FilterApCreaturesChanged False
+                  }
+                , { class = Nothing
                   , label = "Spoilers:"
                   , list =
                         if searchModel.filterSpoilers then
-                            [ "Hide spoilers" ]
+                            [ "Hidden" ]
 
                         else
                             []
@@ -8497,6 +8546,11 @@ viewFilterSources model searchModel =
         { checked = searchModel.filterSpoilers
         , onCheck = FilterSpoilersChanged
         , text = "Hide results with spoilers"
+        }
+    , viewCheckbox
+        { checked = searchModel.filterApCreatures
+        , onCheck = FilterApCreaturesChanged
+        , text = "Hide creatures from Adventure Paths"
         }
     , Html.h4
         []
@@ -10036,6 +10090,7 @@ viewWhatsNew model _ =
         - Items with no bulk are now treated as 0 bulk.
         - Added domain filter buttons.
         - Added trait group filter buttons.
+        - Added filter under _Sources & Spoilers_ that hides creatures from Adventure Paths.
         - In "Grouped" display "N/A" group headers are no longer displayed if they're the sole group on that level. This reduces clutter when grouping on item category + item subcategory, for example.
         - New/changed fields:
             - `ac` (changed: now available as a grouped field)
