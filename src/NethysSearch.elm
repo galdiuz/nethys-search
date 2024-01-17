@@ -72,6 +72,7 @@ type alias Model =
     , groupedShowPfs : Bool
     , groupedShowRarity : Bool
     , groupedSort : GroupedSort
+    , loadAll : Bool
     , legacyMode : Bool
     , limitTableWidth : Bool
     , linkPreviewsEnabled : Bool
@@ -467,6 +468,7 @@ type alias Flags =
     , elasticUrl : String
     , fixedParams : Dict String (List String)
     , fixedQueryString : String
+    , loadAll : Bool
     , legacyMode : Bool
     , localStorage : Dict String String
     , noUi : Bool
@@ -490,6 +492,7 @@ defaultFlags =
     , elasticUrl = ""
     , fixedParams = Dict.empty
     , fixedQueryString = ""
+    , loadAll = False
     , legacyMode = False
     , localStorage = Dict.empty
     , noUi = False
@@ -859,6 +862,7 @@ init flagsValue =
       , groupedShowPfs = True
       , groupedShowRarity = True
       , groupedSort = Alphanum
+      , loadAll = flags.loadAll
       , legacyMode = flags.legacyMode
       , limitTableWidth = False
       , linkPreviewsEnabled = True
@@ -4436,7 +4440,11 @@ buildSearchBody model searchModel load =
                         min 10000 size
 
                     _ ->
-                        model.pageSize
+                        if model.loadAll then
+                            10000
+
+                        else
+                            model.pageSize
                 )
             )
         , ( "sort"
@@ -5680,6 +5688,7 @@ flagsDecoder =
     Field.attempt "defaultQuery" Decode.string <| \defaultQuery ->
     Field.attempt "fixedParams" Decode.string <| \fixedParams ->
     Field.attempt "fixedQueryString" Decode.string <| \fixedQueryString ->
+    Field.attempt "loadAll" Decode.bool <| \loadAll ->
     Field.attempt "legacyMode" Decode.bool <| \legacyMode ->
     Field.attempt "localStorage" (Decode.dict Decode.string) <| \localStorage ->
     Field.attempt "noUi" Decode.bool <| \noUi ->
@@ -5700,6 +5709,7 @@ flagsDecoder =
                 |> Maybe.map queryToParamsDict
                 |> Maybe.withDefault defaultFlags.fixedParams
         , fixedQueryString = Maybe.withDefault defaultFlags.fixedQueryString fixedQueryString
+        , loadAll = Maybe.withDefault defaultFlags.loadAll loadAll
         , legacyMode = Maybe.withDefault defaultFlags.legacyMode legacyMode
         , localStorage = Maybe.withDefault defaultFlags.localStorage localStorage
         , noUi = Maybe.withDefault defaultFlags.noUi noUi
