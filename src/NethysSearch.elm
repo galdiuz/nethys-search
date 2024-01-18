@@ -83,6 +83,7 @@ type alias Model =
     , pageDefaultParams : Dict String (Dict String (List String))
     , pageId : String
     , pageSize : Int
+    , pageSizeDefaults : Dict String Int
     , pageWidth : Int
     , previewLink : Maybe PreviewLink
     , randomSeed : Int
@@ -695,6 +696,7 @@ type Msg
     | NoOp
     | OpenInNewTabChanged Bool
     | PageSizeChanged Int
+    | PageSizeDefaultsChanged String Int
     | PageWidthChanged Int
     | PfsFilterAdded String
     | PfsFilterRemoved String
@@ -876,6 +878,7 @@ init flagsValue =
       , pageDefaultParams = Dict.empty
       , pageId = flags.pageId
       , pageSize = 50
+      , pageSizeDefaults = Dict.empty
       , pageWidth = 0
       , previewLink = Nothing
       , randomSeed = flags.randomSeed
@@ -1928,11 +1931,27 @@ update msg model =
 
         PageSizeChanged size ->
             ( { model | pageSize = size }
-            , saveToLocalStorage
-                "page-size"
-                (String.fromInt size)
+            , Cmd.none
             )
                 |> searchWithCurrentQuery LoadNewForce
+
+        PageSizeDefaultsChanged pageId size ->
+            let
+                newDefaults : Dict String Int
+                newDefaults =
+                    if size == 0 then
+                        Dict.remove pageId model.pageSizeDefaults
+
+                    else
+                        Dict.insert pageId size model.pageSizeDefaults
+            in
+            ( { model | pageSizeDefaults = newDefaults }
+            , saveToLocalStorage
+                "page-size"
+                (Encode.dict identity Encode.int newDefaults
+                    |> Encode.encode 0
+                )
+            )
 
         PageWidthChanged width ->
             ( { model | pageWidth = width }
@@ -3593,15 +3612,17 @@ updateModelFromLocalStorage ( key, value ) model =
                     model
 
         "page-size" ->
-            case String.toInt value of
-                Just size ->
-                    if List.member size Data.pageSizes then
-                        { model | pageSize = size }
+            case Decode.decodeString (Decode.dict Decode.int) value of
+                Ok defaults ->
+                    { model
+                        | pageSize =
+                            Dict.get model.pageId defaults
+                                |> Maybe.Extra.orElse (Dict.get "global" defaults)
+                                |> Maybe.withDefault model.pageSize
+                        , pageSizeDefaults = defaults
+                    }
 
-                    else
-                        model
-
-                Nothing ->
+                Err _ ->
                     model
 
         "page-width" ->
@@ -9908,6 +9929,66 @@ viewResultPageSize model searchModel =
             Data.pageSizes
         )
     , Html.text "Number of results to load. Smaller numbers gives faster results."
+    , Html.h3
+        []
+        [ Html.text ("Default amount for " ++ model.pageId) ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        ]
+        (List.append
+            (List.map
+                (\size ->
+                    viewRadioButton
+                        { checked =
+                            model.pageSizeDefaults
+                                |> Dict.get model.pageId
+                                |> Maybe.withDefault -1
+                                |> (==) size
+                        , enabled = True
+                        , name = "page-size-type"
+                        , onInput = PageSizeDefaultsChanged model.pageId size
+                        , text = String.fromInt size
+                        }
+                )
+                Data.pageSizes
+            )
+            [ viewRadioButton
+                { checked =
+                    model.pageSizeDefaults
+                        |> Dict.get model.pageId
+                        |> Maybe.withDefault 0
+                        |> (==) 0
+                , enabled = True
+                , name = "page-size-type"
+                , onInput = PageSizeDefaultsChanged model.pageId 0
+                , text = "Use global"
+                }
+            ]
+        )
+    , Html.h3
+        []
+        [ Html.text "Global default amount" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        ]
+        (List.map
+            (\size ->
+                viewRadioButton
+                    { checked =
+                        model.pageSizeDefaults
+                            |> Dict.get "global"
+                            |> Maybe.withDefault 20
+                            |> (==) size
+                    , enabled = True
+                    , name = "page-size-global"
+                    , onInput = PageSizeDefaultsChanged "global" size
+                    , text = String.fromInt size
+                    }
+            )
+            Data.pageSizes
+        )
     ]
 
 
@@ -10084,6 +10165,7 @@ viewWhatsNew model _ =
         - Added table data export functionality. Found under _Result display_ when set to "Table", where you can export to CSV or JSON.
         - "List" display option renamed to "Short". The old name made more sense when there only was it and "Table", but now "Grouped" is probably more list-y than "Short".
         - Date format is now configurable under _General settings_. Defaults to your browser's default format.
+        - Default result amount can now be set per page type.
         - Removed "Cantrip" and "Focus" types; they now use the "Spell" type. You can use the respective traits or the new `spell_type` field to filter them. The goal of this change is to reduce confusion. A user might've thought that filtering for "Spell" would give them all spells including cantrips, which it now will.
         - Removed "Armor", "Shield", and "Weapon" types; they now use the "Item" type. You can use item categories to filter them. Same reasoning as above, but in regards to specific variants.
         - Actions, rarities, and sizes are now sorted "numerically" instead of alphabetically.
