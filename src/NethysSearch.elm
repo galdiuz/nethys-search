@@ -6845,7 +6845,12 @@ viewQuery model searchModel =
                     ]
                     [ FontAwesome.view FontAwesome.Solid.times ]
             ]
-
+        , Html.a
+            [ HA.class "skip-link"
+            , HA.style "align-self" "center"
+            , HA.href "#results"
+            ]
+            [ Html.text "Skip to results" ]
         , viewFilters model searchModel
         , viewActiveFiltersAndOptions model searchModel
         ]
@@ -10204,6 +10209,7 @@ viewWhatsNew model _ =
         - Added trait group filter buttons.
         - Added filter under _Sources & Spoilers_ that hides creatures from Adventure Paths.
         - In "Grouped" display "N/A" group headers are no longer displayed if they're the sole group on that level. This reduces clutter when grouping on item category + item subcategory, for example.
+        - Added a "skip to results"-link when tabbing from the query input field.
         - New/changed fields:
             - `ac` (changed: now available as a grouped field)
             - `armor_category` (changed: now available as a grouped field)
@@ -11203,6 +11209,8 @@ viewSearchResults model searchModel =
         , HA.style "align-self" "stretch"
         , HA.style "min-height" "90vh"
         , HA.style "padding-bottom" "8px"
+        , HA.id "results"
+        , HA.tabindex -1
         ]
         (List.concat
             [ [ Html.div
@@ -15388,6 +15396,15 @@ css args =
         max-height: 200px;
         overflow-y: auto;
         padding: 4px;
+    }
+
+    .skip-link {
+        position: absolute;
+        left: -1000px;
+    }
+
+    .skip-link:focus {
+        position: static;
     }
 
     .sticky-left {
