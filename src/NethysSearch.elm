@@ -94,6 +94,7 @@ type alias Model =
     , showHeader : Bool
     , showLegacyFilters : Bool
     , showResultAdditionalInfo : Bool
+    , showResultPfs : Bool
     , showResultSpoilers : Bool
     , showResultSummary : Bool
     , showResultTraits : Bool
@@ -762,6 +763,7 @@ type Msg
     | ShowFilterBox String Bool
     | ShowLegacyFiltersChanged Bool
     | ShowMenuPressed Bool
+    | ShowShortPfsChanged Bool
     | ShowSpoilersChanged Bool
     | ShowSummaryChanged Bool
     | ShowTraitsChanged Bool
@@ -900,6 +902,7 @@ init flagsValue =
       , showHeader = flags.showHeader
       , showLegacyFilters = True
       , showResultAdditionalInfo = True
+      , showResultPfs = True
       , showResultSpoilers = True
       , showResultSummary = True
       , showResultTraits = True
@@ -2661,6 +2664,13 @@ update msg model =
                 Cmd.none
             )
 
+        ShowShortPfsChanged value ->
+            ( { model | showResultPfs = value }
+            , saveToLocalStorage
+                "show-short-pfs"
+                (if value then "1" else "0")
+            )
+
         ShowSpoilersChanged value ->
             ( { model | showResultSpoilers = value }
             , saveToLocalStorage
@@ -3674,6 +3684,17 @@ updateModelFromLocalStorage ( key, value ) model =
 
                 "0" ->
                     { model | showLegacyFilters = False }
+
+                _ ->
+                    model
+
+        "show-short-pfs" ->
+            case value of
+                "1" ->
+                    { model | showResultPfs = True }
+
+                "0" ->
+                    { model | showResultPfs = False }
 
                 _ ->
                     model
@@ -10172,6 +10193,7 @@ viewWhatsNew model _ =
         - Added option under _General settings_ to hide legacy filters.
         - Added table data export functionality. Found under _Result display_ when set to "Table", where you can export to CSV or JSON.
         - "List" display option renamed to "Short". The old name made more sense when there only was it and "Table", but now "Grouped" is probably more list-y than "Short".
+        - Added option to hide PFS icons in "Short" display
         - Date format is now configurable under _General settings_. Defaults to your browser's default format.
         - Default result amount can now be set per page type.
         - Removed "Cantrip" and "Focus" types; they now use the "Spell" type. You can use the respective traits or the new `spell_type` field to filter them. The goal of this change is to reduce confusion. A user might've thought that filtering for "Spell" would give them all spells including cantrips, which it now will.
@@ -10275,6 +10297,11 @@ viewResultDisplayShort model =
     [ Html.h4
         []
         [ Html.text "Short configuration" ]
+    , viewCheckbox
+        { checked = model.showResultPfs
+        , onCheck = ShowShortPfsChanged
+        , text = "Show PFS icon"
+        }
     , viewCheckbox
         { checked = model.showResultSpoilers
         , onCheck = ShowSpoilersChanged
@@ -11299,7 +11326,11 @@ viewSingleSearchResult model document =
                 , HA.class "align-center"
                 , HA.class "nowrap"
                 ]
-                [ viewPfsIconWithLink 25 (Maybe.withDefault "" document.pfs)
+                [ if model.showResultPfs then
+                    viewPfsIconWithLink 25 (Maybe.withDefault "" document.pfs)
+
+                  else
+                    Html.text ""
                 , Html.p
                     []
                     (List.append
