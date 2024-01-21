@@ -6819,6 +6819,7 @@ viewQuery model searchModel =
                 Html.button
                     [ HA.class "input-button"
                     , HA.style "font-size" "24px"
+                    , HA.attribute "aria-label" "Clear query"
                     , HE.onClick (QueryChanged "")
                     ]
                     [ FontAwesome.view FontAwesome.Solid.times ]
@@ -6953,6 +6954,7 @@ viewOptionBox model searchModel filter =
             , Html.button
                 [ HA.class "input-button"
                 , HA.style "font-size" "var(--font-large)"
+                , HA.attribute "aria-label" ("Close " ++ filter.label)
                 , HE.onClick (ShowFilterBox filter.id False)
                 ]
                 [ FontAwesome.view FontAwesome.Solid.times ]
@@ -8010,6 +8012,7 @@ viewFilterCreatureFamilies model searchModel =
           else
             Html.button
                 [ HA.class "input-button"
+                , HA.attribute "aria-label" "Clear search"
                 , HE.onClick (SearchCreatureFamiliesChanged "")
                 ]
                 [ FontAwesome.view FontAwesome.Solid.times ]
@@ -8173,6 +8176,7 @@ viewFilterItemCategories model searchModel =
           else
             Html.button
                 [ HA.class "input-button"
+                , HA.attribute "aria-label" "Clear search"
                 , HE.onClick (SearchItemCategoriesChanged "")
                 ]
                 [ FontAwesome.view FontAwesome.Solid.times ]
@@ -8234,6 +8238,7 @@ viewFilterItemCategories model searchModel =
           else
             Html.button
                 [ HA.class "input-button"
+                , HA.attribute "aria-label" "Clear search"
                 , HE.onClick (SearchItemSubcategoriesChanged "")
                 ]
                 [ FontAwesome.view FontAwesome.Solid.times ]
@@ -8626,6 +8631,7 @@ viewFilterSources model searchModel =
           else
             Html.button
                 [ HA.class "input-button"
+                , HA.attribute "aria-label" "Clear search"
                 , HE.onClick (SearchSourcesChanged "")
                 ]
                 [ FontAwesome.view FontAwesome.Solid.times ]
@@ -8867,6 +8873,7 @@ viewFilterTraits model searchModel =
           else
             Html.button
                 [ HA.class "input-button"
+                , HA.attribute "aria-label" "Clear search"
                 , HE.onClick (SearchTraitsChanged "")
                 ]
                 [ FontAwesome.view FontAwesome.Solid.times ]
@@ -9041,6 +9048,7 @@ viewFilterTypes model searchModel =
           else
             Html.button
                 [ HA.class "input-button"
+                , HA.attribute "aria-label" "Clear search"
                 , HE.onClick (SearchTypesChanged "")
                 ]
                 [ FontAwesome.view FontAwesome.Solid.times ]
@@ -10329,18 +10337,21 @@ viewResultDisplayTable model searchModel =
                             ]
                             [ Html.button
                                 [ HE.onClick (TableColumnRemoved column)
+                                , HA.attribute "aria-label" ("Remove " ++ column ++ " column")
                                 ]
                                 [ FontAwesome.view FontAwesome.Solid.times
                                 ]
                             , Html.button
                                 [ HA.disabled (index == 0)
                                 , HE.onClick (TableColumnMoved index (index - 1))
+                                , HA.attribute "aria-label" ("Move " ++ column ++ " column up")
                                 ]
                                 [ FontAwesome.view FontAwesome.Solid.chevronUp
                                 ]
                             , Html.button
                                 [ HA.disabled (index + 1 == List.length searchModel.tableColumns)
                                 , HE.onClick (TableColumnMoved index (index + 1))
+                                , HA.attribute "aria-label" ("Move " ++ column ++ " column down")
                                 ]
                                 [ FontAwesome.view FontAwesome.Solid.chevronDown
                                 ]
@@ -10377,6 +10388,7 @@ viewResultDisplayTable model searchModel =
                   else
                     Html.button
                         [ HA.class "input-button"
+                        , HA.attribute "aria-label" "Clear search"
                         , HE.onClick (SearchTableColumnsChanged "")
                         ]
                         [ FontAwesome.view FontAwesome.Solid.times ]
@@ -10522,6 +10534,7 @@ viewResultDisplayTableColumn searchModel column =
 
               else
                 HE.onClick (TableColumnAdded column)
+            , HA.attribute "aria-label" ("Toggle " ++ column ++ " column")
             ]
             [ FontAwesome.view FontAwesome.Solid.plus
             ]
@@ -10582,8 +10595,13 @@ viewResultDisplayTableColumnWithSelect searchModel { column, onInput, selected, 
         , HA.class "align-center"
         ]
         [ Html.button
-            [ HA.disabled (List.member columnWithType searchModel.tableColumns)
-            , HE.onClick (TableColumnAdded columnWithType)
+            [ HAE.attributeIf (List.member columnWithType searchModel.tableColumns) (HA.class "active")
+            , if List.member columnWithType searchModel.tableColumns then
+                HE.onClick (TableColumnRemoved columnWithType)
+
+              else
+                HE.onClick (TableColumnAdded columnWithType)
+            , HA.attribute "aria-label" ("Toggle " ++ selected ++ " " ++ column ++ " column")
             ]
             [ FontAwesome.view FontAwesome.Solid.plus
             ]
@@ -10812,20 +10830,22 @@ viewSortResults model searchModel =
             [ Html.div
                 []
                 [ Html.text "Selected fields" ]
-            , Html.div
+            , Html.Keyed.node "div"
                 [ HA.class "scrollbox"
                 , HA.class "column"
                 , HA.class "gap-small"
                 ]
                 (List.indexedMap
                     (\index ( field, dir ) ->
-                        Html.div
+                        ( field
+                        , Html.div
                             [ HA.class "row"
                             , HA.class "gap-small"
                             , HA.class "align-center"
                             ]
                             [ Html.button
                                 [ HE.onClick (SortRemoved field)
+                                , HA.attribute "aria-label" ("Remove " ++ field ++ " sort")
                                 ]
                                 [ FontAwesome.view FontAwesome.Solid.times
                                 ]
@@ -10835,6 +10855,7 @@ viewSortResults model searchModel =
                               else
                                 Html.button
                                     [ HE.onClick (SortAdded field (if dir == Asc then Desc else Asc))
+                                    , HA.attribute "aria-label" ("Toggle " ++ field ++ " sort direction")
                                     ]
                                     [ getSortIcon field (Just dir)
                                     ]
@@ -10845,6 +10866,7 @@ viewSortResults model searchModel =
                                 Html.button
                                     [ HA.disabled (index == 0)
                                     , HE.onClick (SortOrderChanged index (index - 1))
+                                    , HA.attribute "aria-label" ("Move " ++ field ++ " sort up")
                                     ]
                                     [ FontAwesome.view FontAwesome.Solid.chevronUp
                                     ]
@@ -10855,11 +10877,13 @@ viewSortResults model searchModel =
                                 Html.button
                                     [ HA.disabled (index + 1 == List.length searchModel.sort)
                                     , HE.onClick (SortOrderChanged index (index + 1))
+                                    , HA.attribute "aria-label" ("Move " ++ field ++ " sort down")
                                     ]
                                     [ FontAwesome.view FontAwesome.Solid.chevronDown
                                     ]
                             , Html.text (sortFieldToLabel field)
                             ]
+                        )
                     )
                     searchModel.sort
                 )
@@ -11067,18 +11091,21 @@ viewFilterIcon value =
         Just True ->
             Html.div
                 [ HA.style "color" "#00cc00"
+                , HA.attribute "aria-label" "Positive active filter"
                 ]
                 [ FontAwesome.view FontAwesome.Solid.checkCircle ]
 
         Just False ->
             Html.div
                 [ HA.style "color" "#dd0000"
+                , HA.attribute "aria-label" "Negative active filter"
                 ]
                 [ FontAwesome.view FontAwesome.Solid.minusCircle ]
 
         Nothing ->
             Html.div
-                []
+                [ HA.attribute "aria-label" "Inactive filter"
+                ]
                 [ FontAwesome.view FontAwesome.Regular.circle ]
 
 
@@ -14615,6 +14642,7 @@ viewPfsIcon height pfs =
         Just url ->
             Html.img
                 [ HA.src url
+                , HA.alt ("PFS " ++ pfs)
                 , if height == 0 then
                     HA.style "height" "1em"
 
@@ -14635,6 +14663,7 @@ viewPfsIconWithLink height pfs =
                 [ HA.href "/PFS.aspx"
                 , HA.target "_blank"
                 , HA.style "display" "flex"
+                , HA.attribute "aria-label" ("PFS " ++ pfs)
                 ]
                 [ viewPfsIcon height pfs
                 ]
