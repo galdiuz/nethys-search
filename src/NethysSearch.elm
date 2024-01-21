@@ -4937,7 +4937,7 @@ buildSearchMustNotTerms model searchModel =
         , if searchModel.filterApCreatures then
             [ ( "query_string"
               , Encode.object
-                    [ ( "query", Encode.string "!(type:creature source_category:\"adventure paths\")" )
+                    [ ( "query", Encode.string "(type:creature source_category:\"adventure paths\")" )
                     , ( "default_operator", Encode.string "AND" )
                     ]
               )
