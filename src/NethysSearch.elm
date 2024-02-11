@@ -94,6 +94,7 @@ type alias Model =
     , showHeader : Bool
     , showLegacyFilters : Bool
     , showResultAdditionalInfo : Bool
+    , showResultIndex : Bool
     , showResultPfs : Bool
     , showResultSpoilers : Bool
     , showResultSummary : Bool
@@ -763,6 +764,7 @@ type Msg
     | ShowFilterBox String Bool
     | ShowLegacyFiltersChanged Bool
     | ShowMenuPressed Bool
+    | ShowResultIndexChanged Bool
     | ShowShortPfsChanged Bool
     | ShowSpoilersChanged Bool
     | ShowSummaryChanged Bool
@@ -902,6 +904,7 @@ init flagsValue =
       , showHeader = flags.showHeader
       , showLegacyFilters = True
       , showResultAdditionalInfo = True
+      , showResultIndex = True
       , showResultPfs = True
       , showResultSpoilers = True
       , showResultSummary = True
@@ -2664,6 +2667,13 @@ update msg model =
                 Cmd.none
             )
 
+        ShowResultIndexChanged value ->
+            ( { model | showResultIndex = value }
+            , saveToLocalStorage
+                "show-result-index"
+                (if value then "1" else "0")
+            )
+
         ShowShortPfsChanged value ->
             ( { model | showResultPfs = value }
             , saveToLocalStorage
@@ -3684,6 +3694,17 @@ updateModelFromLocalStorage ( key, value ) model =
 
                 "0" ->
                     { model | showLegacyFilters = False }
+
+                _ ->
+                    model
+
+        "show-result-index" ->
+            case value of
+                "1" ->
+                    { model | showResultIndex = True }
+
+                "0" ->
+                    { model | showResultIndex = False }
 
                 _ ->
                     model
@@ -6548,6 +6569,12 @@ view model =
 
               else
                 Html.text ".additional-info + hr { display:none; }"
+
+            , if model.showResultIndex then
+                Html.text ""
+
+              else
+                Html.text ".results-list { list-style-type: none; }"
             ]
         , FontAwesome.Styles.css
         , if model.noUi then
@@ -6711,7 +6738,7 @@ viewLinkPreview model =
                         , HA.class "preview"
                         , HA.class "fade-in"
                         , HA.class "column"
-                        , HA.class "gap-medium"
+                        , HA.class "gap-small"
                         , if link.elementPosition.x + 830 < model.bodySize.width then
                             HA.style "left" (String.fromInt link.elementPosition.x ++ "px")
 
@@ -10195,10 +10222,11 @@ viewWhatsNew model _ =
     [ Html.div
         [ HA.class "no-ul-margin" ]
         ("""
-        - Added option under _General settings_ to hide legacy filters.
+        - Added option under _General settings_ to hide legacy filters (hides alignment, casting component, and spell school filters).
         - Added table data export functionality. Found under _Result display_ when set to "Table", where you can export to CSV or JSON.
         - "List" display option renamed to "Short". The old name made more sense when there only was it and "Table", but now "Grouped" is probably more list-y than "Short".
-        - Added option to hide PFS icons in "Short" display
+        - Added result indices to "Short" and "Full" (and an option to hide them).
+        - Added option to hide PFS icons in "Short" display.
         - Date format is now configurable under _General settings_. Defaults to your browser's default format.
         - Default result amount can now be set per page type.
         - Removed "Cantrip" and "Focus" types; they now use the "Spell" type. You can use the respective traits or the new `spell_type` field to filter them. The goal of this change is to reduce confusion. A user might've thought that filtering for "Spell" would give them all spells including cantrips, which it now will.
@@ -10211,27 +10239,26 @@ viewWhatsNew model _ =
         - In "Grouped" display "N/A" group headers are no longer displayed if they're the sole group on that level. This reduces clutter when grouping on item category + item subcategory, for example.
         - Added a "skip to results"-link when tabbing from the query input field.
         - New/changed fields:
-            - `ac` (changed: now available as a grouped field)
-            - `armor_category` (changed: now available as a grouped field)
-            - `armor_group` (changed: now available as a grouped field)
-            - `attribute` (new: available as table column)
-            - `attribute_boost` (new: alias for `attribute`, available as table column)
-            - `attribute_flaw` (new: available as a table column)
-            - `bulk` (changed: now available as a grouped field)
-            - `deity_category` (changed: now available as a grouped field)
-            - `defense` (new: alias for `saving_throw`, available as a table column)
-            - `element` (changed: spells in the elementalist spell list without an elemental trait are now matched by `element:universal`)
-            - `heighten_group` (new: for grouping spells by heightenable rank)
-            - `legacy_name` (new: name of legacy equivalent)
-            - `pantheon` (new: available as a table column)
-            - `pantheon_member` (new: available as a table column)
-            - `rank` (new: alias for `level`, available as a table column and grouped field)
-            - `remaster_name` (new: name of remaster equivalent)
-            - `spell_type` (new: matches Cantrip / Focus / Spell, available as a table column)
-            - `skill_mod` (new: can be used to find creatures with a specific skill modifier, except lore skills for technical reasons)
-            - `trait_group` (changed: is now indexed on everything, e.g. `type:feat trait_group:ancestry` matches all feats with an ancestry trait)
-            - `url` (changed: now available as a table column)
-
+            - `ac` - changed: now available as a grouped field
+            - `armor_category` - changed: now available as a grouped field
+            - `armor_group` - changed: now available as a grouped field
+            - `attribute` - new: available as table column
+            - `attribute_boost` - new: alias for `attribute`, available as table column
+            - `attribute_flaw` - new: available as a table column
+            - `bulk` - changed: now available as a grouped field
+            - `deity_category` - changed: now available as a grouped field
+            - `defense` - new: alias for `saving_throw`, available as a table column
+            - `element` - changed: spells in the elementalist spell list without an elemental trait are now matched by `element:universal`
+            - `heighten_group` - new: for grouping spells by heightenable rank
+            - `legacy_name` - new: name of legacy equivalent
+            - `pantheon` - new: available as a table column
+            - `pantheon_member` - new: available as a table column
+            - `rank` - new: alias for `level`, available as a table column and grouped field
+            - `remaster_name` - new: name of remaster equivalent
+            - `spell_type` - new: matches Cantrip / Focus / Spell, available as a table column
+            - `skill_mod` - new: can be used to find creatures with a specific skill modifier, except lore skills for technical reasons
+            - `trait_group` - changed: is now indexed on everything, e.g. `type:feat trait_group:ancestry` matches all feats with an ancestry trait
+            - `url` - changed: now available as a table column
         """
             |> String.Extra.unindent
             |> Markdown.Parser.parse
@@ -10303,6 +10330,11 @@ viewResultDisplayShort model =
     [ Html.h4
         []
         [ Html.text "Short configuration" ]
+    , viewCheckbox
+        { checked = model.showResultIndex
+        , onCheck = ShowResultIndexChanged
+        , text = "Show result index"
+        }
     , viewCheckbox
         { checked = model.showResultPfs
         , onCheck = ShowShortPfsChanged
@@ -11204,7 +11236,7 @@ viewSearchResults model searchModel =
     in
     Html.div
         [ HA.class "column"
-        , HA.class "gap-large"
+        , HA.class "gap-medium"
         , HA.class "align-center"
         , HA.style "align-self" "stretch"
         , HA.style "min-height" "90vh"
@@ -11272,44 +11304,49 @@ viewLoadMoreButtons model remaining =
 
 viewSearchResultsShort : Model -> SearchModel -> Int -> Int -> List (Html Msg)
 viewSearchResultsShort model searchModel remaining resultCount =
-    [ List.concatMap
-        (\result ->
-            case result of
-                Ok r ->
-                    r.documentIds
-                        |> List.filterMap (\id -> Dict.get id model.documents)
-                        |> List.filterMap Result.toMaybe
-                        |> List.map (viewSingleSearchResult model)
+    [ Html.ol
+        [ HA.class "fill-width-with-padding"
+        , HA.class "limit-width"
+        , HA.class "results-list"
+        ]
+        (List.concatMap
+            (\result ->
+                case result of
+                    Ok r ->
+                        r.documentIds
+                            |> List.filterMap (\id -> Dict.get id model.documents)
+                            |> List.filterMap Result.toMaybe
+                            |> List.map (viewSingleSearchResult model)
+                            |> List.map List.singleton
+                            |> List.map (Html.li [])
 
-                Err err ->
-                    [ Html.h2
-                        []
-                        [ Html.text (httpErrorToString err) ]
-                    ]
+                    Err err ->
+                        [ Html.h2
+                            []
+                            [ Html.text (httpErrorToString err) ]
+                        ]
+            )
+            searchModel.searchResults
         )
-        searchModel.searchResults
 
     , if Maybe.Extra.isJust searchModel.tracker then
-        [ Html.div
+        Html.div
             [ HA.class "loader"
             ]
             []
-        ]
 
       else
-        [ viewLoadMoreButtons model remaining ]
+        viewLoadMoreButtons model remaining
 
     , if resultCount > 0 then
-        [ Html.button
+        Html.button
             [ HE.onClick ScrollToTopPressed
             ]
             [ Html.text "Scroll to top" ]
-        ]
 
       else
-        []
+        Html.text ""
     ]
-        |> List.concat
 
 
 viewSingleSearchResult : Model -> Document -> Html Msg
@@ -11319,12 +11356,11 @@ viewSingleSearchResult model document =
         hasActionsInTitle =
             List.member document.category [ "action", "creature-ability", "familiar-ability", "feat", "spell" ]
     in
-    Html.section
+    Html.article
         [ HA.class "column"
         , HA.class "gap-small"
-        , HA.class "limit-width"
-        , HA.class "fill-width-with-padding"
         , HA.class "fade-in"
+        , HA.style "margin-top" "2px"
         ]
         [ Html.h1
             [ HA.class "title" ]
@@ -11421,41 +11457,47 @@ viewSingleSearchResult model document =
 
 viewSearchResultsFull : Model -> SearchModel -> Int -> List (Html Msg)
 viewSearchResultsFull model searchModel remaining =
-    [ List.concatMap
-        (\result ->
-            case result of
-                Ok r ->
-                    List.map
-                        (\id ->
-                            Html.section
-                                [ HA.class "column"
-                                , HA.class "gap-small"
-                                , HA.class "limit-width"
-                                , HA.class "fill-width-with-padding"
-                                , HA.class "fade-in"
-                                ]
-                                (viewDocument model id 0 Nothing)
-                        )
-                        r.documentIds
+    [ Html.ol
+        [ HA.class "fill-width-with-padding"
+        , HA.class "limit-width"
+        , HA.class "results-list"
+        ]
+        (List.concatMap
+            (\result ->
+                case result of
+                    Ok r ->
+                        List.map
+                            (\id ->
+                                Html.li
+                                    []
+                                    [ Html.article
+                                        [ HA.class "column"
+                                        , HA.class "gap-small"
+                                        , HA.class "fade-in"
+                                        , HA.style "margin-top" "2px"
+                                        ]
+                                        (viewDocument model id 0 Nothing)
+                                    ]
+                            )
+                            r.documentIds
 
-                Err err ->
-                    [ Html.h2
-                        []
-                        [ Html.text (httpErrorToString err) ]
-                    ]
+                    Err err ->
+                        [ Html.h2
+                            []
+                            [ Html.text (httpErrorToString err) ]
+                        ]
+            )
+            searchModel.searchResults
         )
-        searchModel.searchResults
     , if Maybe.Extra.isJust searchModel.tracker then
-        [ Html.div
+        Html.div
             [ HA.class "loader"
             ]
             []
-        ]
 
       else
-        [ viewLoadMoreButtons model remaining ]
+        viewLoadMoreButtons model remaining
     ]
-        |> List.concat
 
 
 viewSearchResultsTable : Model -> SearchModel -> Int -> List (Html Msg)
@@ -15134,8 +15176,23 @@ css args =
         background-color: var(--color-table-head-bg);
     }
 
-    ul {
+    ul, ol {
+        list-style-position: outside;
         margin-block-start: 0.5em;
+        margin-block-end: 0.5em;
+    }
+
+    ol ol {
+        margin-block-start: 0.5em;
+        margin-block-end: 0.5em;
+    }
+
+    ol ul {
+        list-style-type: disc;
+    }
+
+    ol {
+        list-style-type: decimal;
     }
 
     .align-baseline {
@@ -15207,6 +15264,11 @@ css args =
         font-variant: small-caps;
         font-weight: 700;
         padding: 4px 9px;
+    }
+
+    .foldable-container {
+        transition: height ease-in-out 0.2s;
+        overflow: hidden;
     }
 
     .gap-large {
@@ -15375,9 +15437,18 @@ css args =
         font-size: var(--font-very-large);
     }
 
-    .foldable-container {
-        transition: height ease-in-out 0.2s;
-        overflow: hidden;
+    .results-list {
+        margin: 0;
+        list-style-position: inside;
+    }
+
+    .results-list > li + li {
+        margin-top: var(--gap-medium);
+    }
+
+    .results-list > li::marker {
+        color: var(--color-text-inactive);
+        font-size: 14px;
     }
 
     .rotatable {
