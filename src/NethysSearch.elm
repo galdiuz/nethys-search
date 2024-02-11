@@ -14874,7 +14874,7 @@ css args =
     :root, :host {
         --color-bg: var(--bg-main, #0f0f0f);
         --color-box-bg: var(--border-1, #333333);
-        --color-box-bg-alt: var(--border-2, #282828);
+        --color-box-bg-alt: color-mix(in lch, 85% var(--color-box-bg), black);
         --color-box-border: var(--text-1, #eeeeee);
         --color-box-text: var(--text-1, --color-text);
         --color-table-border: var(--color-text);
@@ -14884,7 +14884,7 @@ css args =
         --color-table-row-bg: var(--bg-2, #342c19);
         --color-table-row-text: var(--text-2, --color-text);
         --color-text: var(--text-1, #eeeeee);
-        --color-text-inactive: var(--border-1, #999999);
+        --color-text-inactive: color-mix(in lch, var(--color-text), #808080);
         --color-title1-bg: var(--head-bg, #522e2c);
         --color-title1-text: var(--head-fg, #cbc18f);
         --color-title2-bg: var(--mid-bg, #806e45);
@@ -14930,7 +14930,7 @@ css args =
     }
 
     button {
-        border-color: var(--color-text);
+        border-color: var(--color-text-inactive);
         border-width: 1px;
         border-style: solid;
         border-radius: 4px;
