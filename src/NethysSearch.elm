@@ -14049,12 +14049,13 @@ markdownHtmlRenderer model titleLevel overrideRight =
                 ]
             )
         , Markdown.Html.tag "ol"
-            (\children ->
+            (\start children ->
                 [ Html.ol
-                    []
+                    [ HAE.attributeMaybe HA.start (Maybe.andThen String.toInt start) ]
                     (List.concat children)
                 ]
             )
+            |> Markdown.Html.withOptionalAttribute "start"
         , Markdown.Html.tag "query-button"
             (\_ ->
                 []
