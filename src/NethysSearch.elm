@@ -7416,6 +7416,7 @@ viewActiveFilters canClick searchModel =
                                         Html.button
                                             [ HA.class "row"
                                             , HA.class "gap-tiny"
+                                            , HA.class "align-center"
                                             , HAE.attributeMaybe HA.class class
                                             , getTraitClass value
                                             , HAE.attributeIf canClick (HE.onClick (removeMsg value))
@@ -7818,6 +7819,7 @@ viewActiveSorts canClick searchModel =
                         Html.button
                             [ HA.class "row"
                             , HA.class "gap-tiny"
+                            , HA.class "align-center"
                             , HAE.attributeIf canClick (HE.onClick (SortRemoved field))
                             ]
                             [ Html.text
@@ -8421,6 +8423,7 @@ viewFilterPfs model searchModel =
                 Html.button
                     [ HA.class "row"
                     , HA.class "gap-tiny"
+                    , HA.class "align-center"
                     , HE.onClick (PfsFilterAdded pfs)
                     ]
                     [ viewPfsIcon 16 pfs
@@ -11128,6 +11131,7 @@ viewSortButtons searchModel field =
         , HAE.attributeIf (List.member ( field, Asc ) searchModel.sort) (HA.class "active")
         , HA.class "row"
         , HA.class "gap-tiny"
+        , HA.class "align-center"
         ]
         [ Html.text "Asc"
         , getSortIcon field (Just Asc)
@@ -11143,6 +11147,7 @@ viewSortButtons searchModel field =
         , HAE.attributeIf (List.member ( field, Desc ) searchModel.sort) (HA.class "active")
         , HA.class "row"
         , HA.class "gap-tiny"
+        , HA.class "align-center"
         ]
         [ Html.text "Desc"
         , getSortIcon field (Just Desc)
@@ -14954,7 +14959,7 @@ css args =
         --gap-large: 20px;
         color: var(--color-text);
         color-scheme: var(--color-scheme, light);
-        font-family: "Century Gothic", CenturyGothic, AppleGothic, sans-serif;
+        font-family: var(--font-1, "Century Gothic", CenturyGothic, AppleGothic, sans-serif);
         font-size: var(--font-normal);
         line-height: normal;
     }
@@ -14979,6 +14984,7 @@ css args =
         border-radius: 4px;
         background-color: transparent;
         color: var(--color-text);
+        font-family: inherit;
         font-size: var(--font-normal);
         padding: 1px 6px;
     }
@@ -15109,6 +15115,7 @@ css args =
 
     select {
         color: var(--color-text);
+        font-family: inherit;
         font-size: var(--font-normal);
     }
 
