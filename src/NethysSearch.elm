@@ -7902,7 +7902,7 @@ viewFilterActions model searchModel =
                             , viewFilterIcon (Dict.get actions searchModel.filteredActions)
                             ]
                     )
-                    (List.sort aggregations.actions)
+                    (List.sortBy actionsToInt aggregations.actions)
 
             Just (Err _) ->
                 []
@@ -13669,7 +13669,7 @@ actionsToInt value =
         multiplier =
             List.Extra.find
                 (\(str, _) ->
-                    String.contains str value
+                    String.contains str (String.toLower value)
                 )
                 [ ( "free action", 0 )
                 , ( "reaction", 1 )
