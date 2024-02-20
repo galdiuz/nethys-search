@@ -11313,6 +11313,11 @@ viewSearchResultsShort model searchModel remaining resultCount =
         [ HA.class "fill-width-with-padding"
         , HA.class "limit-width"
         , HA.class "results-list"
+        , if model.showResultIndex then
+            HA.class "item-gap-small"
+
+          else
+            HA.class "item-gap-large"
         ]
         (List.concatMap
             (\result ->
@@ -11466,6 +11471,11 @@ viewSearchResultsFull model searchModel remaining =
         [ HA.class "fill-width-with-padding"
         , HA.class "limit-width"
         , HA.class "results-list"
+        , if model.showResultIndex then
+            HA.class "item-gap-small"
+
+          else
+            HA.class "item-gap-large"
         ]
         (List.concatMap
             (\result ->
@@ -15449,8 +15459,12 @@ css args =
         list-style-position: inside;
     }
 
-    .results-list > li + li {
-        margin-top: var(--gap-medium);
+    .results-list.item-gap-small > li + li {
+        margin-top: var(--gap-small);
+    }
+
+    .results-list.item-gap-large > li + li {
+        margin-top: var(--gap-large);
     }
 
     .results-list > li::marker {
