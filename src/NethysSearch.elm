@@ -404,6 +404,7 @@ type alias Document =
     , requirements : Maybe String
     , resistanceValues : Maybe DamageTypeValues
     , resistances : Maybe String
+    , sanctification : Maybe String
     , savingThrow : Maybe String
     , school : Maybe String
     , searchMarkdown : Markdown
@@ -6137,6 +6138,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "requirement_markdown" ] Decode.string <| \requirements ->
     Field.attemptAt [ "_source", "resistance" ] damageTypeValuesDecoder <| \resistanceValues ->
     Field.attemptAt [ "_source", "resistance_markdown" ] Decode.string <| \resistances ->
+    Field.attemptAt [ "_source", "sanctification_raw" ] Decode.string <| \sanctification ->
     Field.attemptAt [ "_source", "saving_throw_markdown" ] Decode.string <| \savingThrow ->
     Field.attemptAt [ "_source", "school" ] Decode.string <| \school ->
     Field.attemptAt [ "_source", "search_markdown" ] Decode.string <| \searchMarkdown ->
@@ -6284,6 +6286,7 @@ documentDecoder =
         , requirements = requirements
         , resistanceValues = resistanceValues
         , resistances = resistances
+        , sanctification = sanctification
         , savingThrow = savingThrow
         , school = school
         , searchMarkdown = NotParsed (Maybe.withDefault "" searchMarkdown)
@@ -10043,7 +10046,7 @@ viewResultPageSize model searchModel =
                     { checked =
                         model.pageSizeDefaults
                             |> Dict.get "global"
-                            |> Maybe.withDefault 20
+                            |> Maybe.withDefault 50
                             |> (==) size
                     , enabled = True
                     , name = "page-size-global"
@@ -10258,6 +10261,7 @@ viewWhatsNew model _ =
             - `pantheon_member` - new: available as a table column
             - `rank` - new: alias for `level`, available as a table column and grouped field
             - `remaster_name` - new: name of remaster equivalent
+            - `sanctification` - new: deity sanctification, available as table column and grouped field
             - `spell_type` - new: matches Cantrip / Focus / Spell, available as a table column
             - `skill_mod` - new: can be used to find creatures with a specific skill modifier, except lore skills for technical reasons
             - `trait_group` - changed: is now indexed on everything, e.g. `type:feat trait_group:ancestry` matches all feats with an ancestry trait
@@ -12102,6 +12106,9 @@ viewSearchResultGridCell model document column =
                     |> Maybe.map String.fromInt
                     |> maybeAsText
 
+            [ "sanctification" ] ->
+                maybeAsText document.sanctification
+
             [ "saving_throw" ] ->
                 maybeAsMarkdown document.savingThrow
 
@@ -13461,6 +13468,15 @@ groupDocumentsByField keys field documents =
                         (document.rarityId
                             |> Maybe.map String.fromInt
                             |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
+
+                "sanctification" ->
+                    insertToListDict
+                        (document.sanctification
+                            |> Maybe.withDefault ""
+                            |> String.toLower
                         )
                         document
                         dict

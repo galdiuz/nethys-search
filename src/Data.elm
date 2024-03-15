@@ -208,6 +208,8 @@ fields =
     , ( "reset", "Trap reset" )
     , ( "resistance.<type>", "[n] Resistance to <type>. See list of valid types below. Use resistance.\\* to match any type." )
     , ( "resistance_raw", "Resistances exactly as written" )
+    , ( "sanctification", "Deity sanctification (Holy / Unholy)" )
+    , ( "sanctification_raw", "Deity sanctification exactly as written" )
     , ( "saving_throw", "Saving throw or defense for an effect (Fortitude / Reflex / Will / AC)" )
     , ( "school", "Magical school" )
     , ( "secondary_casters", "[n] Secondary casters for a ritual" )
@@ -281,6 +283,7 @@ groupFields =
     , "rank"
     , "rarity"
     , "school"
+    , "sanctification"
     , "size"
     , "source"
     , "spell_type"
@@ -333,7 +336,7 @@ predefinedColumnConfigurations =
     , { columns = [ "level", "hp", "ac", "fortitude", "reflex", "will", "strongest_save", "weakest_save", "perception", "sense", "size", "alignment", "rarity", "speed", "immunity", "resistance", "weakness", "trait", "creature_family", "language" ]
       , label = "Creatures"
       }
-    , { columns = [ "alignment", "ability", "divine_font", "skill", "favored_weapon", "domain", "deity_category", "follower_alignment", "pfs" ]
+    , { columns = [ "pfs", "edict", "anathema", "domain", "divine_font", "sanctification", "ability", "skill", "favored_weapon", "deity_category", "pantheon", "source" ]
       , label = "Deities"
       }
     , { columns = [ "level", "saving_throw", "onset", "stage", "trait", "rarity" ]
@@ -476,6 +479,7 @@ sortFields =
     , ( "region", "region", False )
     , ( "release_date", "release_date", False )
     , ( "requirement", "requirement.keyword", False )
+    , ( "sanctification", "sanctification_raw.keyword", False )
     , ( "saving_throw", "saving_throw.keyword", False )
     , ( "school", "school", False )
     , ( "secondary_casters", "secondary_casters", False )
@@ -639,6 +643,7 @@ tableColumns =
     , "release_date"
     , "requirement"
     , "resistance"
+    , "sanctification"
     , "saving_throw"
     , "school"
     , "secondary_casters"
