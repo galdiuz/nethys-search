@@ -341,11 +341,13 @@ type alias Document =
     , damage : Maybe String
     , defenseProficiencies : List String
     , deities : Maybe String
+    , deitiesList : List String
     , deityCategory : Maybe String
     , dexCap : Maybe Int
     , dexterity : Maybe Int
     , divineFonts : List String
     , domains : Maybe String
+    , domainsList : List String
     , domainSpell : Maybe String
     , duration : Maybe String
     , durationValue : Maybe Int
@@ -6074,11 +6076,13 @@ documentDecoder =
     Field.attemptAt [ "_source", "creature_family_markdown" ] Decode.string <| \creatureFamilyMarkdown ->
     Field.attemptAt [ "_source", "damage" ] Decode.string <| \damage ->
     Field.attemptAt [ "_source", "defense_proficiency" ] stringListDecoder <| \defenseProficiencies ->
+    Field.attemptAt [ "_source", "deity" ] stringListDecoder <| \deitiesList ->
     Field.attemptAt [ "_source", "deity_markdown" ] Decode.string <| \deities ->
     Field.attemptAt [ "_source", "deity_category" ] Decode.string <| \deityCategory ->
     Field.attemptAt [ "_source", "dex_cap" ] Decode.int <| \dexCap ->
     Field.attemptAt [ "_source", "dexterity" ] Decode.int <| \dexterity ->
     Field.attemptAt [ "_source", "divine_font" ] stringListDecoder <| \divineFonts ->
+    Field.attemptAt [ "_source", "domain" ] stringListDecoder <| \domainsList ->
     Field.attemptAt [ "_source", "domain_markdown" ] Decode.string <| \domains ->
     Field.attemptAt [ "_source", "domain_spell_markdown" ] Decode.string <| \domainSpell ->
     Field.attemptAt [ "_source", "duration" ] Decode.int <| \durationValue ->
@@ -6223,11 +6227,13 @@ documentDecoder =
         , damage = damage
         , defenseProficiencies = Maybe.withDefault [] defenseProficiencies
         , deities = deities
+        , deitiesList = Maybe.withDefault [] deitiesList
         , deityCategory = deityCategory
         , dexCap = dexCap
         , dexterity = dexterity
         , divineFonts = Maybe.withDefault [] divineFonts
         , domains = domains
+        , domainsList = Maybe.withDefault [] domainsList
         , domainSpell = domainSpell
         , duration = duration
         , durationValue = durationValue
@@ -13344,6 +13350,18 @@ groupDocumentsByField keys field documents =
                         document
                         dict
 
+                "deity" ->
+                    if List.isEmpty document.deitiesList then
+                        insertToListDict "" document dict
+
+                    else
+                        List.foldl
+                            (\deity ->
+                                insertToListDict (String.toLower deity) document
+                            )
+                            dict
+                            document.deitiesList
+
                 "deity_category" ->
                     insertToListDict
                         (document.deityCategory
@@ -13351,6 +13369,18 @@ groupDocumentsByField keys field documents =
                         )
                         document
                         dict
+
+                "domain" ->
+                    if List.isEmpty document.domainsList then
+                        insertToListDict "" document dict
+
+                    else
+                        List.foldl
+                            (\domain ->
+                                insertToListDict (String.toLower domain) document
+                            )
+                            dict
+                            document.domainsList
 
                 "duration" ->
                     insertToListDict
