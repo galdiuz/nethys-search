@@ -154,6 +154,7 @@ type alias SearchModel =
     , groupField3 : Maybe String
     , groupedLinkLayout : GroupedLinkLayout
     , lastSearchHash : Maybe String
+    , legacyMode : Maybe Bool
     , query : String
     , queryType : QueryType
     , removeFilters : List String
@@ -243,6 +244,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , groupField3 = Nothing
     , groupedLinkLayout = Horizontal
     , lastSearchHash = Nothing
+    , legacyMode = Nothing
     , query = ""
     , queryType = Standard
     , removeFilters = removeFilters
@@ -690,6 +692,7 @@ type Msg
     | ItemCategoryFilterRemoved String
     | ItemSubcategoryFilterAdded String
     | ItemSubcategoryFilterRemoved String
+    | LegacyModeChanged (Maybe Bool)
     | LimitTableWidthChanged Bool
     | LinkEntered String Position
     | LinkEnteredDebouncePassed String
@@ -1810,6 +1813,16 @@ update msg model =
                 |> updateUrlWithSearchParams
             )
 
+        LegacyModeChanged value ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | legacyMode = value }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
         LimitTableWidthChanged value ->
             ( { model | limitTableWidth = value }
             , saveToLocalStorage
@@ -1837,7 +1850,7 @@ update msg model =
                         (Maybe.Extra.toList documentId)
                         []
                         model.documents
-                        model.legacyMode
+                        (Maybe.withDefault model.legacyMode model.searchModel.legacyMode)
                         |> Tuple.first
             in
             ( { model
@@ -1878,7 +1891,7 @@ update msg model =
                         [ documentId ]
                         []
                         model.documents
-                        model.legacyMode
+                        (Maybe.withDefault model.legacyMode model.searchModel.legacyMode)
                         |> Tuple.second
             in
             if Maybe.map .documentId model.previewLink == Just documentId then
@@ -4377,6 +4390,17 @@ getSearchModelQueryParams model searchModel =
         else
             []
       )
+    , ( "legacy"
+      , case searchModel.legacyMode of
+            Just True ->
+                [ "yes" ]
+
+            Just False ->
+                [ "no" ]
+
+            Nothing ->
+                []
+      )
     , ( "spoilers"
       , if searchModel.filterSpoilers then
             [ "hide" ]
@@ -4884,7 +4908,7 @@ buildSearchFilterTerms model searchModel =
                             [ ( "exists"
                               , Encode.object
                                     [ ( "field"
-                                      , if model.legacyMode then
+                                      , if Maybe.withDefault model.legacyMode searchModel.legacyMode then
                                             Encode.string "legacy_id"
 
                                         else
@@ -5300,6 +5324,16 @@ updateSearchModelFromParams params model searchModel =
                         )
                     )
                 |> Maybe.withDefault []
+        , legacyMode =
+            case Dict.get "legacy" params of
+                Just [ "yes" ] ->
+                    Just True
+
+                Just [ "no" ] ->
+                    Just False
+
+                _ ->
+                    Nothing
         , resultDisplay =
             case Dict.get "display" params of
                 Just [ "full" ] ->
@@ -6783,7 +6817,7 @@ getPreviewDocument : Model -> PreviewLink -> Maybe Document
 getPreviewDocument model link =
     case Dict.get link.documentId model.documents of
         Just (Ok doc) ->
-            if link.noRedirect then
+            if link.noRedirect || Maybe.Extra.isJust model.searchModel.legacyMode then
                 Just doc
 
             else
@@ -7071,6 +7105,11 @@ allFilters model =
       , view = viewFilterDomains
       , visibleIf = moreThanOneAggregation .domains
       }
+    , { id = "hands"
+      , label = "Hands"
+      , view = viewFilterHands
+      , visibleIf = moreThanOneAggregation .hands
+      }
     , { id = "item-categories"
       , label = "Item categories"
       , view = viewFilterItemCategories
@@ -7079,10 +7118,10 @@ allFilters model =
                 (moreThanOneAggregation .itemCategories searchModel)
                     || (moreThanOneAggregation .itemSubcategories searchModel)
       }
-    , { id = "hands"
-      , label = "Hands"
-      , view = viewFilterHands
-      , visibleIf = moreThanOneAggregation .hands
+    , { id = "legacy"
+      , label = "Legacy / Remaster"
+      , view = viewFilterLegacy
+      , visibleIf = \_ -> True
       }
     , { id = "schools"
       , label = "Magic schools"
@@ -7324,6 +7363,16 @@ currentQueryAsComplex searchModel =
 
       else
         []
+    , case searchModel.legacyMode of
+        Just True ->
+            [ "!legacy_id:*" ]
+
+        Just False ->
+            [ "!remaster_id:*" ]
+
+        Nothing ->
+            []
+
     , if searchModel.filterSpoilers then
         [ "!spoilers:*" ]
 
@@ -7764,6 +7813,20 @@ viewActiveFilters canClick searchModel =
                         else
                             []
                   , removeMsg = \_ -> FilterApCreaturesChanged False
+                  }
+                , { class = Nothing
+                  , label = "Legacy / Remaster:"
+                  , list =
+                        case searchModel.legacyMode of
+                            Just True ->
+                                [ "Legacy" ]
+
+                            Just False ->
+                                [ "Remaster" ]
+
+                            Nothing ->
+                                []
+                  , removeMsg = \_ -> LegacyModeChanged Nothing
                   }
                 , { class = Nothing
                   , label = "Spoilers:"
@@ -8376,6 +8439,37 @@ viewFilterItemCategories model searchModel =
             Nothing ->
                 [ viewScrollboxLoader ]
         )
+    ]
+
+
+viewFilterLegacy : Model -> SearchModel -> List (Html Msg)
+viewFilterLegacy model searchModel =
+    [ Html.div
+        [ HA.class "row"
+        , HA.class "gap-medium"
+        ]
+        [ viewRadioButton
+            { checked = searchModel.legacyMode == Nothing
+            , enabled = True
+            , name = "legacy"
+            , onInput = LegacyModeChanged Nothing
+            , text = "Use site mode (" ++ (if model.legacyMode then "Legacy" else "Remaster") ++ ")"
+            }
+        , viewRadioButton
+            { checked = searchModel.legacyMode == Just True
+            , enabled = True
+            , name = "legacy"
+            , onInput = LegacyModeChanged (Just True)
+            , text = "Legacy"
+            }
+        , viewRadioButton
+            { checked = searchModel.legacyMode == Just False
+            , enabled = True
+            , name = "legacy"
+            , onInput = LegacyModeChanged (Just False)
+            , text = "Remaster"
+            }
+        ]
     ]
 
 
