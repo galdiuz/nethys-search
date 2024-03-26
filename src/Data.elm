@@ -245,6 +245,7 @@ fields =
     , ( "type", "Type" )
     , ( "usage", "Usage of curse or item" )
     , ( "vision", "Ancestry or creature vision type" )
+    , ( "warden_spell_tier", "Spell tier for Ranger Warden Spells" )
     , ( "weakest_save", "The weakest save(s) of a creature (Fortitude / Reflex / Will)" )
     , ( "weakness.<type>", "[n] Weakness to <type>. See list of valid types below. Use weakness.\\* to match any type." )
     , ( "weakness_raw", "Weaknesses exactly as written" )
@@ -292,6 +293,7 @@ groupFields =
     , "tradition"
     , "trait"
     , "type"
+    , "warden_spell_tier"
     , "weapon_category"
     , "weapon_group"
     , "weapon_type"
@@ -501,6 +503,7 @@ sortFields =
     , ( "trigger", "trigger.keyword", False )
     , ( "type", "type", False )
     , ( "vision", "vision.keyword", False )
+    , ( "warden_spell_tier", "warden_spell_tier", False )
     , ( "weakest_save", "weakest_save", False )
     , ( "weapon_category", "weapon_category", False )
     , ( "weapon_group", "weapon_group", False )
@@ -675,6 +678,7 @@ tableColumns =
     , "url"
     , "usage"
     , "vision"
+    , "warden_spell_tier"
     , "weakest_save"
     , "weakness"
     , "weapon_category"

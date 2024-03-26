@@ -442,6 +442,7 @@ type alias Document =
     , trigger : Maybe String
     , usage : Maybe String
     , vision : Maybe String
+    , wardenSpellTier : Maybe String
     , weakestSaves : List String
     , weaknessValues : Maybe DamageTypeValues
     , weaknesses : Maybe String
@@ -5509,13 +5510,7 @@ getSearchHash url =
                     [ "display", _ ] ->
                         False
 
-                    [ "group-field-1", _ ] ->
-                        False
-
-                    [ "group-field-2", _ ] ->
-                        False
-
-                    [ "group-field-3", _ ] ->
+                    [ "group-fields", _ ] ->
                         False
 
                     [ "link-layout", _ ] ->
@@ -6210,6 +6205,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "trigger_markdown" ] Decode.string <| \trigger ->
     Field.attemptAt [ "_source", "usage_markdown" ] Decode.string <| \usage ->
     Field.attemptAt [ "_source", "vision" ] Decode.string <| \vision ->
+    Field.attemptAt [ "_source", "warden_spell_tier" ] Decode.string <| \wardenSpellTier ->
     Field.attemptAt [ "_source", "weakest_save" ] stringListDecoder <| \weakestSaves ->
     Field.attemptAt [ "_source", "weakness" ] damageTypeValuesDecoder <| \weaknessValues ->
     Field.attemptAt [ "_source", "weakness_markdown" ] Decode.string <| \weaknesses ->
@@ -6360,6 +6356,7 @@ documentDecoder =
         , trigger = trigger
         , usage = usage
         , vision = vision
+        , wardenSpellTier = wardenSpellTier
         , weakestSaves = Maybe.withDefault [] weakestSaves
         , weaknessValues = weaknessValues
         , weaknesses = weaknesses
@@ -12337,6 +12334,9 @@ viewSearchResultGridCell model document column =
             [ "vision" ] ->
                 maybeAsText document.vision
 
+            [ "warden_spell_tier" ] ->
+                maybeAsText document.wardenSpellTier
+
             [ "weapon_category" ] ->
                 maybeAsText document.weaponCategory
 
@@ -12713,6 +12713,9 @@ searchResultGridCellToString model document column =
                 |> Maybe.map String.fromInt
                 |> maybeAsString
 
+        [ "sanctification" ] ->
+            maybeAsString document.sanctification
+
         [ "saving_throw" ] ->
             maybeAsStringWithoutMarkdown document.savingThrow
 
@@ -12813,6 +12816,9 @@ searchResultGridCellToString model document column =
 
         [ "vision" ] ->
             maybeAsString document.vision
+
+        [ "warden_spell_tier" ] ->
+            maybeAsString document.wardenSpellTier
 
         [ "weapon_category" ] ->
             maybeAsString document.weaponCategory
@@ -13670,6 +13676,15 @@ groupDocumentsByField keys field documents =
                 "type" ->
                     insertToListDict (String.toLower document.type_) document dict
 
+                "warden_spell_tier" ->
+                    insertToListDict
+                        (document.wardenSpellTier
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        document
+                        dict
+
                 "weapon_category" ->
                     insertToListDict
                         (document.weaponCategory
@@ -13782,6 +13797,22 @@ compareAlphanum field a b =
         "heighten_group" ->
             Maybe.map2 compare (getIntFromString a) (getIntFromString b)
                 |> Maybe.withDefault (compare a b)
+
+        "warden_spell_tier" ->
+            let
+                tierToInt : String -> Int
+                tierToInt tier =
+                    List.Extra.find
+                        (Tuple.first >> String.toLower >> (==) tier)
+                        [ ( "initiate", 0 )
+                        , ( "advanced", 1 )
+                        , ( "master", 2 )
+                        , ( "peerless", 3 )
+                        ]
+                        |> Maybe.map Tuple.second
+                        |> Maybe.withDefault 4
+            in
+            compare (tierToInt a) (tierToInt b)
 
         "weapon_category" ->
             let
