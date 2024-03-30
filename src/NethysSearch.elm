@@ -12951,7 +12951,6 @@ viewSearchResultsGrouped model searchModel remaining =
                         ( Maybe.withDefault "" agg.key1, agg.count )
                     )
                 |> Dict.fromList
-
     in
     [ if Maybe.Extra.isJust searchModel.tracker || searchModel.searchResultGroupAggs == Nothing then
         Html.div
@@ -12970,6 +12969,16 @@ viewSearchResultsGrouped model searchModel remaining =
         ]
         (List.map
             (\( key1, documents1 ) ->
+                let
+                    loaded : Int
+                    loaded =
+                        List.length documents1
+
+                    total : Int
+                    total =
+                        Dict.get key1 counts
+                            |> Maybe.withDefault 0
+                in
                 Html.div
                     [ HA.class "column"
                     , HA.class "gap-small"
@@ -12998,7 +13007,7 @@ viewSearchResultsGrouped model searchModel remaining =
                             viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1
 
                         Nothing ->
-                            viewSearchResultsGroupedLinkList model searchModel documents1
+                            viewSearchResultsGroupedLinkList model searchModel documents1 (total - loaded)
                     ]
             )
             (if searchModel.searchResultGroupAggs == Nothing then
@@ -13064,6 +13073,16 @@ viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1 =
         ]
         (List.map
             (\( key2, documents2 ) ->
+                let
+                    loaded : Int
+                    loaded =
+                        List.length documents2
+
+                    total : Int
+                    total =
+                        Dict.get (key1 ++ "--" ++ key2) counts
+                            |> Maybe.withDefault 0
+                in
                 Html.div
                     [ HA.class "column"
                     , HA.class "gap-small"
@@ -13095,7 +13114,7 @@ viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1 =
                             viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2
 
                         Nothing ->
-                            viewSearchResultsGroupedLinkList model searchModel documents2
+                            viewSearchResultsGroupedLinkList model searchModel documents2 (total - loaded)
                     ]
             )
             groupedDocuments
@@ -13147,6 +13166,16 @@ viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2 =
         ]
         (List.map
             (\( key3, documents3 ) ->
+                let
+                    loaded : Int
+                    loaded =
+                        List.length documents3
+
+                    total : Int
+                    total =
+                        Dict.get (key1 ++ "--" ++ key2 ++ "--" ++ key3) counts
+                            |> Maybe.withDefault 0
+                in
                 Html.div
                     [ HA.class "column"
                     , HA.class "gap-small"
@@ -13174,15 +13203,15 @@ viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2 =
                                     )
                                 ]
                             ]
-                    , viewSearchResultsGroupedLinkList model searchModel documents3
+                    , viewSearchResultsGroupedLinkList model searchModel documents3 (total - loaded)
                     ]
             )
             groupedDocuments
         )
 
 
-viewSearchResultsGroupedLinkList : Model -> SearchModel -> List Document -> Html Msg
-viewSearchResultsGroupedLinkList model searchModel documents =
+viewSearchResultsGroupedLinkList : Model -> SearchModel -> List Document -> Int -> Html Msg
+viewSearchResultsGroupedLinkList model searchModel documents remaining =
     let
         sortedDocuments : List Document
         sortedDocuments =
@@ -13254,25 +13283,28 @@ viewSearchResultsGroupedLinkList model searchModel documents =
                 [ HA.class "row"
                 , HA.class "gap-small"
                 ]
-                (List.map
-                    (\document ->
-                        Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            ]
-                            [ if model.groupedShowPfs then
-                                document.pfs
-                                    |> Maybe.withDefault ""
-                                    |> viewPfsIcon 0
+                (List.append
+                    (List.map
+                        (\document ->
+                            Html.div
+                                [ HA.class "row"
+                                , HA.class "gap-tiny"
+                                ]
+                                [ if model.groupedShowPfs then
+                                    document.pfs
+                                        |> Maybe.withDefault ""
+                                        |> viewPfsIcon 0
 
-                              else
-                                  Html.text ""
-                            , link document
-                            , heightenableBadge document
-                            , rarityBadge document
-                            ]
+                                  else
+                                      Html.text ""
+                                , link document
+                                , heightenableBadge document
+                                , rarityBadge document
+                                ]
+                        )
+                        sortedDocuments
                     )
-                    sortedDocuments
+                    [ viewSearchResultsGroupedNotLoaded remaining ]
                 )
 
         Vertical ->
@@ -13280,24 +13312,27 @@ viewSearchResultsGroupedLinkList model searchModel documents =
                 [ HA.class "column"
                 , HA.class "gap-small"
                 ]
-                (List.map
-                    (\document ->
-                        Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            ]
-                            [ if model.groupedShowPfs then
-                                document.pfs
-                                    |> Maybe.withDefault ""
-                                    |> viewPfsIcon 0
-                              else
-                                Html.text ""
-                            , link document
-                            , heightenableBadge document
-                            , rarityBadge document
-                            ]
+                (List.append
+                    (List.map
+                        (\document ->
+                            Html.div
+                                [ HA.class "row"
+                                , HA.class "gap-tiny"
+                                ]
+                                [ if model.groupedShowPfs then
+                                    document.pfs
+                                        |> Maybe.withDefault ""
+                                        |> viewPfsIcon 0
+                                  else
+                                    Html.text ""
+                                , link document
+                                , heightenableBadge document
+                                , rarityBadge document
+                                ]
+                        )
+                        sortedDocuments
                     )
-                    sortedDocuments
+                    [ viewSearchResultsGroupedNotLoaded remaining ]
                 )
 
         VerticalWithSummary ->
@@ -13305,45 +13340,61 @@ viewSearchResultsGroupedLinkList model searchModel documents =
                 [ HA.class "column"
                 , HA.class "gap-small"
                 ]
-                (List.map
-                    (\document ->
-                        Html.div
-                            [ HA.class "inline" ]
-                            (List.append
-                                (if model.groupedShowPfs then
-                                    [ document.pfs
-                                        |> Maybe.withDefault ""
-                                        |> viewPfsIcon 0
-                                    , Html.text " "
-                                    , link document
-                                    , Html.text " "
-                                    , heightenableBadge document
-                                    , Html.text " "
-                                    , rarityBadge document
-                                    ]
+                (List.append
+                    (List.map
+                        (\document ->
+                            Html.div
+                                [ HA.class "inline" ]
+                                (List.append
+                                    (if model.groupedShowPfs then
+                                        [ document.pfs
+                                            |> Maybe.withDefault ""
+                                            |> viewPfsIcon 0
+                                        , Html.text " "
+                                        , link document
+                                        , Html.text " "
+                                        , heightenableBadge document
+                                        , Html.text " "
+                                        , rarityBadge document
+                                        ]
 
-                                else
-                                    [ link document
-                                    , Html.text " "
-                                    , heightenableBadge document
-                                    , Html.text " "
-                                    , rarityBadge document
-                                    ]
+                                    else
+                                        [ link document
+                                        , Html.text " "
+                                        , heightenableBadge document
+                                        , Html.text " "
+                                        , rarityBadge document
+                                        ]
 
+                                    )
+                                    (case document.summary of
+                                        Just summary ->
+                                            List.append
+                                                [ Html.text " - " ]
+                                                (parseAndViewAsMarkdown model summary)
+
+                                        Nothing ->
+                                            []
+                                    )
                                 )
-                                (case document.summary of
-                                    Just summary ->
-                                        List.append
-                                            [ Html.text " - " ]
-                                            (parseAndViewAsMarkdown model summary)
-
-                                    Nothing ->
-                                        []
-                                )
-                            )
+                        )
+                        sortedDocuments
                     )
-                    sortedDocuments
+                    [ viewSearchResultsGroupedNotLoaded remaining ]
                 )
+
+
+viewSearchResultsGroupedNotLoaded : Int -> Html msg
+viewSearchResultsGroupedNotLoaded remaining =
+    if remaining > 0 then
+        Html.div
+            [ HA.style "color" "var(--color-text-inactive)"
+            ]
+            [ Html.text (String.Extra.pluralize "result" "results" remaining ++ " not loaded")
+            ]
+
+    else
+        Html.text ""
 
 
 groupedDisplayAttribute : Model -> Html.Attribute msg
