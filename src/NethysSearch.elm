@@ -76,6 +76,7 @@ type alias Model =
     , legacyMode : Bool
     , limitTableWidth : Bool
     , linkPreviewsEnabled : Bool
+    , loadUntil : Maybe (List String)
     , menuOpen : Bool
     , noUi : Bool
     , openInNewTab : Bool
@@ -703,6 +704,7 @@ type Msg
     | LinkLeft
     | LoadGroupPressed (List ( String, String ))
     | LoadMorePressed Int
+    | LoadUntilPressed Int (List String)
     | LocalStorageValueReceived Decode.Value
     | MenuOpenDelayPassed
     | NewRandomSeedPressed
@@ -887,6 +889,7 @@ init flagsValue =
       , legacyMode = flags.legacyMode
       , limitTableWidth = False
       , linkPreviewsEnabled = True
+      , loadUntil = Nothing
       , menuOpen = False
       , noUi = flags.noUi
       , openInNewTab = False
@@ -1599,6 +1602,13 @@ update msg model =
                         |> List.filterMap getParsedMarkdown
                         |> List.concatMap getChildDocumentIds
                         |> List.filter (\childId -> not (Dict.member childId model.documents))
+
+                resultCount : Int
+                resultCount =
+                    result
+                        |> Result.map .documents
+                        |> Result.withDefault []
+                        |> List.length
             in
             ( updateCurrentSearchModel
                 (\searchModel ->
@@ -1642,6 +1652,7 @@ update msg model =
                     else
                         fetchDocuments model False childDocumentIds
             )
+                |> loadAgain resultCount
 
         GotSourcesAggregationResult result ->
             ( { model | sourcesAggregation = Just result }
@@ -1653,7 +1664,7 @@ update msg model =
                 (\searchModel ->
                     { searchModel | groupField1 = field }
                 )
-                model
+                { model | loadUntil = Nothing }
                 |> updateWithNewGroupFields
 
         GroupField2Changed field ->
@@ -1669,7 +1680,7 @@ update msg model =
                                 searchModel.groupField3
                     }
                 )
-                model
+                { model | loadUntil = Nothing }
                 |> updateWithNewGroupFields
 
         GroupField3Changed field ->
@@ -1677,7 +1688,7 @@ update msg model =
                 (\searchModel ->
                     { searchModel | groupField3 = field }
                 )
-                model
+                { model | loadUntil = Nothing }
                 |> updateWithNewGroupFields
 
         GroupTraitsChanged enabled ->
@@ -1956,6 +1967,12 @@ update msg model =
 
         LoadMorePressed size ->
             ( model
+            , Cmd.none
+            )
+                |> searchWithCurrentQuery (LoadMore size)
+
+        LoadUntilPressed size keys ->
+            ( { model | loadUntil = Just keys }
             , Cmd.none
             )
                 |> searchWithCurrentQuery (LoadMore size)
@@ -4652,7 +4669,11 @@ buildSearchBody model searchModel load =
             [ ( "excludes", Encode.list Encode.string [ "text" ] ) ]
           )
             |> Just
-        , searchModel.searchResults
+        -- TODO
+        , if Maybe.Extra.isJust model.loadUntil then
+            Nothing
+          else
+          searchModel.searchResults
             |> List.Extra.last
             |> Maybe.andThen (Result.toMaybe)
             |> Maybe.map .searchAfter
@@ -5532,6 +5553,124 @@ getQueryParam url param =
         |> Url.Parser.parse (Url.Parser.query (Url.Parser.Query.string param))
         |> Maybe.Extra.join
         |> Maybe.withDefault ""
+
+
+loadAgain : Int -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+loadAgain resultCount ( model, cmd ) =
+    case ( resultCount > 0, model.loadUntil ) of
+        ( True, Just keys ) ->
+            let
+                searchModel : SearchModel
+                searchModel =
+                    model.searchModel
+
+                allDocuments : List Document
+                allDocuments =
+                    searchModel.searchResults
+                        |> List.concatMap (Result.map .documentIds >> Result.withDefault [])
+                        |> List.filterMap (\id -> Dict.get id model.documents)
+                        |> List.filterMap Result.toMaybe
+
+                groupCounts : { loaded : Int, total : Int }
+                groupCounts =
+                    case keys of
+                        key1 :: key2 :: key3 :: _ ->
+                            { loaded =
+                                allDocuments
+                                    |> groupDocumentsByField [ key1 ] searchModel.groupField1
+                                    |> Dict.get key1
+                                    |> Maybe.withDefault []
+                                    |> groupDocumentsByField [ key2 ] (Maybe.withDefault "" searchModel.groupField2)
+                                    |> Dict.get key2
+                                    |> Maybe.withDefault []
+                                    |> groupDocumentsByField [ key3 ] (Maybe.withDefault "" searchModel.groupField3)
+                                    |> Dict.get key3
+                                    |> Maybe.withDefault []
+                                    |> List.length
+                            , total =
+                                searchModel.searchResultGroupAggs
+                                    |> Maybe.andThen .group3
+                                    |> Maybe.withDefault []
+                                    |> List.Extra.find
+                                        (\agg ->
+                                            Maybe.withDefault "" agg.key1 == key1
+                                                && Maybe.withDefault "" agg.key2 == key2
+                                                && Maybe.withDefault "" agg.key3 == key3
+                                        )
+                                    |> Maybe.map .count
+                                    |> Maybe.withDefault 0
+                            }
+
+                        key1 :: key2 :: _ ->
+                            { loaded =
+                                allDocuments
+                                    |> groupDocumentsByField [ key1 ] searchModel.groupField1
+                                    |> Dict.get key1
+                                    |> Maybe.withDefault []
+                                    |> groupDocumentsByField [ key2 ] (Maybe.withDefault "" searchModel.groupField2)
+                                    |> Dict.get key2
+                                    |> Maybe.withDefault []
+                                    |> List.length
+                            , total =
+                                searchModel.searchResultGroupAggs
+                                    |> Maybe.andThen .group2
+                                    |> Maybe.withDefault []
+                                    |> List.Extra.find
+                                        (\agg ->
+                                            Maybe.withDefault "" agg.key1 == key1
+                                                && Maybe.withDefault "" agg.key2 == key2
+                                        )
+                                    |> Maybe.map .count
+                                    |> Maybe.withDefault 0
+                            }
+
+                        key1 :: _ ->
+                            { loaded =
+                                allDocuments
+                                    |> groupDocumentsByField [ key1 ] searchModel.groupField1
+                                    |> Dict.get key1
+                                    |> Maybe.withDefault []
+                                    |> List.length
+                            , total =
+                                searchModel.searchResultGroupAggs
+                                    |> Maybe.map .group1
+                                    |> Maybe.withDefault []
+                                    |> List.Extra.find
+                                        (\agg ->
+                                            Maybe.withDefault "" agg.key1 == key1
+                                        )
+                                    |> Maybe.map .count
+                                    |> Maybe.withDefault 0
+                            }
+
+                        _ ->
+                            { loaded = 0
+                            , total = 0
+                            }
+
+                shouldLoadAgain : Bool
+                shouldLoadAgain =
+                    groupCounts.loaded < groupCounts.total
+                        && resultCount > 0
+            in
+            ( { model | loadUntil =
+                if shouldLoadAgain then
+                    model.loadUntil
+
+                else
+                    Nothing
+              }
+            , cmd
+            )
+                |> (if shouldLoadAgain then
+                        searchWithCurrentQuery (LoadMore 10000)
+
+                    else
+                        identity
+                   )
+
+        _ ->
+            ( model, cmd )
 
 
 searchWithCurrentQuery : LoadType -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
@@ -13425,6 +13564,21 @@ viewLoadGroupButton model searchModel groups =
     else
         Html.button
             [ HE.onClick (LoadGroupPressed groups)
+            ]
+            [ Html.text "Load" ]
+
+
+viewLoadUntilButton : Model -> SearchModel -> List String -> Html Msg
+viewLoadUntilButton model searchModel keys =
+    if Maybe.Extra.isJust searchModel.tracker then
+        Html.div
+            [ HA.class "loader-small"
+            ]
+            []
+
+    else
+        Html.button
+            [ HE.onClick (LoadUntilPressed 10000 keys)
             ]
             [ Html.text "Load" ]
 
