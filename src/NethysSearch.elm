@@ -749,6 +749,7 @@ type Msg
     | RemoveAllWeaponCategoryFiltersPressed
     | RemoveAllWeaponGroupFiltersPressed
     | RemoveAllWeaponTypeFiltersPressed
+    | ResetDefaultParamsPressed
     | ResultDisplayChanged ResultDisplay
     | SaveColumnConfigurationPressed
     | SaveDefaultParamsPressed
@@ -2411,6 +2412,26 @@ update msg model =
                 )
                 model
                 |> updateUrlWithSearchParams
+            )
+
+        ResetDefaultParamsPressed ->
+            let
+                newDefaults : Dict String (Dict String (List String))
+                newDefaults =
+                    Dict.remove model.pageId model.pageDefaultParams
+            in
+            ( { model | pageDefaultParams = newDefaults }
+            , saveToLocalStorage
+                "page-default-params"
+                (Encode.dict
+                    identity
+                    (Encode.dict
+                        identity
+                        (Encode.list Encode.string)
+                    )
+                    newDefaults
+                    |> Encode.encode 0
+                )
             )
 
         ResultDisplayChanged value ->
@@ -10268,6 +10289,11 @@ viewDefaultParams model searchModel =
             [ HE.onClick SaveDefaultParamsPressed
             ]
             [ Html.text "Save current filters as default" ]
+        , Html.button
+            [ HE.onClick ResetDefaultParamsPressed
+            , HA.disabled (not (Dict.member model.pageId model.pageDefaultParams))
+            ]
+            [ Html.text "Reset to site defaults" ]
         ]
     , Html.h3
         []
