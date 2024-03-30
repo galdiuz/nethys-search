@@ -160,6 +160,7 @@ type alias SearchModel =
     , removeFilters : List String
     , resultDisplay : ResultDisplay
     , searchCreatureFamilies : String
+    , searchGroupResults : List String
     , searchItemCategories : String
     , searchItemSubcategories : String
     , searchResultGroupAggs : Maybe GroupAggregations
@@ -251,6 +252,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , resultDisplay = Short
     , searchResultGroupAggs = Nothing
     , searchCreatureFamilies = ""
+    , searchGroupResults = []
     , searchItemCategories = ""
     , searchItemSubcategories = ""
     , searchResults = []
@@ -663,6 +665,7 @@ type Msg
     | GotDocuments (List String) Bool (Result Http.Error (List (Result String Document)))
     | GotGlobalAggregationsResult (Result Http.Error GlobalAggregations)
     | GotGroupAggregationsResult (Result Http.Error SearchResultWithDocuments)
+    | GotGroupSearchResult (Result Http.Error SearchResultWithDocuments)
     | GotSearchResult (Result Http.Error SearchResultWithDocuments)
     | GotSourcesAggregationResult (Result Http.Error (List Source))
     | FilterApCreaturesChanged Bool
@@ -698,6 +701,7 @@ type Msg
     | LinkEntered String Position
     | LinkEnteredDebouncePassed String
     | LinkLeft
+    | LoadGroupPressed (List ( String, String ))
     | LoadMorePressed Int
     | LocalStorageValueReceived Decode.Value
     | MenuOpenDelayPassed
@@ -1514,6 +1518,39 @@ update msg model =
             , Cmd.none
             )
 
+        GotGroupSearchResult result ->
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | searchGroupResults =
+                            result
+                                |> Result.map .documents
+                                |> Result.map (List.map .id)
+                                |> Result.withDefault []
+                                |> List.append searchModel.searchGroupResults
+                                |> List.Extra.unique
+                        , tracker = Nothing
+                    }
+                )
+                { model
+                    | documents =
+                        Dict.union
+                            model.documents
+                            (result
+                                |> Result.map .documents
+                                |> Result.map
+                                    (List.map
+                                        (\document ->
+                                            ( document.id, Ok document )
+                                        )
+                                    )
+                                |> Result.withDefault []
+                                |> Dict.fromList
+                            )
+                }
+            , Cmd.none
+            )
+
         GotSearchResult result ->
             let
                 containsTeleport : Bool
@@ -1910,6 +1947,12 @@ update msg model =
             ( { model | previewLink = Nothing }
             , Cmd.none
             )
+
+        LoadGroupPressed groups ->
+            ( model
+            , Cmd.none
+            )
+                |> searchWithGroups groups
 
         LoadMorePressed size ->
             ( model
@@ -4514,7 +4557,7 @@ buildSearchBody model searchModel load =
                 [ ( "function_score"
                   , Encode.object
                         (if sortIsRandom searchModel then
-                            [ buildSearchQuery model searchModel
+                            [ buildSearchQuery model searchModel []
                             , ( "boost_mode", Encode.string "replace" )
                             , ( "random_score"
                               , Encode.object
@@ -4525,7 +4568,7 @@ buildSearchBody model searchModel load =
                             ]
 
                          else
-                            [ buildSearchQuery model searchModel
+                            [ buildSearchQuery model searchModel []
                             , ( "boost_mode", Encode.string "multiply" )
                             , ( "functions"
                               , Encode.list Encode.object
@@ -4561,8 +4604,8 @@ buildSearchBody model searchModel load =
                               )
                             ]
                         )
-                )
-              ]
+                  )
+                ]
             )
         , Just
             ( "size"
@@ -4622,21 +4665,39 @@ buildSearchBody model searchModel load =
         ]
 
 
+buildSearchGroupedBody : Model -> SearchModel -> List ( String, String ) -> Encode.Value
+buildSearchGroupedBody model searchModel groups =
+    Encode.object
+        [ buildSearchQuery model searchModel groups
+        , ( "size", Encode.int 10000 )
+        , ( "sort"
+          , Encode.list identity
+                [ Encode.string "_score"
+                , Encode.string "_doc"
+                ]
+          )
+        , ( "_source"
+          , Encode.object
+            [ ( "excludes", Encode.list Encode.string [ "text" ] ) ]
+          )
+        ]
+
+
 buildSearchGroupAggregationsBody : Model -> SearchModel -> Encode.Value
 buildSearchGroupAggregationsBody model searchModel =
     Encode.object
-        [ buildSearchQuery model searchModel
+        [ buildSearchQuery model searchModel []
         , buildGroupAggs searchModel
         , ( "size", Encode.int 0 )
         ]
 
 
-buildSearchQuery : Model -> SearchModel -> ( String, Encode.Value )
-buildSearchQuery model searchModel =
+buildSearchQuery : Model -> SearchModel -> List ( String, String ) -> ( String, Encode.Value )
+buildSearchQuery model searchModel groupFilters =
     let
         filters : List (List ( String, Encode.Value ))
         filters =
-            buildSearchFilterTerms model searchModel
+            buildSearchFilterTerms model searchModel groupFilters
 
         mustNots : List (List ( String, Encode.Value ))
         mustNots =
@@ -4797,8 +4858,12 @@ sortIsRandom searchModel =
     searchModel.sort == [ ( "random", Asc ) ]
 
 
-buildSearchFilterTerms : Model -> SearchModel -> List (List ( String, Encode.Value ))
-buildSearchFilterTerms model searchModel =
+buildSearchFilterTerms :
+    Model
+    -> SearchModel
+    -> List ( String, String )
+    -> List (List ( String, Encode.Value ))
+buildSearchFilterTerms model searchModel groupFilters =
     List.concat
         [ List.concatMap
             (\( field, dict, isAnd ) ->
@@ -4922,6 +4987,20 @@ buildSearchFilterTerms model searchModel =
 
           else
             [ buildElasticsearchQueryStringQueryBody searchModel.fixedQueryString ]
+
+        , List.map
+            (\( field, value ) ->
+                [ ( "term"
+                  , Encode.object
+                        [ ( mapSortFieldToElastic field
+                          , Encode.object
+                                [ ( "value", Encode.string value ) ]
+                          )
+                        ]
+                  )
+                ]
+            )
+            groupFilters
 
         , [ [ ( "bool"
               , Encode.object
@@ -5515,6 +5594,54 @@ searchWithCurrentQuery load ( model, cmd ) =
         ( model
         , cmd
         )
+
+
+searchWithGroups : List ( String, String ) -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+searchWithGroups groups ( model, cmd ) =
+    let
+        searchModel : SearchModel
+        searchModel =
+            model.searchModel
+
+        newTracker : Int
+        newTracker =
+            case searchModel.tracker of
+                Just tracker ->
+                    tracker + 1
+
+                Nothing ->
+                    1
+
+        newModel : Model
+        newModel =
+            { model
+                | searchModel =
+                    { searchModel
+                        | tracker = Just newTracker
+                    }
+            }
+    in
+    ( newModel
+    , Cmd.batch
+        [ cmd
+        , case searchModel.tracker of
+            Just tracker ->
+                Http.cancel ("search-" ++ String.fromInt tracker)
+
+            Nothing ->
+                Cmd.none
+
+        , Http.request
+            { method = "POST"
+            , url = model.elasticUrl ++ "/_search?track_total_hits=true"
+            , headers = []
+            , body = Http.jsonBody (buildSearchGroupedBody newModel newModel.searchModel groups)
+            , expect = Http.expectJson GotGroupSearchResult esResultDecoder
+            , timeout = Just 10000
+            , tracker = Just ("search-" ++ String.fromInt newTracker)
+            }
+        ]
+    )
 
 
 getSearchHash : Url -> String
@@ -11353,14 +11480,25 @@ viewSearchResults model searchModel =
                 |> Maybe.andThen Result.toMaybe
                 |> Maybe.map .total
 
+
+        groupedResults : List String
+        groupedResults =
+            case searchModel.resultDisplay of
+                Grouped ->
+                    searchModel.searchGroupResults
+
+                _ ->
+                    []
+
         resultCount : Int
         resultCount =
             searchModel.searchResults
                 |> List.map Result.toMaybe
                 |> List.map (Maybe.map .documentIds)
-                |> List.map (Maybe.map List.length)
-                |> List.map (Maybe.withDefault 0)
-                |> List.sum
+                |> List.concatMap (Maybe.withDefault [])
+                |> List.append groupedResults
+                |> List.Extra.unique
+                |> List.length
 
         remaining : Int
         remaining =
@@ -12956,6 +13094,8 @@ viewSearchResultsGrouped model searchModel remaining =
         allDocuments =
             searchModel.searchResults
                 |> List.concatMap (Result.map .documentIds >> Result.withDefault [])
+                |> List.append searchModel.searchGroupResults
+                |> List.Extra.unique
                 |> List.filterMap (\id -> Dict.get id model.documents)
                 |> List.filterMap Result.toMaybe
 
@@ -12985,7 +13125,7 @@ viewSearchResultsGrouped model searchModel remaining =
             []
 
       else
-        viewLoadMoreButtons model remaining
+        viewLoadMoreButtons { model | pageSize = 100000 } remaining
 
     , Html.div
         [ HA.class "column"
@@ -13017,14 +13157,25 @@ viewSearchResultsGrouped model searchModel remaining =
                             [ viewGroupedTitle searchModel.groupField1 key1
                             ]
                         , Html.div
-                            []
-                            [ Html.text (String.fromInt (List.length documents1))
-                            , Html.text "/"
-                            , Html.text
-                                (Dict.get key1 counts
-                                    |> Maybe.withDefault 0
-                                    |> String.fromInt
-                                )
+                            [ HA.class "row"
+                            , HA.class "gap-small"
+                            , HA.class "align-center"
+                            , HA.class "nowrap"
+                            ]
+                            [ if loaded < total then
+                                viewLoadGroupButton
+                                    model
+                                    searchModel
+                                    [ ( searchModel.groupField1, key1 ) ]
+
+                              else
+                                Html.text ""
+                            , Html.div
+                                []
+                                [ Html.text (String.fromInt loaded)
+                                , Html.text "/"
+                                , Html.text (String.fromInt total)
+                                ]
                             ]
                         ]
 
@@ -13053,7 +13204,7 @@ viewSearchResultsGrouped model searchModel remaining =
             []
 
       else
-        viewLoadMoreButtons model remaining
+        viewLoadMoreButtons { model | pageSize = 100000 } remaining
     ]
 
 
@@ -13125,14 +13276,27 @@ viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1 =
                                 [ viewGroupedTitle field2 key2
                                 ]
                             , Html.div
-                                []
-                                [ Html.text (String.fromInt (List.length documents2))
-                                , Html.text "/"
-                                , Html.text
-                                    (Dict.get (key1 ++ "--" ++ key2) counts
-                                        |> Maybe.withDefault 0
-                                        |> String.fromInt
-                                    )
+                                [ HA.class "row"
+                                , HA.class "gap-small"
+                                , HA.class "align-center"
+                                , HA.class "nowrap"
+                                ]
+                                [ if loaded < total then
+                                    viewLoadGroupButton
+                                        model
+                                        searchModel
+                                        [ ( searchModel.groupField1, key1 )
+                                        , ( field2, key2 )
+                                        ]
+
+                                  else
+                                    Html.text ""
+                                , Html.div
+                                    []
+                                    [ Html.text (String.fromInt loaded)
+                                    , Html.text "/"
+                                    , Html.text (String.fromInt total)
+                                    ]
                                 ]
                             ]
                     , case searchModel.groupField3 of
@@ -13219,14 +13383,28 @@ viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2 =
                                 [ viewGroupedTitle field3 key3
                                 ]
                             , Html.div
-                                []
-                                [ Html.text (String.fromInt (List.length documents3))
-                                , Html.text "/"
-                                , Html.text
-                                    (Dict.get (key1 ++ "--" ++ key2 ++ "--" ++ key3) counts
-                                        |> Maybe.withDefault 0
-                                        |> String.fromInt
-                                    )
+                                [ HA.class "row"
+                                , HA.class "gap-small"
+                                , HA.class "align-center"
+                                , HA.class "nowrap"
+                                ]
+                                [ if loaded < total then
+                                    viewLoadGroupButton
+                                        model
+                                        searchModel
+                                        [ ( searchModel.groupField1, key1 )
+                                        , ( Maybe.withDefault "" searchModel.groupField2, key2 )
+                                        , ( field3, key3 )
+                                        ]
+
+                                  else
+                                    Html.text ""
+                                , Html.div
+                                    []
+                                    [ Html.text (String.fromInt loaded)
+                                    , Html.text "/"
+                                    , Html.text (String.fromInt total)
+                                    ]
                                 ]
                             ]
                     , viewSearchResultsGroupedLinkList model searchModel documents3 (total - loaded)
@@ -13234,6 +13412,21 @@ viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2 =
             )
             groupedDocuments
         )
+
+
+viewLoadGroupButton : Model -> SearchModel -> List ( String, String ) -> Html Msg
+viewLoadGroupButton model searchModel groups =
+    if Maybe.Extra.isJust searchModel.tracker then
+        Html.div
+            [ HA.class "loader-small"
+            ]
+            []
+
+    else
+        Html.button
+            [ HE.onClick (LoadGroupPressed groups)
+            ]
+            [ Html.text "Load" ]
 
 
 viewSearchResultsGroupedLinkList : Model -> SearchModel -> List Document -> Int -> Html Msg
@@ -15826,6 +16019,18 @@ css args =
         width: 48px;
         height: 48px;
         border: 5px solid #FFF;
+        border-bottom-color: transparent;
+        border-radius: 50%;
+        display: inline-block;
+        box-sizing: border-box;
+        align-self: center;
+        animation: rotation 1s linear infinite;
+    }
+
+    .loader-small {
+        width: 16px;
+        height: 16px;
+        border: 2px solid #FFF;
         border-bottom-color: transparent;
         border-radius: 50%;
         display: inline-block;
