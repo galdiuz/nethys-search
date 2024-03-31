@@ -117,6 +117,7 @@ type alias SearchModel =
     , filteredArmorGroups : Dict String Bool
     , filteredComponents : Dict String Bool
     , filteredCreatureFamilies : Dict String Bool
+    , filteredDamageTypes : Dict String Bool
     , filteredDomains : Dict String Bool
     , filteredFromValues : Dict String String
     , filteredHands : Dict String Bool
@@ -144,6 +145,7 @@ type alias SearchModel =
     , filteredWeaponTypes : Dict String Bool
     , filterApCreatures : Bool
     , filterComponentsOperator : Bool
+    , filterDamageTypesOperator : Bool
     , filterDomainsOperator : Bool
     , filterSpoilers : Bool
     , filterTraditionsOperator : Bool
@@ -208,6 +210,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , filteredArmorGroups = Dict.empty
     , filteredComponents = Dict.empty
     , filteredCreatureFamilies = Dict.empty
+    , filteredDamageTypes = Dict.empty
     , filteredDomains = Dict.empty
     , filteredFromValues = Dict.empty
     , filteredHands = Dict.empty
@@ -235,6 +238,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , filteredWeaponTypes = Dict.empty
     , filterApCreatures = False
     , filterComponentsOperator = True
+    , filterDamageTypesOperator = True
     , filterDomainsOperator = True
     , filterSpoilers = False
     , filterTraditionsOperator = True
@@ -343,6 +347,7 @@ type alias Document =
     , creatureFamily : Maybe String
     , creatureFamilyMarkdown : Maybe String
     , damage : Maybe String
+    , damageTypes : List String
     , defenseProficiencies : List String
     , deities : Maybe String
     , deitiesList : List String
@@ -653,6 +658,8 @@ type Msg
     | ComponentFilterRemoved String
     | CreatureFamilyFilterAdded String
     | CreatureFamilyFilterRemoved String
+    | DamageTypeFilterAdded String
+    | DamageTypeFilterRemoved String
     | DateFormatChanged String
     | DebouncePassed Int
     | DeleteColumnConfigurationPressed
@@ -671,6 +678,7 @@ type Msg
     | FilterApCreaturesChanged Bool
     | FilterAttributeChanged String
     | FilterComponentsOperatorChanged Bool
+    | FilterDamageTypesOperatorChanged Bool
     | FilterDomainsOperatorChanged Bool
     | FilterResistanceChanged String
     | FilterSpeedChanged String
@@ -729,6 +737,7 @@ type Msg
     | RemoveAllAttributeFiltersPressed
     | RemoveAllComponentFiltersPressed
     | RemoveAllCreatureFamilyFiltersPressed
+    | RemoveAllDamageTypeFiltersPressed
     | RemoveAllDomainFiltersPressed
     | RemoveAllHandFiltersPressed
     | RemoveAllItemCategoryFiltersPressed
@@ -1160,6 +1169,26 @@ update msg model =
                 |> updateUrlWithSearchParams
             )
 
+        DamageTypeFilterAdded component ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredDamageTypes = toggleBoolDict component searchModel.filteredDamageTypes }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        DamageTypeFilterRemoved component ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredDamageTypes = Dict.remove component searchModel.filteredDamageTypes }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
         DateFormatChanged format ->
             ( { model | dateFormat = format }
             , saveToLocalStorage "date-format" format
@@ -1290,6 +1319,16 @@ update msg model =
             , updateCurrentSearchModel
                 (\searchModel ->
                     { searchModel | filterComponentsOperator = value }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        FilterDamageTypesOperatorChanged value ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filterDamageTypesOperator = value }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -2216,6 +2255,16 @@ update msg model =
             , updateCurrentSearchModel
                 (\searchModel ->
                     { searchModel | filteredCreatureFamilies = Dict.empty }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        RemoveAllDamageTypeFiltersPressed ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filteredDamageTypes = Dict.empty }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -4279,6 +4328,19 @@ getSearchModelQueryParams model searchModel =
     , ( "exclude-creature-families"
       , boolDictExcluded searchModel.filteredCreatureFamilies
       )
+    , ( "include-damage-types"
+      , boolDictIncluded searchModel.filteredDamageTypes
+      )
+    , ( "exclude-damage-types"
+      , boolDictExcluded searchModel.filteredDamageTypes
+      )
+    , ( "damage-types-operator"
+      , if searchModel.filterDamageTypesOperator then
+            []
+
+        else
+            [ "or" ]
+      )
     , ( "include-domains"
       , boolDictIncluded searchModel.filteredDomains
       )
@@ -5346,6 +5408,7 @@ updateSearchModelFromParams params model searchModel =
         , filteredArmorGroups = getBoolDictFromParams params "armor-groups"
         , filteredComponents = getBoolDictFromParams params "components"
         , filteredCreatureFamilies = getBoolDictFromParams params "creature-families"
+        , filteredDamageTypes = getBoolDictFromParams params "damage-types"
         , filteredDomains = getBoolDictFromParams params "domains"
         , filteredHands = getBoolDictFromParams params "hands"
         , filteredItemCategories = getBoolDictFromParams params "item-categories"
@@ -5372,6 +5435,7 @@ updateSearchModelFromParams params model searchModel =
         , filterApCreatures = Dict.get "ap-creatures" params == Just [ "hide" ]
         , filterSpoilers = Dict.get "spoilers" params == Just [ "hide" ]
         , filterComponentsOperator = Dict.get "components-operator" params /= Just [ "or" ]
+        , filterDamageTypesOperator = Dict.get "damage-types-operator" params /= Just [ "or" ]
         , filterDomainsOperator = Dict.get "domains-operator" params /= Just [ "or" ]
         , filterTraditionsOperator = Dict.get "traditions-operator" params /= Just [ "or" ]
         , filterTraitsOperator = Dict.get "traits-operator" params /= Just [ "or" ]
@@ -6252,6 +6316,7 @@ documentDecoder =
     Field.attemptAt [ "_source", "creature_family" ] Decode.string <| \creatureFamily ->
     Field.attemptAt [ "_source", "creature_family_markdown" ] Decode.string <| \creatureFamilyMarkdown ->
     Field.attemptAt [ "_source", "damage" ] Decode.string <| \damage ->
+    Field.attemptAt [ "_source", "damage_type" ] stringListDecoder <| \damageTypes ->
     Field.attemptAt [ "_source", "defense_proficiency" ] stringListDecoder <| \defenseProficiencies ->
     Field.attemptAt [ "_source", "deity" ] stringListDecoder <| \deitiesList ->
     Field.attemptAt [ "_source", "deity_markdown" ] Decode.string <| \deities ->
@@ -6403,6 +6468,7 @@ documentDecoder =
         , creatureFamily = creatureFamily
         , creatureFamilyMarkdown = creatureFamilyMarkdown
         , damage = damage
+        , damageTypes = Maybe.withDefault [] damageTypes
         , defenseProficiencies = Maybe.withDefault [] defenseProficiencies
         , deities = deities
         , deitiesList = Maybe.withDefault [] deitiesList
@@ -7400,6 +7466,7 @@ filterFields searchModel =
     , ( "attribute", searchModel.filteredAttributes, False )
     , ( "component", searchModel.filteredComponents, searchModel.filterComponentsOperator )
     , ( "creature_family", searchModel.filteredCreatureFamilies, False )
+    , ( "damage_type", searchModel.filteredDamageTypes, searchModel.filterDamageTypesOperator )
     , ( "domain", searchModel.filteredDomains, searchModel.filterDomainsOperator )
     , ( "hands.keyword", searchModel.filteredHands, False )
     , ( "item_category", searchModel.filteredItemCategories, False )
@@ -9489,6 +9556,57 @@ viewFilterWeapons model searchModel =
 
     , Html.h4
         []
+        [ Html.text "Damage types" ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "align-baseline"
+        , HA.class "gap-medium"
+        ]
+        [ Html.button
+            [ HA.style "align-self" "flex-start"
+            , HA.style "justify-self" "flex-start"
+            , HE.onClick RemoveAllDamageTypeFiltersPressed
+            ]
+            [ Html.text "Reset selection" ]
+        , viewRadioButton
+            { checked = searchModel.filterDamageTypesOperator
+            , enabled = True
+            , name = "filter-damageTypes"
+            , onInput = FilterDamageTypesOperatorChanged True
+            , text = "Include all (AND)"
+            }
+        , viewRadioButton
+            { checked = not searchModel.filterDamageTypesOperator
+            , enabled = True
+            , name = "filter-damageTypes"
+            , onInput = FilterDamageTypesOperatorChanged False
+            , text = "Include any (OR)"
+            }
+        ]
+    , Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        , HA.class "scrollbox"
+        ]
+        (List.map
+            (\type_ ->
+                Html.button
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HE.onClick (DamageTypeFilterAdded type_)
+                    ]
+                    [ Html.text (toTitleCase type_)
+                    , viewFilterIcon (Dict.get type_ searchModel.filteredDamageTypes)
+                    ]
+            )
+            [ "bludgeoning"
+            , "piercing"
+            , "slashing"
+            ]
+        )
+
+    , Html.h4
+        []
         [ Html.text "Reload" ]
     , Html.button
         [ HA.style "align-self" "flex-start"
@@ -10160,19 +10278,10 @@ viewQueryType model searchModel =
         []
         [ Html.div
             []
-            [ Html.text "Spells or cantrips unique to the arcane tradition:" ]
+            [ Html.text "Spells (or cantrips) unique to the arcane tradition:" ]
         , Html.div
             [ HA.class "monospace" ]
-            [ Html.text "tradition:(arcane -divine -occult -primal) type:(spell OR cantrip)" ]
-        ]
-    , Html.div
-        []
-        [ Html.div
-            []
-            [ Html.text "Evil deities with dagger as their favored weapon:" ]
-        , Html.div
-            [ HA.class "monospace" ]
-            [ Html.text "alignment:?E favored_weapon:dagger" ]
+            [ Html.text "tradition:(arcane -divine -occult -primal) type:spell" ]
         ]
     , Html.div
         []
@@ -12092,6 +12201,14 @@ viewSearchResultGridCell model document column =
             [ "damage" ] ->
                 maybeAsText document.damage
 
+            [ "damage_type" ] ->
+                document.damageTypes
+                    |> List.map toTitleCase
+                    |> List.sort
+                    |> String.join ", "
+                    |> Html.text
+                    |> List.singleton
+
             [ "defense" ] ->
                 maybeAsMarkdown document.savingThrow
 
@@ -12678,6 +12795,12 @@ searchResultGridCellToString model document column =
 
         [ "damage" ] ->
             maybeAsString document.damage
+
+        [ "damage_type" ] ->
+            document.damageTypes
+                |> List.map toTitleCase
+                |> List.sort
+                |> String.join ", "
 
         [ "defense" ] ->
             maybeAsStringWithoutMarkdown document.savingThrow
@@ -13719,6 +13842,18 @@ groupDocumentsByField keys field documents =
                         )
                         document
                         dict
+
+                "damage_type" ->
+                    if List.isEmpty document.damageTypes then
+                        insertToListDict "" document dict
+
+                    else
+                        List.foldl
+                            (\damageType ->
+                                insertToListDict (String.toLower damageType) document
+                            )
+                            dict
+                            document.damageTypes
 
                 "deity" ->
                     if List.isEmpty document.deitiesList then

@@ -128,6 +128,7 @@ fields =
     , ( "creature_family", "Creature family" )
     , ( "damage", "Weapon damage" )
     , ( "damage_die", "[n] Weapon damage die" )
+    , ( "damage_type", "Weapon damage type" )
     , ( "defense", "Alias for 'saving_throw'" )
     , ( "defense_proficiency", "A class's defense proficiencies" )
     , ( "deity", "Deities associated with a domain, spell, or weapon" )
@@ -270,6 +271,7 @@ groupFields =
     , "attribute"
     , "bulk"
     , "creature_family"
+    , "damage_type"
     , "deity"
     , "deity_category"
     , "domain"
@@ -443,6 +445,7 @@ sortFields =
     , ( "cost", "cost.keyword", False )
     , ( "creature_family", "creature_family", False )
     , ( "damage", "damage_die", True )
+    , ( "damage_type", "damage_type", False )
     , ( "deity", "deity", False )
     , ( "deity_category", "deity_category.keyword", False )
     , ( "deity_category_order", "deity_category_order", False )
@@ -597,6 +600,7 @@ tableColumns =
     , "creature_ability"
     , "creature_family"
     , "damage"
+    , "damage_type"
     , "defense"
     , "defense_proficiency"
     , "deity"
