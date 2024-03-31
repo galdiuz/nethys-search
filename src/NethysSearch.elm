@@ -5052,15 +5052,34 @@ buildSearchFilterTerms model searchModel groupFilters =
 
         , List.map
             (\( field, value ) ->
-                [ ( "term"
-                  , Encode.object
-                        [ ( mapSortFieldToElastic field
-                          , Encode.object
-                                [ ( "value", Encode.string value ) ]
-                          )
-                        ]
-                  )
-                ]
+                if value /= "" then
+                    [ ( "term"
+                      , Encode.object
+                            [ ( mapSortFieldToElastic field
+                              , Encode.object
+                                    [ ( "value", Encode.string value ) ]
+                              )
+                            ]
+                      )
+                    ]
+
+                else
+                    [ ( "bool"
+                      , Encode.object
+                            [ ( "must_not"
+                              , Encode.object
+                                    [ ( "exists"
+                                      , Encode.object
+                                            [ ( "field"
+                                              , Encode.string field
+                                              )
+                                            ]
+                                      )
+                                    ]
+                              )
+                            ]
+                      )
+                    ]
             )
             groupFilters
 
