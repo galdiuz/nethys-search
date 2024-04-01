@@ -57,7 +57,8 @@ port navigation_urlChanged : (String -> msg) -> Sub msg
 
 
 type alias Model =
-    { autofocus : Bool
+    { alwaysShowFilters : Bool
+    , autofocus : Bool
     , autoQueryType : Bool
     , bodySize : Size
     , browserDateFormat : String
@@ -107,7 +108,6 @@ type alias Model =
 
 type alias SearchModel =
     { aggregations : Maybe (Result Http.Error Aggregations)
-    , alwaysShowFilters : List String
     , debounce : Int
     , defaultQuery : String
     , filteredAttributes : Dict String Bool
@@ -182,7 +182,7 @@ type alias SearchModel =
     , selectedSortResistance : String
     , selectedSortSpeed : String
     , selectedSortWeakness : String
-    , showAllFilters : Bool
+    , showFilters : Bool
     , sort : List ( String, SortDir )
     , sortHasChanged : Bool
     , tableColumns : List String
@@ -192,15 +192,13 @@ type alias SearchModel =
 
 
 emptySearchModel :
-   { alwaysShowFilters : List String
-   , defaultQuery : String
+   { defaultQuery : String
    , removeFilters : List String
    , fixedQueryString : String
    }
    -> SearchModel
-emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilters } =
+emptySearchModel { defaultQuery, fixedQueryString, removeFilters } =
     { aggregations = Nothing
-    , alwaysShowFilters = alwaysShowFilters
     , debounce = 0
     , defaultQuery = defaultQuery
     , filteredAttributes = Dict.empty
@@ -275,7 +273,7 @@ emptySearchModel { alwaysShowFilters, defaultQuery, fixedQueryString, removeFilt
     , selectedSortResistance = "acid"
     , selectedSortSpeed = "land"
     , selectedSortWeakness = "acid"
-    , showAllFilters = False
+    , showFilters = False
     , sort = []
     , sortHasChanged = False
     , tableColumns = []
@@ -494,7 +492,6 @@ type alias Flags =
     , randomSeed : Int
     , removeFilters : List String
     , resultBaseUrl : String
-    , showFilters : List String
     , showHeader : Bool
     , windowHeight : Int
     , windowWidth : Int
@@ -518,7 +515,6 @@ defaultFlags =
     , randomSeed = 1
     , removeFilters = []
     , resultBaseUrl = "https://2e.aonprd.com/"
-    , showFilters = [ "numbers", "pfs", "rarities", "traits", "types" ]
     , showHeader = True
     , windowHeight = 0
     , windowWidth = 0
@@ -644,6 +640,7 @@ type Msg
     | ActionsFilterRemoved String
     | AlignmentFilterAdded String
     | AlignmentFilterRemoved String
+    | AlwaysShowFiltersChanged Bool
     | ArmorCategoryFilterAdded String
     | ArmorCategoryFilterRemoved String
     | ArmorGroupFilterAdded String
@@ -781,7 +778,7 @@ type Msg
     | SearchTraitsChanged String
     | SearchTypesChanged String
     | ShowAdditionalInfoChanged Bool
-    | ShowAllFilters
+    | ShowFilters
     | ShowFilterBox String Bool
     | ShowLegacyFiltersChanged Bool
     | ShowMenuPressed Bool
@@ -877,7 +874,8 @@ init flagsValue =
         url =
             parseUrl flags.currentUrl
     in
-    ( { autofocus = flags.autofocus
+    ( { alwaysShowFilters = False
+      , autofocus = flags.autofocus
       , autoQueryType = False
       , bodySize = { width = 0, height = 0 }
       , browserDateFormat = flags.browserDateFormat
@@ -917,8 +915,7 @@ init flagsValue =
       , savedColumnConfigurationName = ""
       , searchModel =
             emptySearchModel
-                { alwaysShowFilters = flags.showFilters
-                , defaultQuery = flags.defaultQuery
+                { defaultQuery = flags.defaultQuery
                 , fixedQueryString = flags.fixedQueryString
                 , removeFilters = flags.removeFilters
                 }
@@ -1030,6 +1027,17 @@ update msg model =
                 )
                 model
                 |> updateUrlWithSearchParams
+            )
+
+        AlwaysShowFiltersChanged enabled ->
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | showFilters = True }
+                )
+                { model | alwaysShowFilters = enabled }
+            , saveToLocalStorage
+                "always-show-filters"
+                (if enabled then "1" else "0")
             )
 
         ArmorCategoryFilterAdded category ->
@@ -2747,10 +2755,10 @@ update msg model =
                 (if value then "1" else "0")
             )
 
-        ShowAllFilters ->
+        ShowFilters ->
             ( updateCurrentSearchModel
                 (\searchModel ->
-                    { searchModel | showAllFilters = True }
+                    { searchModel | showFilters = True }
                 )
                 model
             , Cmd.none
@@ -3613,6 +3621,17 @@ updateCurrentSearchModel updateFun model =
 updateModelFromLocalStorage : ( String, String ) -> Model -> Model
 updateModelFromLocalStorage ( key, value ) model =
     case key of
+        "always-show-filters" ->
+            case value of
+                "1" ->
+                    { model | alwaysShowFilters = True }
+
+                "0" ->
+                    { model | alwaysShowFilters = False }
+
+                _ ->
+                    model
+
         "auto-query-type" ->
             case value of
                 "1" ->
@@ -6055,7 +6074,6 @@ flagsDecoder =
     Field.attempt "pageId" Decode.string <| \pageId ->
     Field.attempt "randomSeed" Decode.int <| \randomSeed ->
     Field.attempt "removeFilters" (Decode.list Decode.string) <| \removeFilters ->
-    Field.attempt "showFilters" (Decode.list Decode.string) <| \showFilters ->
     Field.attempt "windowHeight" Decode.int <| \windowHeight ->
     Field.attempt "windowWidth" Decode.int <| \windowWidth ->
     Decode.succeed
@@ -6084,7 +6102,6 @@ flagsDecoder =
                     filters
                )
         , resultBaseUrl = Maybe.withDefault defaultFlags.resultBaseUrl resultBaseUrl
-        , showFilters = Maybe.withDefault defaultFlags.showFilters showFilters
         , showHeader = Maybe.withDefault defaultFlags.showHeader showHeader
         , windowHeight = Maybe.withDefault defaultFlags.windowHeight windowHeight
         , windowWidth = Maybe.withDefault defaultFlags.windowWidth windowWidth
@@ -7164,86 +7181,77 @@ viewFilters model searchModel =
             allFilters model
                 |> List.filter (\filter -> not (List.member filter.id searchModel.removeFilters))
                 |> List.filter (\filter -> filter.visibleIf searchModel)
-
-        visibleFilters : List FilterBox
-        visibleFilters =
-            if searchModel.showAllFilters || List.length availableFilters <= 8 then
-                availableFilters
-
-             else
-                availableFilters
-                    |> List.filter (\filter -> List.member filter.id searchModel.alwaysShowFilters)
     in
     Html.div
         [ HA.class "column"
         , HA.class "gap-small"
         ]
-        [ Html.div
-            [ HA.class "row"
-            , HA.class "gap-small"
-            , HA.class "align-center"
-            ]
-            (List.concat
-                [ [ Html.h4
-                        []
-                        [ Html.text "Filters:" ]
-                  ]
-                , List.map
-                    (\filter ->
-                        Html.button
-                            [ HE.onClick
-                                (ShowFilterBox
-                                    filter.id
-                                    (not (List.member filter.id searchModel.visibleFilterBoxes))
-                                )
-                            , HAE.attributeIf
-                                (List.member filter.id searchModel.visibleFilterBoxes)
-                                (HA.class "active")
-                            ]
-                            [ Html.text filter.label ]
-                    )
-                    visibleFilters
-                , if List.length visibleFilters == List.length availableFilters then
-                    []
-
-                  else
-                    [ Html.button
-                        [ HE.onClick ShowAllFilters ]
-                        [ Html.text "Show all filters" ]
+        (List.append
+            (if searchModel.showFilters || model.alwaysShowFilters then
+                [ Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-small"
+                    , HA.class "align-center"
                     ]
-                ]
-            )
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-small"
-            , HA.class "align-center"
-            ]
-            (List.append
-                [ Html.h4
-                    []
-                    [ Html.text "Options:" ]
-                ]
-                (List.map
-                    (\filter ->
-                        Html.button
-                            [ HE.onClick
-                                (ShowFilterBox
-                                    filter.id
-                                    (not (List.member filter.id searchModel.visibleFilterBoxes))
-                                )
-                            , HAE.attributeIf
-                                (List.member filter.id searchModel.visibleFilterBoxes)
-                                (HA.class "active")
-                            ]
-                            [ Html.text filter.label ]
+                    (List.append
+                        [ Html.h4
+                            []
+                            [ Html.text "Filters:" ]
+                        ]
+                        (List.map
+                            (\filter ->
+                                Html.button
+                                    [ HE.onClick
+                                        (ShowFilterBox
+                                            filter.id
+                                            (not (List.member filter.id searchModel.visibleFilterBoxes))
+                                        )
+                                    , HAE.attributeIf
+                                        (List.member filter.id searchModel.visibleFilterBoxes)
+                                        (HA.class "active")
+                                    ]
+                                    [ Html.text filter.label ]
+                            )
+                            availableFilters
+                        )
                     )
-                    allOptions
-                )
+                , Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-small"
+                    , HA.class "align-center"
+                    ]
+                    (List.append
+                        [ Html.h4
+                            []
+                            [ Html.text "Options:" ]
+                        ]
+                        (List.map
+                            (\filter ->
+                                Html.button
+                                    [ HE.onClick
+                                        (ShowFilterBox
+                                            filter.id
+                                            (not (List.member filter.id searchModel.visibleFilterBoxes))
+                                        )
+                                    , HAE.attributeIf
+                                        (List.member filter.id searchModel.visibleFilterBoxes)
+                                        (HA.class "active")
+                                    ]
+                                    [ Html.text filter.label ]
+                            )
+                            allOptions
+                        )
+                    )
+                ]
+
+             else
+                [ Html.button
+                    [ HA.style "align-self" "center"
+                    , HE.onClick ShowFilters
+                    ]
+                    [ Html.text "Show filters and options" ]
+                ]
             )
-        , Html.div
-            [ HA.class "column"
-            , HA.class "gap-small"
-            ]
             (allFilters model ++ allOptions
                 |> List.filterMap
                     (\filterBox ->
@@ -7258,7 +7266,7 @@ viewFilters model searchModel =
                 |> List.map Tuple.second
                 |> List.map (viewOptionBox model searchModel)
             )
-        ]
+        )
 
 
 viewOptionBox : Model -> SearchModel -> FilterBox -> Html Msg
@@ -7443,14 +7451,14 @@ allOptions =
       , view = viewResultPageSize
       , visibleIf = \_ -> True
       }
-    , { id = "settings"
-      , label = "General settings"
-      , view = viewGeneralSettings
-      , visibleIf = \_ -> True
-      }
     , { id = "default-params"
       , label = "Default params"
       , view = viewDefaultParams
+      , visibleIf = \_ -> True
+      }
+    , { id = "settings"
+      , label = "General settings"
+      , view = viewGeneralSettings
       , visibleIf = \_ -> True
       }
     , { id = "whats-new"
@@ -10440,6 +10448,11 @@ viewGeneralSettings model searchModel =
         , text = "Links open in new tab"
         }
     , viewCheckbox
+        { checked = model.alwaysShowFilters
+        , onCheck = AlwaysShowFiltersChanged
+        , text = "Always show filters and options"
+        }
+    , viewCheckbox
         { checked = model.showLegacyFilters
         , onCheck = ShowLegacyFiltersChanged
         , text = "Show legacy filters (alignment, casting components, spell schools)"
@@ -10532,9 +10545,10 @@ viewDefaultParams model searchModel =
     in
     [ Html.text
         """
-        Default parameters are automatically applied when you visit a page without
-        any search parameters in the URL. These defaults are saved per page
-        type. You can view the defaults for the current page type below.
+        Default parameters are filters and options automatically applied when
+        you visit a page without any search parameters in the URL. These
+        defaults are saved per page type. You can view the defaults for the
+        current page type below.
         """
     , Html.div
         [ HA.class "row"
@@ -15805,6 +15819,10 @@ css args =
 
     ol {
         list-style-type: decimal;
+    }
+
+    #results:focus {
+        outline: none;
     }
 
     .align-baseline {
