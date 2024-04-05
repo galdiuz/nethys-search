@@ -5883,12 +5883,6 @@ buildAggregationsBody searchModel =
                         [ ( "category", "item_category" )
                         , ( "name", "item_subcategory" )
                         ]
-                    , buildCompositeAggregation
-                        "trait_group"
-                        False
-                        [ ( "group", "trait_group" )
-                        , ( "trait", "name.keyword" )
-                        ]
                     ]
                 )
           )
