@@ -3,6 +3,7 @@ port module NethysSearch exposing (main)
 import Browser
 import Browser.Dom
 import Browser.Events
+import Cmd.Extra
 import Csv.Encode
 import Data
 import Date
@@ -34,6 +35,7 @@ import Process
 import Random
 import Regex
 import Result.Extra
+import Set exposing (Set)
 import String.Extra
 import Svg
 import Svg.Attributes as SA
@@ -62,17 +64,20 @@ type alias Model =
     , autoQueryType : Bool
     , bodySize : Size
     , browserDateFormat : String
+    , dataUrl : String
     , dateFormat : String
+    , documentIndex : Dict String String
     , documents : Dict String (Result Http.Error Document)
+    , documentsToFetch : Set String
     , elasticUrl : String
     , fixedParams : Dict String (List String)
-    , globalAggregations : Maybe (Result Http.Error GlobalAggregations)
     , groupTraits : Bool
     , groupedDisplay : GroupedDisplay
     , groupedShowHeightenable : Bool
     , groupedShowPfs : Bool
     , groupedShowRarity : Bool
     , groupedSort : GroupedSort
+    , index : String
     , loadAll : Bool
     , legacyMode : Bool
     , limitTableWidth : Bool
@@ -101,6 +106,7 @@ type alias Model =
     , showResultSummary : Bool
     , showResultTraits : Bool
     , sourcesAggregation : Maybe (Result Http.Error (List Source))
+    , traitAggregations : Maybe (Result Http.Error (Dict String (List String)))
     , url : Url
     , windowSize : Size
     }
@@ -287,14 +293,7 @@ type alias SearchResult =
     , searchAfter : Encode.Value
     , total : Int
     , groupAggs : Maybe GroupAggregations
-    }
-
-
-type alias SearchResultWithDocuments =
-    { documents : List Document
-    , searchAfter : Encode.Value
-    , total : Int
-    , groupAggs : Maybe GroupAggregations
+    , index : Maybe String
     }
 
 
@@ -319,7 +318,6 @@ type alias Document =
     , advancedApocryphalSpell : Maybe String
     , advancedDomainSpell : Maybe String
     , alignment : Maybe String
-    , ammunition : Maybe String
     , anathemas : Maybe String
     , apocryphalSpell : Maybe String
     , archetype : Maybe String
@@ -480,6 +478,7 @@ type alias Flags =
     { autofocus : Bool
     , browserDateFormat : String
     , currentUrl : String
+    , dataUrl : String
     , defaultQuery : String
     , elasticUrl : String
     , fixedParams : Dict String (List String)
@@ -503,6 +502,7 @@ defaultFlags =
     { autofocus = False
     , browserDateFormat = "yyyy-MM-dd"
     , currentUrl = "/"
+    , dataUrl = ""
     , defaultQuery = ""
     , elasticUrl = ""
     , fixedParams = Dict.empty
@@ -534,11 +534,6 @@ type alias Aggregations =
     , traits : List String
     , types : List String
     , weaponGroups : List String
-    }
-
-
-type alias GlobalAggregations =
-    { traitGroups : Dict String (List String)
     }
 
 
@@ -666,12 +661,13 @@ type Msg
     | ExportAsJsonPressed
     | GotAggregationsResult (Result Http.Error Aggregations)
     | GotBodySize Size
-    | GotDocuments (List String) Bool (Result Http.Error (List (Result String Document)))
-    | GotGlobalAggregationsResult (Result Http.Error GlobalAggregations)
-    | GotGroupAggregationsResult (Result Http.Error SearchResultWithDocuments)
-    | GotGroupSearchResult (Result Http.Error SearchResultWithDocuments)
-    | GotSearchResult (Result Http.Error SearchResultWithDocuments)
+    | GotDocumentIndexResult (Result Http.Error (Dict String String))
+    | GotDocuments Bool (List String) (Result Http.Error (List (Result String Document)))
+    | GotGroupAggregationsResult (Result Http.Error SearchResult)
+    | GotGroupSearchResult (Result Http.Error SearchResult)
+    | GotSearchResult (Result Http.Error SearchResult)
     | GotSourcesAggregationResult (Result Http.Error (List Source))
+    | GotTraitAggregationsResult (Result Http.Error (Dict String (List String)))
     | FilterApCreaturesChanged Bool
     | FilterAttributeChanged String
     | FilterComponentsOperatorChanged Bool
@@ -879,17 +875,20 @@ init flagsValue =
       , autoQueryType = False
       , bodySize = { width = 0, height = 0 }
       , browserDateFormat = flags.browserDateFormat
+      , dataUrl = flags.dataUrl
       , dateFormat = "default"
+      , documentIndex = Dict.empty
       , documents = Dict.empty
+      , documentsToFetch = Set.empty
       , elasticUrl = flags.elasticUrl
       , fixedParams = flags.fixedParams
-      , globalAggregations = Nothing
       , groupTraits = False
       , groupedDisplay = Dim
       , groupedShowHeightenable = True
       , groupedShowPfs = True
       , groupedShowRarity = True
       , groupedSort = Alphanum
+      , index = ""
       , loadAll = flags.loadAll
       , legacyMode = flags.legacyMode
       , limitTableWidth = False
@@ -928,6 +927,7 @@ init flagsValue =
       , showResultSummary = True
       , showResultTraits = True
       , sourcesAggregation = Nothing
+      , traitAggregations = Nothing
       , url = url
       , windowSize = { width = flags.windowWidth, height = flags.windowHeight }
       }
@@ -939,17 +939,18 @@ init flagsValue =
         |> updateModelFromDefaultsOrUrl
     , Cmd.none
     )
+        |> addCmd getDocumentIndex
         |> \( model, cmd ) ->
-            if model.noUi then
+            if model.noUi && model.index /= "" then
                 ( model, cmd )
 
             else
                 ( model, cmd )
                     |> searchWithCurrentQuery LoadNew
-                    |> updateTitle
-                    |> getAggregations
-                    |> getGlobalAggregations
-                    |> getSourcesAggregation
+                    |> addCmd updateTitle
+                    |> addCmd getAggregations
+                    |> addCmd getSourcesAggregation
+                    |> addCmd getTraitAggregations
 
 
 subscriptions : Model -> Sub Msg
@@ -1466,90 +1467,42 @@ update msg model =
             , Cmd.none
             )
 
-        GotDocuments ids fetchLinks result ->
-            let
-                resultWithParsedMarkdown : Result Http.Error (List (Result String Document))
-                resultWithParsedMarkdown =
-                    Result.map (List.map (Result.map parseDocumentMarkdown)) result
-
-                childMarkdown : List ParsedMarkdownResult
-                childMarkdown =
-                    resultWithParsedMarkdown
-                        |> Result.withDefault []
-                        |> List.filterMap (Result.toMaybe)
-                        |> List.map .markdown
-                        |> List.filterMap getParsedMarkdown
-
-                childDocumentIds : List String
-                childDocumentIds =
-                    childMarkdown
-                        |> List.concatMap getChildDocumentIds
-                        |> List.filter (\childId -> not (Dict.member childId model.documents))
-                        |> List.filter (\childId -> not (List.member childId ids))
-
-                linkDocumentIds : List String
-                linkDocumentIds =
-                    if fetchLinks then
-                        childMarkdown
-                            |> List.concatMap getLinksFromMarkdown
-                            |> List.map parseUrl
-                            |> List.filterMap urlToDocumentId
-                            |> List.filter (\childId -> not (Dict.member childId model.documents))
-                            |> List.filter (\childId -> not (List.member childId ids))
-
-                    else
-                        []
-
-                legacyId : List String
-                legacyId =
-                    case model.previewLink of
-                        Just { documentId } ->
-                            result
-                                |> Result.withDefault []
-                                |> List.filterMap Result.toMaybe
-                                |> List.Extra.find (.id >> (==) documentId)
-                                |> Maybe.andThen (if model.legacyMode then .legacyId else .remasterId)
-                                |> Maybe.Extra.toList
-                                |> List.filter (\id -> not (Dict.member id model.documents))
-
-                        Nothing ->
-                            []
-            in
+        GotDocumentIndexResult result ->
             ( { model
-                | documents =
+                | documentIndex = Result.withDefault Dict.empty result
+                , documentsToFetch = Set.empty
+              }
+            , Cmd.none
+            )
+                |> fetchDocuments False (Set.toList model.documentsToFetch)
+
+        GotDocuments alwaysParseMarkdown ids result ->
+            ( { model
+                | documentIndex =
+                    List.foldl
+                        (\id index -> Dict.remove id index)
+                        model.documentIndex
+                        ids
+                , documents =
                     Dict.union
                         model.documents
-                        (ids
+                        (result
+                            |> Result.withDefault []
                             |> List.map
-                                (\id ->
-                                    ( id
-                                    , Result.andThen
-                                        (\docs ->
-                                            docs
-                                                |> List.filterMap (Result.toMaybe)
-                                                |> List.Extra.find (.id >> (==) id)
-                                                |> Result.fromMaybe (Http.BadStatus 404)
-                                        )
-                                        resultWithParsedMarkdown
-                                    )
+                                (\docResult ->
+                                    case docResult of
+                                        Ok doc ->
+                                            ( doc.id, Ok doc )
+
+                                        Err id ->
+                                            ( id, Err (Http.BadStatus 404) )
                                 )
                             |> Dict.fromList
                         )
               }
-            , Cmd.batch
-                [ if List.isEmpty childDocumentIds then
-                    Cmd.none
-
-                  else
-                    fetchDocuments model fetchLinks childDocumentIds
-                , fetchDocuments model False (linkDocumentIds ++ legacyId)
-                ]
-            )
-
-        GotGlobalAggregationsResult result ->
-            ( { model | globalAggregations = Just result }
             , Cmd.none
             )
+                |> parseAndFetchDocuments alwaysParseMarkdown ids
 
         GotGroupAggregationsResult result ->
             ( updateCurrentSearchModel
@@ -1571,89 +1524,32 @@ update msg model =
                     { searchModel
                         | searchGroupResults =
                             result
-                                |> Result.map .documents
-                                |> Result.map (List.map .id)
+                                |> Result.map .documentIds
                                 |> Result.withDefault []
                                 |> List.append searchModel.searchGroupResults
                                 |> List.Extra.unique
                         , tracker = Nothing
                     }
                 )
-                { model
-                    | documents =
-                        Dict.union
-                            model.documents
-                            (result
-                                |> Result.map .documents
-                                |> Result.map
-                                    (List.map
-                                        (\document ->
-                                            ( document.id, Ok document )
-                                        )
-                                    )
-                                |> Result.withDefault []
-                                |> Dict.fromList
-                            )
-                }
+                model
             , Cmd.none
             )
+                |> parseAndFetchDocuments
+                    False
+                    (result
+                        |> Result.map .documentIds
+                        |> Result.withDefault []
+                        |> List.filter (\id -> not (Dict.member id model.documents))
+                    )
 
         GotSearchResult result ->
-            let
-                containsTeleport : Bool
-                containsTeleport =
-                    model.url.query
-                        |> Maybe.map (\q -> String.contains "teleport=true" q)
-                        |> Maybe.withDefault False
-
-                firstResultUrl : Maybe String
-                firstResultUrl =
-                    result
-                        |> Result.toMaybe
-                        |> Maybe.map .documents
-                        |> Maybe.andThen List.head
-                        |> Maybe.map (getUrl model)
-
-                resultWithParsedMarkdown : Result Http.Error SearchResultWithDocuments
-                resultWithParsedMarkdown =
-                    Result.map
-                        (\r ->
-                            { r
-                                | documents =
-                                    List.map
-                                        (\d ->
-                                            case model.searchModel.resultDisplay of
-                                                Short ->
-                                                    parseDocumentSearchMarkdown d
-
-                                                Full ->
-                                                    parseDocumentMarkdown d
-
-                                                _ ->
-                                                    d
-                                        )
-                                        r.documents
-                            }
-                        )
-                        result
-
-                childDocumentIds : List String
-                childDocumentIds =
-                    resultWithParsedMarkdown
-                        |> Result.map .documents
-                        |> Result.withDefault []
-                        |> List.map .markdown
-                        |> List.filterMap getParsedMarkdown
-                        |> List.concatMap getChildDocumentIds
-                        |> List.filter (\childId -> not (Dict.member childId model.documents))
-            in
             ( updateCurrentSearchModel
                 (\searchModel ->
                     { searchModel
                         | searchResults =
                             List.append
                                 (List.filter Result.Extra.isOk searchModel.searchResults)
-                                [ Result.map removeDocumentsFromSearchResult result ]
+                                [ result ]
                         , searchResultGroupAggs =
                             result
                                 |> Result.toMaybe
@@ -1662,36 +1558,24 @@ update msg model =
                         , tracker = Nothing
                     }
                 )
-                { model
-                    | documents =
-                        Dict.union
-                            model.documents
-                            (resultWithParsedMarkdown
-                                |> Result.map .documents
-                                |> Result.map
-                                    (List.map
-                                        (\document ->
-                                            ( document.id, Ok document )
-                                        )
-                                    )
-                                |> Result.withDefault []
-                                |> Dict.fromList
-                            )
-                }
-            , case ( containsTeleport, firstResultUrl ) of
-                ( True, Just url ) ->
-                    navigation_loadUrl url
-
-                _ ->
-                    if List.isEmpty childDocumentIds then
-                        Cmd.none
-
-                    else
-                        fetchDocuments model False childDocumentIds
+                model
+            , Cmd.none
             )
+                |> updateIndex (Result.toMaybe result |> Maybe.andThen .index)
+                |> parseAndFetchDocuments
+                    False
+                    (result
+                        |> Result.map .documentIds
+                        |> Result.withDefault []
+                    )
 
         GotSourcesAggregationResult result ->
             ( { model | sourcesAggregation = Just result }
+            , Cmd.none
+            )
+
+        GotTraitAggregationsResult result ->
+            ( { model | traitAggregations = Just result }
             , Cmd.none
             )
 
@@ -1970,20 +1854,11 @@ update msg model =
             )
 
         LinkEnteredDebouncePassed documentId ->
-            let
-                idsToLoad : List String
-                idsToLoad =
-                    parseMarkdownAndCollectIdsToFetch
-                        [ documentId ]
-                        []
-                        model.documents
-                        (Maybe.withDefault model.legacyMode model.searchModel.legacyMode)
-                        |> Tuple.second
-            in
             if Maybe.map .documentId model.previewLink == Just documentId then
                 ( model
-                , fetchDocuments model False idsToLoad
+                , Cmd.none
                 )
+                    |> parseAndFetchDocuments True [ documentId ]
 
             else
                 ( model
@@ -2535,51 +2410,15 @@ update msg model =
             )
 
         ResultDisplayChanged value ->
-            let
-                newModel : Model
-                newModel =
-                    { model
-                        | documents =
-                            if value == Short then
-                                Dict.map
-                                    (\_ -> Result.map parseDocumentSearchMarkdown)
-                                    model.documents
-
-                            else if value == Full then
-                                Dict.map
-                                    (\_ -> Result.map parseDocumentMarkdown)
-                                    model.documents
-
-                            else
-                                model.documents
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | resultDisplay = value
                     }
-
-                childDocumentIds : List String
-                childDocumentIds =
-                    newModel.documents
-                        |> Dict.values
-                        |> List.filterMap Result.toMaybe
-                        |> List.map .markdown
-                        |> List.filterMap getParsedMarkdown
-                        |> List.concatMap getChildDocumentIds
-                        |> List.filter (\childId -> not (Dict.member childId model.documents))
-            in
-            ( newModel
-            , Cmd.batch
-                [ updateCurrentSearchModel
-                    (\searchModel ->
-                        { searchModel
-                            | resultDisplay = value
-                        }
-                    )
-                    model
-                    |> updateUrlWithSearchParams
-                , if List.isEmpty childDocumentIds then
-                    Cmd.none
-
-                  else
-                    fetchDocuments model False childDocumentIds
-                ]
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         SaveColumnConfigurationPressed ->
@@ -3273,7 +3112,12 @@ update msg model =
             , Cmd.none
             )
                 |> searchWithCurrentQuery LoadNew
-                |> updateTitle
+                |> addCmd updateTitle
+                |> parseAndFetchDocuments
+                    False
+                    (model.searchModel.searchResults
+                        |> List.concatMap (Result.map .documentIds >> Result.withDefault [])
+                    )
 
         UrlRequested urlRequest ->
             case urlRequest of
@@ -3373,8 +3217,102 @@ update msg model =
             )
 
 
-fetchDocuments : Model -> Bool -> List String -> Cmd Msg
-fetchDocuments model fetchLinks ids =
+addCmd : (Model -> Cmd Msg) -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+addCmd fn ( model, cmd ) =
+    ( model
+    , Cmd.batch
+        [ cmd
+        , fn model
+        ]
+    )
+
+
+updateIndex : Maybe String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+updateIndex maybeIndex ( model, cmd ) =
+    case maybeIndex of
+        Just index ->
+            if index /= model.index then
+                ( { model
+                    | documentIndex = Dict.empty
+                    , index = index
+                  }
+                , cmd
+                )
+                    |> addCmd getDocumentIndex
+                    |> addCmd getSourcesAggregation
+                    |> addCmd getTraitAggregations
+                    |> Cmd.Extra.add (saveToLocalStorage "index" index)
+
+            else
+                ( model, cmd )
+
+        Nothing ->
+            ( model, cmd )
+
+
+parseAndFetchDocuments : Bool -> List String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+parseAndFetchDocuments alwaysParseMarkdown ids ( model, cmd ) =
+    let
+        ( parsedDocuments, idsToFetch ) =
+            if model.searchModel.resultDisplay == Full || alwaysParseMarkdown then
+                parseMarkdownAndCollectIdsToFetch
+                    ids
+                    []
+                    model.documents
+                    (Maybe.withDefault model.legacyMode model.searchModel.legacyMode)
+
+            else if model.searchModel.resultDisplay == Short then
+                ( List.foldl
+                    (\id documents ->
+                        Dict.update
+                            id
+                            (Maybe.map (Result.map parseDocumentSearchMarkdown))
+                            documents
+                    )
+                    model.documents
+                    ids
+                , ids
+                )
+
+            else
+                ( model.documents, ids )
+
+        containsTeleport : Bool
+        containsTeleport =
+            model.url.query
+                |> Maybe.map (\q -> String.contains "teleport=true" q)
+                |> Maybe.withDefault False
+
+        teleportUrl : Maybe String
+        teleportUrl =
+            if containsTeleport then
+                model.searchModel.searchResults
+                    |> List.head
+                    |> Maybe.andThen Result.toMaybe
+                    |> Maybe.map .documentIds
+                    |> Maybe.andThen List.head
+                    |> Maybe.andThen (\id -> Dict.get id model.documents)
+                    |> Maybe.andThen Result.toMaybe
+                    |> Maybe.map (getUrl model)
+
+            else
+                Nothing
+    in
+    ( { model
+        | documents = parsedDocuments
+      }
+    , cmd
+    )
+        |> case teleportUrl of
+            Just url ->
+                Cmd.Extra.add (navigation_loadUrl url)
+
+            Nothing ->
+                fetchDocuments alwaysParseMarkdown idsToFetch
+
+
+fetchDocuments : Bool -> List String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+fetchDocuments alwaysParseMarkdown ids ( model, cmd ) =
     let
         idsToFetch : List String
         idsToFetch =
@@ -3382,52 +3320,47 @@ fetchDocuments model fetchLinks ids =
                 (\id -> not (Dict.member id model.documents))
                 ids
                 |> List.Extra.unique
-    in
-    if List.isEmpty idsToFetch then
-        Cmd.none
 
-    else
-        Http.request
-            { method = "POST"
-            , url = model.elasticUrl ++ "/_mget"
-            , headers = []
-            , body =
-                Http.jsonBody
-                    (Encode.object
-                        [ ( "docs"
-                          , Encode.list
-                                (\id ->
-                                    Encode.object [ ( "_id", Encode.string id ) ]
-                                )
-                                idsToFetch
-                          )
-                        ]
+        filesToFetch : List ( String, List String )
+        filesToFetch =
+            idsToFetch
+                |> List.map
+                    (\id ->
+                        ( id
+                        , Dict.get id model.documentIndex
+                        )
                     )
-            , expect =
-                Http.expectJson
-                    (GotDocuments idsToFetch fetchLinks)
-                    (Decode.field
-                        "docs"
+                |> Dict.Extra.filterGroupBy Tuple.second
+                |> Dict.map (\_ v -> List.map Tuple.first v)
+                |> Dict.toList
+    in
+    ( { model
+        | documentsToFetch =
+            if True then
+                Set.union model.documentsToFetch (Set.fromList idsToFetch)
+
+            else
+                model.documentsToFetch
+      }
+    , filesToFetch
+        |> List.map
+            (\( file, fileIds ) ->
+                Http.get
+                    { expect = Http.expectJson
+                        (GotDocuments alwaysParseMarkdown fileIds)
                         (Decode.list
                             (Decode.oneOf
                                 [ Decode.map Ok documentDecoder
-                                , Decode.map Err (Decode.field "_id" Decode.string)
+                                , Decode.map Err (Decode.field "id" Decode.string)
                                 ]
                             )
                         )
-                    )
-            , timeout = Just 10000
-            , tracker = Nothing
-            }
-
-
-removeDocumentsFromSearchResult : SearchResultWithDocuments -> SearchResult
-removeDocumentsFromSearchResult result =
-    { documentIds = List.map .id result.documents
-    , searchAfter = result.searchAfter
-    , total = result.total
-    , groupAggs = result.groupAggs
-    }
+                    , url = model.dataUrl ++ "/" ++ file ++ ".json"
+                    }
+            )
+        |> List.append [ cmd ]
+        |> Cmd.batch
+    )
 
 
 parseMarkdown : Markdown -> Markdown
@@ -3469,7 +3402,7 @@ parseMarkdownAndCollectIdsToFetch :
     -> List String
     -> Dict String (Result Http.Error Document)
     -> Bool
-    -> ( Dict String (Result Http.Error Document) , List String )
+    -> ( Dict String (Result Http.Error Document), List String )
 parseMarkdownAndCollectIdsToFetch idsToCheck idsToFetch documents legacyMode =
     case idsToCheck of
         id :: remainingToCheck ->
@@ -3725,6 +3658,9 @@ updateModelFromLocalStorage ( key, value ) model =
 
                 _ ->
                     model
+
+        "index" ->
+            { model | index = value }
 
         "limit-table-width" ->
             case value of
@@ -4728,11 +4664,7 @@ buildSearchBody model searchModel load =
                 )
           )
             |> Just
-        , ( "_source"
-          , Encode.object
-            [ ( "excludes", Encode.list Encode.string [ "text" ] ) ]
-          )
-            |> Just
+        , Just ( "_source" , Encode.bool False )
         , searchModel.searchResults
             |> List.Extra.last
             |> Maybe.andThen (Result.toMaybe)
@@ -4757,10 +4689,7 @@ buildSearchGroupedBody model searchModel groups =
                 , Encode.string "_doc"
                 ]
           )
-        , ( "_source"
-          , Encode.object
-            [ ( "excludes", Encode.list Encode.string [ "text" ] ) ]
-          )
+        , ( "_source", Encode.bool False )
         ]
 
 
@@ -5685,7 +5614,7 @@ searchWithCurrentQuery load ( model, cmd ) =
                 , url = model.elasticUrl ++ "/_search?track_total_hits=true"
                 , headers = []
                 , body = Http.jsonBody (buildSearchBody newModel newModel.searchModel load)
-                , expect = Http.expectJson GotSearchResult esResultDecoder
+                , expect = Http.expectJson GotSearchResult searchResultDecoder
                 , timeout = Just 10000
                 , tracker = Just ("search-" ++ String.fromInt newTracker)
                 }
@@ -5738,7 +5667,7 @@ searchWithGroups groups ( model, cmd ) =
             , url = model.elasticUrl ++ "/_search?track_total_hits=true"
             , headers = []
             , body = Http.jsonBody (buildSearchGroupedBody newModel newModel.searchModel groups)
-            , expect = Http.expectJson GotGroupSearchResult esResultDecoder
+            , expect = Http.expectJson GotGroupSearchResult searchResultDecoder
             , timeout = Just 10000
             , tracker = Just ("search-" ++ String.fromInt newTracker)
             }
@@ -5780,14 +5709,9 @@ getSearchHash url =
         |> String.join "&"
 
 
-updateTitle : ( Model, Cmd msg ) -> ( Model, Cmd msg )
-updateTitle ( model, cmd ) =
-    ( model
-    , Cmd.batch
-        [ cmd
-        , document_setTitle model.searchModel.query
-        ]
-    )
+updateTitle : Model -> Cmd msg
+updateTitle model =
+    document_setTitle model.searchModel.query
 
 
 updateWithNewGroupFields : Model -> ( Model, Cmd Msg )
@@ -5804,7 +5728,7 @@ updateWithNewGroupFields model =
             , url = model.elasticUrl ++ "/_search"
             , headers = []
             , body = Http.jsonBody (buildSearchGroupAggregationsBody model model.searchModel)
-            , expect = Http.expectJson GotGroupAggregationsResult esResultDecoder
+            , expect = Http.expectJson GotGroupAggregationsResult searchResultDecoder
             , timeout = Just 10000
             , tracker = Nothing
             }
@@ -5812,22 +5736,17 @@ updateWithNewGroupFields model =
     )
 
 
-getAggregations : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-getAggregations ( model, cmd ) =
-    ( model
-    , Cmd.batch
-        [ cmd
-        , Http.request
-            { method = "POST"
-            , url = model.elasticUrl ++ "/_search"
-            , headers = []
-            , body = Http.jsonBody (buildAggregationsBody model.searchModel)
-            , expect = Http.expectJson GotAggregationsResult aggregationsDecoder
-            , timeout = Just 10000
-            , tracker = Nothing
-            }
-        ]
-    )
+getAggregations : Model -> Cmd Msg
+getAggregations model =
+    Http.request
+        { method = "POST"
+        , url = model.elasticUrl ++ "/_search"
+        , headers = []
+        , body = Http.jsonBody (buildAggregationsBody model.searchModel)
+        , expect = Http.expectJson GotAggregationsResult aggregationsDecoder
+        , timeout = Just 10000
+        , tracker = Nothing
+        }
 
 
 buildAggregationsBody : SearchModel -> Encode.Value
@@ -5936,79 +5855,56 @@ buildCompositeTermsSource missing ( name, field ) =
     ]
 
 
-getGlobalAggregations : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-getGlobalAggregations ( model, cmd ) =
-    ( model
-    , Cmd.batch
-        [ cmd
-        , Http.request
-            { method = "POST"
-            , url = model.elasticUrl ++ "/_search"
-            , headers = []
-            , body = Http.jsonBody (buildGlobalAggregationsBody model.searchModel)
-            , expect = Http.expectJson GotGlobalAggregationsResult globalAggregationsDecoder
-            , timeout = Just 10000
-            , tracker = Nothing
+getDocumentIndex : Model -> Cmd Msg
+getDocumentIndex model =
+    if model.index /= "" then
+        Http.get
+            { expect =
+                Http.expectJson
+                    GotDocumentIndexResult
+                    (Decode.dict (Decode.list Decode.string)
+                        |> Decode.map
+                            (\dict ->
+                                Dict.foldl
+                                    (\key docs carry ->
+                                        List.foldl
+                                            (\id -> Dict.insert id key)
+                                            carry
+                                            docs
+                                    )
+                                    Dict.empty
+                                    dict
+                            )
+                    )
+            , url = model.dataUrl ++ "/" ++ model.index ++ "-index.json"
             }
-        ]
-    )
+
+    else
+        Cmd.none
 
 
-buildGlobalAggregationsBody : SearchModel -> Encode.Value
-buildGlobalAggregationsBody searchModel =
-    Encode.object
-        [ ( "aggs"
-          , Encode.object
-                [ buildCompositeAggregation
-                    "trait_group"
-                    False
-                    [ ( "group", "trait_group" )
-                    , ( "trait", "name.keyword" )
-                    ]
-                ]
-          )
-        , ( "query"
-          , Encode.object
-                [ ( "bool"
-                  , Encode.object
-                        [ ( "must"
-                          , Encode.object
-                                [ ( "term"
-                                  , Encode.object [ ( "type", Encode.string "trait" ) ]
-                                  )
-                                ]
-                          )
-                        , ( "must_not"
-                          , Encode.object
-                                [ ( "term"
-                                  , Encode.object [ ( "exclude_from_search", Encode.bool True ) ]
-                                  )
-                                ]
-                          )
-                        ]
-                  )
-                ]
-          )
-        , ( "size", Encode.int 0 )
-        ]
-
-
-getSourcesAggregation : ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-getSourcesAggregation ( model, cmd ) =
-    ( model
-    , Cmd.batch
-        [ cmd
-        , Http.request
-            { method = "POST"
-            , url = model.elasticUrl ++ "/_search"
-            , headers = []
-            , body = Http.jsonBody buildSourcesAggregationBody
-            , expect = Http.expectJson (GotSourcesAggregationResult) sourcesAggregationDecoder
-            , timeout = Just 10000
-            , tracker = Nothing
+getSourcesAggregation : Model -> Cmd Msg
+getSourcesAggregation model =
+    if model.index /= "" then
+        Http.get
+            { expect = Http.expectJson GotSourcesAggregationResult sourcesAggregationDecoder
+            , url = model.dataUrl ++ "/" ++ model.index ++ "-source-agg.json"
             }
-        ]
-    )
+
+    else
+        Cmd.none
+
+
+getTraitAggregations : Model -> Cmd Msg
+getTraitAggregations model =
+    if model.index /= "" then
+        Http.get
+            { expect = Http.expectJson GotTraitAggregationsResult traitAggregationsDecoder
+            , url = model.dataUrl ++ "/" ++ model.index ++ "-trait-agg.json"
+            }
+
+    else
+        Cmd.none
 
 
 buildSourcesAggregationBody : Encode.Value
@@ -6053,6 +5949,7 @@ buildSourcesAggregationBody =
 flagsDecoder : Decode.Decoder Flags
 flagsDecoder =
     Field.require "currentUrl" Decode.string <| \currentUrl ->
+    Field.require "dataUrl" Decode.string <| \dataUrl ->
     Field.require "elasticUrl" Decode.string <| \elasticUrl ->
     Field.attempt "autofocus" Decode.bool <| \autofocus ->
     Field.attempt "browserDateFormat" Decode.string <| \browserDateFormat ->
@@ -6074,6 +5971,7 @@ flagsDecoder =
         { autofocus = Maybe.withDefault defaultFlags.autofocus autofocus
         , browserDateFormat = Maybe.withDefault defaultFlags.browserDateFormat browserDateFormat
         , currentUrl = currentUrl
+        , dataUrl = dataUrl
         , defaultQuery = Maybe.withDefault defaultFlags.defaultQuery defaultQuery
         , elasticUrl = elasticUrl
         , fixedParams =
@@ -6108,20 +6006,22 @@ encodeObjectMaybe list =
         |> Encode.object
 
 
-esResultDecoder : Decode.Decoder SearchResultWithDocuments
-esResultDecoder =
-    Field.requireAt [ "hits", "hits" ] (Decode.list documentDecoder) <| \documents ->
+searchResultDecoder : Decode.Decoder SearchResult
+searchResultDecoder =
+    Field.requireAt [ "hits", "hits" ] (Decode.list (Decode.field "_id" Decode.string)) <| \documentIds ->
     Field.requireAt [ "hits", "hits" ] (Decode.list (Decode.field "sort" Decode.value)) <| \sorts ->
     Field.requireAt [ "hits", "total", "value" ] Decode.int <| \total ->
     Field.attempt "aggregations" groupAggregationsDecoder <| \groupAggs ->
+    Field.attemptAt [ "hits", "hits" ] (Decode.list (Decode.field "_index" Decode.string)) <| \indices ->
     Decode.succeed
-        { documents = documents
+        { documentIds = documentIds
         , searchAfter =
             sorts
                 |> List.Extra.last
                 |> Maybe.withDefault Encode.null
         , total = total
         , groupAggs = groupAggs
+        , index = Maybe.andThen List.head indices
         }
 
 
@@ -6158,13 +6058,6 @@ decodeToString =
         , Decode.map String.fromInt Decode.int
         , Decode.map String.fromFloat Decode.float
         ]
-
-
-aggregationBucketCountDecoder : Decode.Decoder a -> Decode.Decoder ( a, Int )
-aggregationBucketCountDecoder keyDecoder =
-    Field.require "key" keyDecoder <| \key ->
-    Field.require "doc_count" Decode.int <| \count ->
-    Decode.succeed ( key, count )
 
 
 aggregationsDecoder : Decode.Decoder Aggregations
@@ -6246,40 +6139,33 @@ aggregationBucketDecoder keyDecoder =
     Decode.field "buckets" (Decode.list (Decode.field "key" keyDecoder))
 
 
-globalAggregationsDecoder : Decode.Decoder GlobalAggregations
-globalAggregationsDecoder =
-    Field.requireAt
-        [ "aggregations", "trait_group" ]
-        (aggregationBucketDecoder
-            (Field.require "group" Decode.string <| \group ->
-             Field.require "trait" Decode.string <| \trait ->
-             Decode.succeed
-                { group = String.toLower group
-                , trait = String.toLower trait
-                }
-            )
+traitAggregationsDecoder : Decode.Decoder (Dict String (List String))
+traitAggregationsDecoder =
+    Decode.list
+        (Field.require "group" Decode.string <| \group ->
+         Field.require "trait" Decode.string <| \trait ->
+         Decode.succeed
+            { group = String.toLower group
+            , trait = String.toLower trait
+            }
         )
-        <| \traitGroups ->
-    Decode.succeed
-        { traitGroups =
-            traitGroups
-                |> Dict.Extra.groupBy .group
-                |> Dict.map (\_ v -> List.map .trait v)
-        }
+        |> Decode.map
+            (\traitGroups ->
+                traitGroups
+                    |> Dict.Extra.groupBy .group
+                    |> Dict.map (\_ v -> List.map .trait v)
+            )
 
 
 sourcesAggregationDecoder : Decode.Decoder (List Source)
 sourcesAggregationDecoder =
-    Decode.at
-        [ "aggregations", "source" ]
-        (aggregationBucketDecoder
-            (Field.require "category" Decode.string <| \category ->
-             Field.require "name" Decode.string <| \name ->
-             Decode.succeed
-                { category = category
-                , name = name
-                }
-            )
+    Decode.list
+        (Field.require "category" Decode.string <| \category ->
+         Field.require "name" Decode.string <| \name ->
+         Decode.succeed
+            { category = category
+            , name = name
+            }
         )
 
 
@@ -6308,157 +6194,156 @@ stringListDecoder =
 
 documentDecoder : Decode.Decoder Document
 documentDecoder =
-    Field.require "_id" Decode.string <| \id ->
-    Field.requireAt [ "_source", "category" ] Decode.string <| \category ->
-    Field.requireAt [ "_source", "name" ] Decode.string <| \name ->
-    Field.requireAt [ "_source", "type" ] Decode.string <| \type_ ->
-    Field.requireAt [ "_source", "url" ] Decode.string <| \url ->
-    Field.attemptAt [ "_source", "ability_type" ] Decode.string <| \abilityType ->
-    Field.attemptAt [ "_source", "ac" ] Decode.int <| \ac ->
-    Field.attemptAt [ "_source", "actions" ] Decode.string <| \actions ->
-    Field.attemptAt [ "_source", "activate" ] Decode.string <| \activate ->
-    Field.attemptAt [ "_source", "advanced_apocryphal_spell_markdown" ] Decode.string <| \advancedApocryphalSpell ->
-    Field.attemptAt [ "_source", "advanced_domain_spell_markdown" ] Decode.string <| \advancedDomainSpell ->
-    Field.attemptAt [ "_source", "alignment" ] Decode.string <| \alignment ->
-    Field.attemptAt [ "_source", "ammunition" ] Decode.string <| \ammunition ->
-    Field.attemptAt [ "_source", "anathema" ] Decode.string <| \anathemas ->
-    Field.attemptAt [ "_source", "apocryphal_spell_markdown" ] Decode.string <| \apocryphalSpell ->
-    Field.attemptAt [ "_source", "archetype" ] Decode.string <| \archetype ->
-    Field.attemptAt [ "_source", "area" ] Decode.string <| \area ->
-    Field.attemptAt [ "_source", "armor_category" ] Decode.string <| \armorCategory ->
-    Field.attemptAt [ "_source", "armor_group_markdown" ] Decode.string <| \armorGroup ->
-    Field.attemptAt [ "_source", "aspect" ] Decode.string <| \aspect ->
-    Field.attemptAt [ "_source", "attack_proficiency" ] stringListDecoder <| \attackProficiencies ->
-    Field.attemptAt [ "_source", "attribute_flaw" ] stringListDecoder <| \attributeFlaws ->
-    Field.attemptAt [ "_source", "attribute" ] stringListDecoder <| \attributes ->
-    Field.attemptAt [ "_source", "base_item_markdown" ] Decode.string <| \baseItems ->
-    Field.attemptAt [ "_source", "bloodline_markdown" ] Decode.string <| \bloodlines ->
-    Field.attemptAt [ "_source", "breadcrumbs" ] Decode.string <| \breadcrumbs ->
-    Field.attemptAt [ "_source", "bulk" ] Decode.float <| \bulk ->
-    Field.attemptAt [ "_source", "bulk_raw" ] Decode.string <| \bulkRaw ->
-    Field.attemptAt [ "_source", "charisma" ] Decode.int <| \charisma ->
-    Field.attemptAt [ "_source", "check_penalty" ] Decode.int <| \checkPenalty ->
-    Field.attemptAt [ "_source", "complexity" ] Decode.string <| \complexity ->
-    Field.attemptAt [ "_source", "component" ] stringListDecoder <| \components ->
-    Field.attemptAt [ "_source", "constitution" ] Decode.int <| \constitution ->
-    Field.attemptAt [ "_source", "cost_markdown" ] Decode.string <| \cost ->
-    Field.attemptAt [ "_source", "creature_ability" ] stringListDecoder <| \creatureAbilities ->
-    Field.attemptAt [ "_source", "creature_family" ] Decode.string <| \creatureFamily ->
-    Field.attemptAt [ "_source", "creature_family_markdown" ] Decode.string <| \creatureFamilyMarkdown ->
-    Field.attemptAt [ "_source", "damage" ] Decode.string <| \damage ->
-    Field.attemptAt [ "_source", "damage_type" ] stringListDecoder <| \damageTypes ->
-    Field.attemptAt [ "_source", "defense_proficiency" ] stringListDecoder <| \defenseProficiencies ->
-    Field.attemptAt [ "_source", "deity" ] stringListDecoder <| \deitiesList ->
-    Field.attemptAt [ "_source", "deity_markdown" ] Decode.string <| \deities ->
-    Field.attemptAt [ "_source", "deity_category" ] Decode.string <| \deityCategory ->
-    Field.attemptAt [ "_source", "dex_cap" ] Decode.int <| \dexCap ->
-    Field.attemptAt [ "_source", "dexterity" ] Decode.int <| \dexterity ->
-    Field.attemptAt [ "_source", "divine_font" ] stringListDecoder <| \divineFonts ->
-    Field.attemptAt [ "_source", "domain" ] stringListDecoder <| \domainsList ->
-    Field.attemptAt [ "_source", "domain_markdown" ] Decode.string <| \domains ->
-    Field.attemptAt [ "_source", "domain_spell_markdown" ] Decode.string <| \domainSpell ->
-    Field.attemptAt [ "_source", "duration" ] Decode.int <| \durationValue ->
-    Field.attemptAt [ "_source", "duration_raw" ] Decode.string <| \duration ->
-    Field.attemptAt [ "_source", "edict" ] Decode.string <| \edicts ->
-    Field.attemptAt [ "_source", "element" ] stringListDecoder <| \elements ->
-    Field.attemptAt [ "_source", "familiar_ability" ] stringListDecoder <| \familiarAbilities ->
-    Field.attemptAt [ "_source", "favored_weapon_markdown" ] Decode.string <| \favoredWeapons ->
-    Field.attemptAt [ "_source", "feat_markdown" ] Decode.string <| \feats ->
-    Field.attemptAt [ "_source", "fortitude_save" ] Decode.int <| \fort ->
-    Field.attemptAt [ "_source", "fortitude_proficiency" ] Decode.string <| \fortitudeProficiency ->
-    Field.attemptAt [ "_source", "follower_alignment" ] stringListDecoder <| \followerAlignments ->
-    Field.attemptAt [ "_source", "frequency" ] Decode.string <| \frequency ->
-    Field.attemptAt [ "_source", "hands" ] Decode.string <| \hands ->
-    Field.attemptAt [ "_source", "hardness_raw" ] Decode.string <| \hardness ->
-    Field.attemptAt [ "_source", "hazard_type" ] Decode.string <| \hazardType ->
-    Field.attemptAt [ "_source", "heighten" ] stringListDecoder <| \heighten ->
-    Field.attemptAt [ "_source", "heighten_group" ] stringListDecoder <| \heightenGroups ->
-    Field.attemptAt [ "_source", "heighten_level" ] (Decode.list Decode.int) <| \heightenLevels ->
-    Field.attemptAt [ "_source", "hp_raw" ] Decode.string <| \hp ->
-    Field.attemptAt [ "_source", "icon_image" ] Decode.string <| \iconImage ->
-    Field.attemptAt [ "_source", "image" ] stringListDecoder <| \images ->
-    Field.attemptAt [ "_source", "immunity_markdown" ] Decode.string <| \immunities ->
-    Field.attemptAt [ "_source", "intelligence" ] Decode.int <| \intelligence ->
-    Field.attemptAt [ "_source", "item_category" ] Decode.string <| \itemCategory ->
-    Field.attemptAt [ "_source", "item_subcategory" ] Decode.string <| \itemSubcategory ->
-    Field.attemptAt [ "_source", "language_markdown" ] Decode.string <| \languages ->
-    Field.attemptAt [ "_source", "legacy_id" ] Decode.string <| \legacyId ->
-    Field.attemptAt [ "_source", "lesson_markdown" ] Decode.string <| \lessons ->
-    Field.attemptAt [ "_source", "lesson_type" ] Decode.string <| \lessonType ->
-    Field.attemptAt [ "_source", "level" ] Decode.int <| \level ->
-    Field.attemptAt [ "_source", "markdown" ] Decode.string <| \markdown ->
-    Field.attemptAt [ "_source", "mystery_markdown" ] Decode.string <| \mysteries ->
-    Field.attemptAt [ "_source", "onset_raw" ] Decode.string <| \onset ->
-    Field.attemptAt [ "_source", "pantheon" ] stringListDecoder <| \pantheons ->
-    Field.attemptAt [ "_source", "pantheon_markdown" ] Decode.string <| \pantheonMarkdown ->
-    Field.attemptAt [ "_source", "pantheon_member_markdown" ] Decode.string <| \pantheonMembers ->
-    Field.attemptAt [ "_source", "patron_theme_markdown" ] Decode.string <| \patronThemes ->
-    Field.attemptAt [ "_source", "perception" ] Decode.int <| \perception ->
-    Field.attemptAt [ "_source", "perception_proficiency" ] Decode.string <| \perceptionProficiency ->
-    Field.attemptAt [ "_source", "pfs" ] Decode.string <| \pfs ->
-    Field.attemptAt [ "_source", "plane_category" ] Decode.string <| \planeCategory ->
-    Field.attemptAt [ "_source", "prerequisite_markdown" ] Decode.string <| \prerequisites ->
-    Field.attemptAt [ "_source", "price_raw" ] Decode.string <| \price ->
-    Field.attemptAt [ "_source", "primary_check_markdown" ] Decode.string <| \primaryCheck ->
-    Field.attemptAt [ "_source", "range" ] Decode.int <| \rangeValue ->
-    Field.attemptAt [ "_source", "range_raw" ] Decode.string <| \range ->
-    Field.attemptAt [ "_source", "rarity" ] Decode.string <| \rarity ->
-    Field.attemptAt [ "_source", "rarity_id" ] Decode.int <| \rarityId ->
-    Field.attemptAt [ "_source", "reflex_save" ] Decode.int <| \ref ->
-    Field.attemptAt [ "_source", "reflex_proficiency" ] Decode.string <| \reflexProficiency ->
-    Field.attemptAt [ "_source", "region" ] Decode.string <| \region->
-    Field.attemptAt [ "_source", "release_date" ] Decode.string <| \releaseDate ->
-    Field.attemptAt [ "_source", "reload_raw" ] Decode.string <| \reload ->
-    Field.attemptAt [ "_source", "remaster_id" ] Decode.string <| \remasterId ->
-    Field.attemptAt [ "_source", "required_abilities" ] Decode.string <| \requiredAbilities ->
-    Field.attemptAt [ "_source", "requirement_markdown" ] Decode.string <| \requirements ->
-    Field.attemptAt [ "_source", "resistance" ] damageTypeValuesDecoder <| \resistanceValues ->
-    Field.attemptAt [ "_source", "resistance_markdown" ] Decode.string <| \resistances ->
-    Field.attemptAt [ "_source", "sanctification_raw" ] Decode.string <| \sanctification ->
-    Field.attemptAt [ "_source", "saving_throw_markdown" ] Decode.string <| \savingThrow ->
-    Field.attemptAt [ "_source", "school" ] Decode.string <| \school ->
-    Field.attemptAt [ "_source", "search_markdown" ] Decode.string <| \searchMarkdown ->
-    Field.attemptAt [ "_source", "secondary_casters_raw" ] Decode.string <| \secondaryCasters ->
-    Field.attemptAt [ "_source", "secondary_check_markdown" ] Decode.string <| \secondaryChecks ->
-    Field.attemptAt [ "_source", "sense_markdown" ] Decode.string <| \senses ->
-    Field.attemptAt [ "_source", "size_id" ] intListDecoder <| \sizeIds ->
-    Field.attemptAt [ "_source", "size" ] stringListDecoder <| \sizes ->
-    Field.attemptAt [ "_source", "skill_markdown" ] Decode.string <| \skills ->
-    Field.attemptAt [ "_source", "skill_proficiency" ] stringListDecoder <| \skillProficiencies ->
-    Field.attemptAt [ "_source", "source" ] stringListDecoder <| \sourceList ->
-    Field.attemptAt [ "_source", "source_category" ] Decode.string <| \sourceCategory ->
-    Field.attemptAt [ "_source", "source_group" ] Decode.string <| \sourceGroup ->
-    Field.attemptAt [ "_source", "source_markdown" ] Decode.string <| \sources ->
-    Field.attemptAt [ "_source", "speed" ] speedTypeValuesDecoder <| \speedValues ->
-    Field.attemptAt [ "_source", "speed_markdown" ] Decode.string <| \speed ->
-    Field.attemptAt [ "_source", "speed_penalty" ] Decode.string <| \speedPenalty ->
-    Field.attemptAt [ "_source", "spell_markdown" ] Decode.string <| \spell ->
-    Field.attemptAt [ "_source", "spell_list" ] Decode.string <| \spellList ->
-    Field.attemptAt [ "_source", "spell_type" ] Decode.string <| \spellType ->
-    Field.attemptAt [ "_source", "spoilers" ] Decode.string <| \spoilers ->
-    Field.attemptAt [ "_source", "stage_markdown" ] Decode.string <| \stages ->
-    Field.attemptAt [ "_source", "strength" ] Decode.int <| \strength ->
-    Field.attemptAt [ "_source", "strongest_save" ] stringListDecoder <| \strongestSaves ->
-    Field.attemptAt [ "_source", "summary_markdown" ] Decode.string <| \summary ->
-    Field.attemptAt [ "_source", "target_markdown" ] Decode.string <| \targets ->
-    Field.attemptAt [ "_source", "tradition" ] stringListDecoder <| \traditionList ->
-    Field.attemptAt [ "_source", "tradition_markdown" ] Decode.string <| \traditions ->
-    Field.attemptAt [ "_source", "trait_markdown" ] Decode.string <| \traits ->
-    Field.attemptAt [ "_source", "trait" ] stringListDecoder <| \traitList ->
-    Field.attemptAt [ "_source", "trigger_markdown" ] Decode.string <| \trigger ->
-    Field.attemptAt [ "_source", "usage_markdown" ] Decode.string <| \usage ->
-    Field.attemptAt [ "_source", "vision" ] Decode.string <| \vision ->
-    Field.attemptAt [ "_source", "warden_spell_tier" ] Decode.string <| \wardenSpellTier ->
-    Field.attemptAt [ "_source", "weakest_save" ] stringListDecoder <| \weakestSaves ->
-    Field.attemptAt [ "_source", "weakness" ] damageTypeValuesDecoder <| \weaknessValues ->
-    Field.attemptAt [ "_source", "weakness_markdown" ] Decode.string <| \weaknesses ->
-    Field.attemptAt [ "_source", "weapon_category" ] Decode.string <| \weaponCategory ->
-    Field.attemptAt [ "_source", "weapon_group" ] Decode.string <| \weaponGroup ->
-    Field.attemptAt [ "_source", "weapon_group_markdown" ] Decode.string <| \weaponGroupMarkdown ->
-    Field.attemptAt [ "_source", "weapon_type" ] Decode.string <| \weaponType ->
-    Field.attemptAt [ "_source", "will_save" ] Decode.int <| \will ->
-    Field.attemptAt [ "_source", "will_proficiency" ] Decode.string <| \willProficiency ->
-    Field.attemptAt [ "_source", "wisdom" ] Decode.int <| \wisdom ->
+    Field.require "category" Decode.string <| \category ->
+    Field.require "id" Decode.string <| \id ->
+    Field.require "name" Decode.string <| \name ->
+    Field.require "type" Decode.string <| \type_ ->
+    Field.require "url" Decode.string <| \url ->
+    Field.attempt "ability_type" Decode.string <| \abilityType ->
+    Field.attempt "ac" Decode.int <| \ac ->
+    Field.attempt "actions" Decode.string <| \actions ->
+    Field.attempt "activate" Decode.string <| \activate ->
+    Field.attempt "advanced_apocryphal_spell_markdown" Decode.string <| \advancedApocryphalSpell ->
+    Field.attempt "advanced_domain_spell_markdown" Decode.string <| \advancedDomainSpell ->
+    Field.attempt "alignment" Decode.string <| \alignment ->
+    Field.attempt "anathema" Decode.string <| \anathemas ->
+    Field.attempt "apocryphal_spell_markdown" Decode.string <| \apocryphalSpell ->
+    Field.attempt "archetype" Decode.string <| \archetype ->
+    Field.attempt "area" Decode.string <| \area ->
+    Field.attempt "armor_category" Decode.string <| \armorCategory ->
+    Field.attempt "armor_group_markdown" Decode.string <| \armorGroup ->
+    Field.attempt "aspect" Decode.string <| \aspect ->
+    Field.attempt "attack_proficiency" stringListDecoder <| \attackProficiencies ->
+    Field.attempt "attribute_flaw" stringListDecoder <| \attributeFlaws ->
+    Field.attempt "attribute" stringListDecoder <| \attributes ->
+    Field.attempt "base_item_markdown" Decode.string <| \baseItems ->
+    Field.attempt "bloodline_markdown" Decode.string <| \bloodlines ->
+    Field.attempt "breadcrumbs" Decode.string <| \breadcrumbs ->
+    Field.attempt "bulk" Decode.float <| \bulk ->
+    Field.attempt "bulk_raw" Decode.string <| \bulkRaw ->
+    Field.attempt "charisma" Decode.int <| \charisma ->
+    Field.attempt "check_penalty" Decode.int <| \checkPenalty ->
+    Field.attempt "complexity" Decode.string <| \complexity ->
+    Field.attempt "component" stringListDecoder <| \components ->
+    Field.attempt "constitution" Decode.int <| \constitution ->
+    Field.attempt "cost_markdown" Decode.string <| \cost ->
+    Field.attempt "creature_ability" stringListDecoder <| \creatureAbilities ->
+    Field.attempt "creature_family" Decode.string <| \creatureFamily ->
+    Field.attempt "creature_family_markdown" Decode.string <| \creatureFamilyMarkdown ->
+    Field.attempt "damage" Decode.string <| \damage ->
+    Field.attempt "damage_type" stringListDecoder <| \damageTypes ->
+    Field.attempt "defense_proficiency" stringListDecoder <| \defenseProficiencies ->
+    Field.attempt "deity" stringListDecoder <| \deitiesList ->
+    Field.attempt "deity_markdown" Decode.string <| \deities ->
+    Field.attempt "deity_category" Decode.string <| \deityCategory ->
+    Field.attempt "dex_cap" Decode.int <| \dexCap ->
+    Field.attempt "dexterity" Decode.int <| \dexterity ->
+    Field.attempt "divine_font" stringListDecoder <| \divineFonts ->
+    Field.attempt "domain" stringListDecoder <| \domainsList ->
+    Field.attempt "domain_markdown" Decode.string <| \domains ->
+    Field.attempt "domain_spell_markdown" Decode.string <| \domainSpell ->
+    Field.attempt "duration" Decode.int <| \durationValue ->
+    Field.attempt "duration_raw" Decode.string <| \duration ->
+    Field.attempt "edict" Decode.string <| \edicts ->
+    Field.attempt "element" stringListDecoder <| \elements ->
+    Field.attempt "familiar_ability" stringListDecoder <| \familiarAbilities ->
+    Field.attempt "favored_weapon_markdown" Decode.string <| \favoredWeapons ->
+    Field.attempt "feat_markdown" Decode.string <| \feats ->
+    Field.attempt "fortitude_save" Decode.int <| \fort ->
+    Field.attempt "fortitude_proficiency" Decode.string <| \fortitudeProficiency ->
+    Field.attempt "follower_alignment" stringListDecoder <| \followerAlignments ->
+    Field.attempt "frequency" Decode.string <| \frequency ->
+    Field.attempt "hands" Decode.string <| \hands ->
+    Field.attempt "hardness_raw" Decode.string <| \hardness ->
+    Field.attempt "hazard_type" Decode.string <| \hazardType ->
+    Field.attempt "heighten" stringListDecoder <| \heighten ->
+    Field.attempt "heighten_group" stringListDecoder <| \heightenGroups ->
+    Field.attempt "heighten_level" (Decode.list Decode.int) <| \heightenLevels ->
+    Field.attempt "hp_raw" Decode.string <| \hp ->
+    Field.attempt "icon_image" Decode.string <| \iconImage ->
+    Field.attempt "image" stringListDecoder <| \images ->
+    Field.attempt "immunity_markdown" Decode.string <| \immunities ->
+    Field.attempt "intelligence" Decode.int <| \intelligence ->
+    Field.attempt "item_category" Decode.string <| \itemCategory ->
+    Field.attempt "item_subcategory" Decode.string <| \itemSubcategory ->
+    Field.attempt "language_markdown" Decode.string <| \languages ->
+    Field.attempt "legacy_id" Decode.string <| \legacyId ->
+    Field.attempt "lesson_markdown" Decode.string <| \lessons ->
+    Field.attempt "lesson_type" Decode.string <| \lessonType ->
+    Field.attempt "level" Decode.int <| \level ->
+    Field.attempt "markdown" Decode.string <| \markdown ->
+    Field.attempt "mystery_markdown" Decode.string <| \mysteries ->
+    Field.attempt "onset_raw" Decode.string <| \onset ->
+    Field.attempt "pantheon" stringListDecoder <| \pantheons ->
+    Field.attempt "pantheon_markdown" Decode.string <| \pantheonMarkdown ->
+    Field.attempt "pantheon_member_markdown" Decode.string <| \pantheonMembers ->
+    Field.attempt "patron_theme_markdown" Decode.string <| \patronThemes ->
+    Field.attempt "perception" Decode.int <| \perception ->
+    Field.attempt "perception_proficiency" Decode.string <| \perceptionProficiency ->
+    Field.attempt "pfs" Decode.string <| \pfs ->
+    Field.attempt "plane_category" Decode.string <| \planeCategory ->
+    Field.attempt "prerequisite_markdown" Decode.string <| \prerequisites ->
+    Field.attempt "price_raw" Decode.string <| \price ->
+    Field.attempt "primary_check_markdown" Decode.string <| \primaryCheck ->
+    Field.attempt "range" Decode.int <| \rangeValue ->
+    Field.attempt "range_raw" Decode.string <| \range ->
+    Field.attempt "rarity" Decode.string <| \rarity ->
+    Field.attempt "rarity_id" Decode.int <| \rarityId ->
+    Field.attempt "reflex_save" Decode.int <| \ref ->
+    Field.attempt "reflex_proficiency" Decode.string <| \reflexProficiency ->
+    Field.attempt "region" Decode.string <| \region->
+    Field.attempt "release_date" Decode.string <| \releaseDate ->
+    Field.attempt "reload_raw" Decode.string <| \reload ->
+    Field.attempt "remaster_id" Decode.string <| \remasterId ->
+    Field.attempt "required_abilities" Decode.string <| \requiredAbilities ->
+    Field.attempt "requirement_markdown" Decode.string <| \requirements ->
+    Field.attempt "resistance" damageTypeValuesDecoder <| \resistanceValues ->
+    Field.attempt "resistance_markdown" Decode.string <| \resistances ->
+    Field.attempt "sanctification_raw" Decode.string <| \sanctification ->
+    Field.attempt "saving_throw_markdown" Decode.string <| \savingThrow ->
+    Field.attempt "school" Decode.string <| \school ->
+    Field.attempt "search_markdown" Decode.string <| \searchMarkdown ->
+    Field.attempt "secondary_casters_raw" Decode.string <| \secondaryCasters ->
+    Field.attempt "secondary_check_markdown" Decode.string <| \secondaryChecks ->
+    Field.attempt "sense_markdown" Decode.string <| \senses ->
+    Field.attempt "size_id" intListDecoder <| \sizeIds ->
+    Field.attempt "size" stringListDecoder <| \sizes ->
+    Field.attempt "skill_markdown" Decode.string <| \skills ->
+    Field.attempt "skill_proficiency" stringListDecoder <| \skillProficiencies ->
+    Field.attempt "source" stringListDecoder <| \sourceList ->
+    Field.attempt "source_category" Decode.string <| \sourceCategory ->
+    Field.attempt "source_group" Decode.string <| \sourceGroup ->
+    Field.attempt "source_markdown" Decode.string <| \sources ->
+    Field.attempt "speed" speedTypeValuesDecoder <| \speedValues ->
+    Field.attempt "speed_markdown" Decode.string <| \speed ->
+    Field.attempt "speed_penalty" Decode.string <| \speedPenalty ->
+    Field.attempt "spell_markdown" Decode.string <| \spell ->
+    Field.attempt "spell_list" Decode.string <| \spellList ->
+    Field.attempt "spell_type" Decode.string <| \spellType ->
+    Field.attempt "spoilers" Decode.string <| \spoilers ->
+    Field.attempt "stage_markdown" Decode.string <| \stages ->
+    Field.attempt "strength" Decode.int <| \strength ->
+    Field.attempt "strongest_save" stringListDecoder <| \strongestSaves ->
+    Field.attempt "summary_markdown" Decode.string <| \summary ->
+    Field.attempt "target_markdown" Decode.string <| \targets ->
+    Field.attempt "tradition" stringListDecoder <| \traditionList ->
+    Field.attempt "tradition_markdown" Decode.string <| \traditions ->
+    Field.attempt "trait_markdown" Decode.string <| \traits ->
+    Field.attempt "trait" stringListDecoder <| \traitList ->
+    Field.attempt "trigger_markdown" Decode.string <| \trigger ->
+    Field.attempt "usage_markdown" Decode.string <| \usage ->
+    Field.attempt "vision" Decode.string <| \vision ->
+    Field.attempt "warden_spell_tier" Decode.string <| \wardenSpellTier ->
+    Field.attempt "weakest_save" stringListDecoder <| \weakestSaves ->
+    Field.attempt "weakness" damageTypeValuesDecoder <| \weaknessValues ->
+    Field.attempt "weakness_markdown" Decode.string <| \weaknesses ->
+    Field.attempt "weapon_category" Decode.string <| \weaponCategory ->
+    Field.attempt "weapon_group" Decode.string <| \weaponGroup ->
+    Field.attempt "weapon_group_markdown" Decode.string <| \weaponGroupMarkdown ->
+    Field.attempt "weapon_type" Decode.string <| \weaponType ->
+    Field.attempt "will_save" Decode.int <| \will ->
+    Field.attempt "will_proficiency" Decode.string <| \willProficiency ->
+    Field.attempt "wisdom" Decode.int <| \wisdom ->
     Decode.succeed
         { id = id
         , category = category
@@ -6472,7 +6357,6 @@ documentDecoder =
         , advancedApocryphalSpell = advancedApocryphalSpell
         , advancedDomainSpell = advancedDomainSpell
         , alignment = alignment
-        , ammunition = ammunition
         , anathemas = anathemas
         , apocryphalSpell = apocryphalSpell
         , archetype = archetype
@@ -9276,12 +9160,12 @@ viewFilterTraits model searchModel =
             [ HA.class "column"
             , HA.class "gap-small"
             ]
-            (case ( model.globalAggregations, searchModel.aggregations ) of
-                ( Just (Ok globalAggregations), Just (Ok aggregations) ) ->
+            (case ( model.traitAggregations, searchModel.aggregations ) of
+                ( Just (Ok traitAggregations), Just (Ok aggregations) ) ->
                     let
                         categorizedTraits : List String
                         categorizedTraits =
-                            globalAggregations.traitGroups
+                            traitAggregations
                                 |> Dict.values
                                 |> List.concat
 
@@ -9346,7 +9230,7 @@ viewFilterTraits model searchModel =
                                     )
                                 ]
                         )
-                        (globalAggregations.traitGroups
+                        (traitAggregations
                             |> Dict.filter
                                 (\group traits ->
                                     not (List.member group [ "half-elf", "half-orc", "aon-special" ])
@@ -11725,8 +11609,8 @@ viewSearchResultsShort model searchModel remaining resultCount =
                 case result of
                     Ok r ->
                         r.documentIds
-                            |> List.filterMap (\id -> Dict.get id model.documents)
-                            |> List.filterMap Result.toMaybe
+                            |> List.map (\id -> Dict.get id model.documents)
+                            |> List.map (Maybe.andThen Result.toMaybe)
                             |> List.map (viewSingleSearchResult model)
                             |> List.map List.singleton
                             |> List.map (Html.li [])
@@ -11760,8 +11644,27 @@ viewSearchResultsShort model searchModel remaining resultCount =
     ]
 
 
-viewSingleSearchResult : Model -> Document -> Html Msg
-viewSingleSearchResult model document =
+viewSingleSearchResult : Model -> Maybe Document -> Html Msg
+viewSingleSearchResult model maybeDocument =
+    case maybeDocument of
+        Just document ->
+            viewSingleSearchResultLoaded model document
+
+        Nothing ->
+            Html.article
+                [ HA.class "column"
+                , HA.class "gap-small"
+                , HA.class "fade-in"
+                , HA.style "margin-top" "2px"
+                ]
+                [ Html.h1
+                    [ HA.class "title" ]
+                    [ Html.text "Loading..." ]
+                ]
+
+
+viewSingleSearchResultLoaded : Model -> Document -> Html Msg
+viewSingleSearchResultLoaded model document =
     let
         hasActionsInTitle : Bool
         hasActionsInTitle =
@@ -11848,21 +11751,20 @@ viewSingleSearchResult model document =
                         Html.text ""
                 ]
             ]
+        , Html.div
+            [ HA.class "column"
+            , HA.class "gap-small"
+            ]
+            (case document.searchMarkdown of
+                Parsed parsed ->
+                    viewMarkdown model document.id 0 Nothing parsed
 
-            , Html.div
-                [ HA.class "column"
-                , HA.class "gap-small"
-                ]
-                (case document.searchMarkdown of
-                    Parsed parsed ->
-                        viewMarkdown model document.id 0 Nothing parsed
-
-                    NotParsed _ ->
-                        [ Html.div
-                            [ HA.style "color" "red" ]
-                            [ Html.text ("Not parsed: " ++ document.id) ]
-                        ]
-                )
+                NotParsed _ ->
+                    [ Html.div
+                        [ HA.style "color" "red" ]
+                        [ Html.text ("Not parsed: " ++ document.id) ]
+                    ]
+            )
         ]
 
 
@@ -14160,34 +14062,15 @@ sortGroupedList model field keyPrefix counts list =
         (\( k1, v1 ) ( k2, v2 ) ->
             case model.groupedSort of
                 Alphanum ->
-                    case ( List.length v1, List.length v2 ) of
-                        ( 0, 0 ) ->
-                            case ( k1, k2 ) of
-                                ( "", _ ) ->
-                                    GT
-
-                                ( _, "" ) ->
-                                    LT
-
-                                _ ->
-                                    compareAlphanum field k1 k2
-
-                        ( 0, _ ) ->
+                    case ( k1, k2 ) of
+                        ( "", _ ) ->
                             GT
 
-                        ( _, 0 ) ->
+                        ( _, "" ) ->
                             LT
 
                         _ ->
-                            case ( k1, k2 ) of
-                                ( "", _ ) ->
-                                    GT
-
-                                ( _, "" ) ->
-                                    LT
-
-                                _ ->
-                                    compareAlphanum field k1 k2
+                            compareAlphanum field k1 k2
 
                 CountLoaded ->
                     compare (List.length v2) (List.length v1)
