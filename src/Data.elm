@@ -317,7 +317,7 @@ magicSchools =
 
 pageSizes : List Int
 pageSizes =
-    [ 20, 50, 100, 250, 1000 ]
+    [ 20, 50, 100, 250, 1000, 5000 ]
 
 
 allPageWidths : List Int
