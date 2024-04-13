@@ -12,6 +12,7 @@ import Html.Attributes as HA
 import Html.Attributes.Extra as HAE
 import Html.Events as HE
 import Html.Keyed
+import Html.Lazy
 import Http
 import Json.Decode as Decode
 import List.Extra
@@ -22,6 +23,7 @@ import Markdown.Renderer
 import Maybe.Extra
 import NethysSearch.Data as Data exposing (..)
 import Regex
+import Set
 import String.Extra
 import Tuple3
 
@@ -38,50 +40,7 @@ view : Model -> Html Msg
 view model =
     Html.div
         []
-        [ Html.node "style"
-            []
-            [ Html.text
-                (css
-                    { pageWidth = model.pageWidth
-                    }
-                )
-
-            , if model.showResultAdditionalInfo then
-                Html.text ""
-
-              else
-                Html.text ".additional-info { display:none; }"
-
-            , if model.showResultSpoilers then
-                Html.text ""
-
-              else
-                Html.text ".spoilers { display:none; }"
-
-            , if model.showResultSummary then
-                Html.text ""
-
-              else
-                Html.text ".summary { display:none; }"
-
-            , if model.showResultTraits then
-                Html.text ""
-
-              else
-                Html.text ".traits { display:none; }"
-
-            , if model.showResultAdditionalInfo && model.showResultSummary then
-                Html.text ""
-
-              else
-                Html.text ".additional-info + hr { display:none; }"
-
-            , if model.showResultIndex then
-                Html.text ""
-
-              else
-                Html.text ".results-list { list-style-type: none; }"
-            ]
+        [ viewCss model
         , FontAwesome.Styles.css
         , if model.noUi then
             Html.text ""
@@ -721,7 +680,7 @@ viewResultPageSize model searchModel =
 viewGeneralSettings : Model -> SearchModel -> List (Html Msg)
 viewGeneralSettings model searchModel =
     [ viewCheckbox
-        { checked = model.openInNewTab
+        { checked = model.viewModel.openInNewTab
         , onCheck = OpenInNewTabChanged
         , text = "Links open in new tab"
         }
@@ -778,28 +737,28 @@ viewGeneralSettings model searchModel =
         , HA.class "gap-medium"
         ]
         [ viewRadioButton
-            { checked = model.dateFormat == "default"
+            { checked = model.viewModel.dateFormat == "default"
             , enabled = True
             , name = "date-format"
             , onInput = DateFormatChanged "default"
-            , text = "Browser default (" ++ model.browserDateFormat ++ ")"
+            , text = "Browser default (" ++ model.viewModel.browserDateFormat ++ ")"
             }
         , viewRadioButton
-            { checked = model.dateFormat == "yyyy-MM-dd"
+            { checked = model.viewModel.dateFormat == "yyyy-MM-dd"
             , enabled = True
             , name = "date-format"
             , onInput = DateFormatChanged "yyyy-MM-dd"
             , text = "yyyy-MM-dd"
             }
         , viewRadioButton
-            { checked = model.dateFormat == "MM/dd/yyyy"
+            { checked = model.viewModel.dateFormat == "MM/dd/yyyy"
             , enabled = True
             , name = "date-format"
             , onInput = DateFormatChanged "MM/dd/yyyy"
             , text = "MM/dd/yyyy"
             }
         , viewRadioButton
-            { checked = model.dateFormat == "dd/MM/yyyy"
+            { checked = model.viewModel.dateFormat == "dd/MM/yyyy"
             , enabled = True
             , name = "date-format"
             , onInput = DateFormatChanged "dd/MM/yyyy"
@@ -930,7 +889,7 @@ viewResultDisplay model searchModel =
         ]
         (case searchModel.resultDisplay of
             Short ->
-                viewResultDisplayShort model
+                viewResultDisplayShort model.viewModel
 
             Full ->
                 viewResultDisplayFull model
@@ -944,38 +903,38 @@ viewResultDisplay model searchModel =
     ]
 
 
-viewResultDisplayShort : Model -> List (Html Msg)
-viewResultDisplayShort model =
+viewResultDisplayShort : ViewModel -> List (Html Msg)
+viewResultDisplayShort viewModel =
     [ Html.h4
         []
         [ Html.text "Short configuration" ]
     , viewCheckbox
-        { checked = model.showResultIndex
+        { checked = viewModel.showResultIndex
         , onCheck = ShowResultIndexChanged
         , text = "Show result index"
         }
     , viewCheckbox
-        { checked = model.showResultPfs
+        { checked = viewModel.showResultPfs
         , onCheck = ShowShortPfsChanged
         , text = "Show PFS icon"
         }
     , viewCheckbox
-        { checked = model.showResultSpoilers
+        { checked = viewModel.showResultSpoilers
         , onCheck = ShowSpoilersChanged
         , text = "Show spoiler warning"
         }
     , viewCheckbox
-        { checked = model.showResultTraits
+        { checked = viewModel.showResultTraits
         , onCheck = ShowTraitsChanged
         , text = "Show traits"
         }
     , viewCheckbox
-        { checked = model.showResultAdditionalInfo
+        { checked = viewModel.showResultAdditionalInfo
         , onCheck = ShowAdditionalInfoChanged
         , text = "Show additional info"
         }
     , viewCheckbox
-        { checked = model.showResultSummary
+        { checked = viewModel.showResultSummary
         , onCheck = ShowSummaryChanged
         , text = "Show summary"
         }
@@ -1481,17 +1440,17 @@ viewResultDisplayGrouped model searchModel =
         , HA.class "gap-medium"
         ]
         [ viewCheckbox
-            { checked = model.groupedShowPfs
+            { checked = model.viewModel.groupedShowPfs
             , onCheck = GroupedShowPfsIconChanged
             , text = "PFS icons"
             }
         , viewCheckbox
-            { checked = model.groupedShowHeightenable
+            { checked = model.viewModel.groupedShowHeightenable
             , onCheck = GroupedShowHeightenableChanged
             , text = "Heightenable"
             }
         , viewCheckbox
-            { checked = model.groupedShowRarity
+            { checked = model.viewModel.groupedShowRarity
             , onCheck = GroupedShowRarityChanged
             , text = "Rarity"
             }
@@ -4377,7 +4336,6 @@ viewSearchResults model searchModel =
                 |> Maybe.andThen Result.toMaybe
                 |> Maybe.map .total
 
-
         groupedResults : List String
         groupedResults =
             case searchModel.resultDisplay of
@@ -4390,12 +4348,11 @@ viewSearchResults model searchModel =
         resultCount : Int
         resultCount =
             searchModel.searchResults
-                |> List.map Result.toMaybe
-                |> List.map (Maybe.map .documentIds)
-                |> List.concatMap (Maybe.withDefault [])
+                |> List.filterMap Result.toMaybe
+                |> List.concatMap .documentIds
                 |> List.append groupedResults
-                |> List.Extra.unique
-                |> List.length
+                |> Set.fromList
+                |> Set.size
 
         remaining : Int
         remaining =
@@ -4411,22 +4368,21 @@ viewSearchResults model searchModel =
         , HA.id "results"
         , HA.tabindex -1
         ]
-        (List.concat
-            [ [ Html.div
-                    [ HA.class "limit-width"
-                    , HA.class "fill-width-with-padding"
-                    , HA.class "fade-in"
-                    ]
-                    [ case total of
-                        Just count ->
-                            Html.text ("Showing " ++ String.fromInt resultCount ++ " of " ++ String.fromInt count ++ " results")
+        (List.append
+            [ Html.div
+                [ HA.class "limit-width"
+                , HA.class "fill-width-with-padding"
+                , HA.class "fade-in"
+                ]
+                [ case total of
+                    Just count ->
+                        Html.text ("Showing " ++ String.fromInt resultCount ++ " of " ++ String.fromInt count ++ " results")
 
-                        _ ->
-                            Html.text ""
-                    ]
-              ]
-
-            , case searchModel.resultDisplay of
+                    _ ->
+                        Html.text ""
+                ]
+            ]
+            (case searchModel.resultDisplay of
                 Short ->
                     viewSearchResultsShort model searchModel remaining resultCount
 
@@ -4438,22 +4394,22 @@ viewSearchResults model searchModel =
 
                 Grouped ->
                     viewSearchResultsGrouped model searchModel remaining
-            ]
+            )
         )
 
 
-viewLoadMoreButtons : Model -> Int -> Html Msg
-viewLoadMoreButtons model remaining =
+viewLoadMoreButtons : Int -> Int -> Html Msg
+viewLoadMoreButtons pageSize remaining =
     Html.div
         [ HA.class "row"
         , HA.class "gap-medium"
         , HA.style "justify-content" "center"
         ]
-        [ if remaining > model.pageSize then
+        [ if remaining > pageSize then
             Html.button
-                [ HE.onClick (LoadMorePressed model.pageSize)
+                [ HE.onClick (LoadMorePressed pageSize)
                 ]
-                [ Html.text ("Load " ++ String.fromInt model.pageSize ++ " more") ]
+                [ Html.text ("Load " ++ String.fromInt pageSize ++ " more") ]
 
           else
             Html.text ""
@@ -4471,11 +4427,11 @@ viewLoadMoreButtons model remaining =
 
 viewSearchResultsShort : Model -> SearchModel -> Int -> Int -> List (Html Msg)
 viewSearchResultsShort model searchModel remaining resultCount =
-    [ Html.ol
+    [ Html.Keyed.ol
         [ HA.class "fill-width-with-padding"
         , HA.class "limit-width"
         , HA.class "results-list"
-        , if model.showResultIndex then
+        , if model.viewModel.showResultIndex then
             HA.class "item-gap-small"
 
           else
@@ -4485,17 +4441,25 @@ viewSearchResultsShort model searchModel remaining resultCount =
             (\result ->
                 case result of
                     Ok r ->
-                        r.documentIds
-                            |> List.map (\id -> Dict.get id model.documents)
-                            |> List.map (Maybe.andThen Result.toMaybe)
-                            |> List.map (viewSingleSearchResult model)
-                            |> List.map List.singleton
-                            |> List.map (Html.li [])
+                        List.map
+                            (\id ->
+                                ( id
+                                , Html.li
+                                    []
+                                    [ Dict.get id model.documents
+                                        |> Maybe.andThen Result.toMaybe
+                                        |> viewSingleShortResult model.viewModel
+                                    ]
+                                )
+                            )
+                            r.documentIds
 
                     Err err ->
-                        [ Html.h2
-                            []
-                            [ Html.text (httpErrorToString err) ]
+                        [ ( "err"
+                          , Html.h2
+                                []
+                                [ Html.text (httpErrorToString err) ]
+                          )
                         ]
             )
             searchModel.searchResults
@@ -4508,7 +4472,7 @@ viewSearchResultsShort model searchModel remaining resultCount =
             []
 
       else
-        viewLoadMoreButtons model remaining
+        viewLoadMoreButtons model.pageSize remaining
 
     , if resultCount > 0 then
         Html.button
@@ -4521,11 +4485,14 @@ viewSearchResultsShort model searchModel remaining resultCount =
     ]
 
 
-viewSingleSearchResult : Model -> Maybe Document -> Html Msg
-viewSingleSearchResult model maybeDocument =
+viewSingleShortResult : ViewModel -> Maybe Document -> Html Msg
+viewSingleShortResult viewModel maybeDocument =
     case maybeDocument of
         Just document ->
-            viewSingleSearchResultLoaded model document
+            Html.Lazy.lazy2
+                viewSingleShortResultLoaded
+                viewModel
+                document
 
         Nothing ->
             Html.article
@@ -4540,8 +4507,8 @@ viewSingleSearchResult model maybeDocument =
                 ]
 
 
-viewSingleSearchResultLoaded : Model -> Document -> Html Msg
-viewSingleSearchResultLoaded model document =
+viewSingleShortResultLoaded : ViewModel -> Document -> Html Msg
+viewSingleShortResultLoaded viewModel document =
     let
         hasActionsInTitle : Bool
         hasActionsInTitle =
@@ -4561,7 +4528,7 @@ viewSingleSearchResultLoaded model document =
                 , HA.class "align-center"
                 , HA.class "nowrap"
                 ]
-                [ if model.showResultPfs then
+                [ if viewModel.showResultPfs then
                     viewPfsIconWithLink 25 (Maybe.withDefault "" document.pfs)
 
                   else
@@ -4571,8 +4538,8 @@ viewSingleSearchResultLoaded model document =
                     (List.append
                         [ Html.a
                             (List.append
-                                [ HA.href (getUrl model document)
-                                , HAE.attributeIf model.openInNewTab (HA.target "_blank")
+                                [ HA.href (getUrl viewModel document)
+                                , HAE.attributeIf viewModel.openInNewTab (HA.target "_blank")
                                 ]
                                 (linkEventAttributes document.url)
                             )
@@ -4634,7 +4601,10 @@ viewSingleSearchResultLoaded model document =
             ]
             (case document.searchMarkdown of
                 Parsed parsed ->
-                    viewMarkdown model document.id 0 Nothing parsed
+                    viewMarkdown viewModel document.id parsed
+
+                ParsedWithUnflattenedChildren parsed ->
+                    viewMarkdown viewModel document.id parsed
 
                 NotParsed _ ->
                     [ Html.div
@@ -4647,11 +4617,11 @@ viewSingleSearchResultLoaded model document =
 
 viewSearchResultsFull : Model -> SearchModel -> Int -> List (Html Msg)
 viewSearchResultsFull model searchModel remaining =
-    [ Html.ol
+    [ Html.Keyed.ol
         [ HA.class "fill-width-with-padding"
         , HA.class "limit-width"
         , HA.class "results-list"
-        , if model.showResultIndex then
+        , if model.viewModel.showResultIndex then
             HA.class "item-gap-small"
 
           else
@@ -4663,7 +4633,8 @@ viewSearchResultsFull model searchModel remaining =
                     Ok r ->
                         List.map
                             (\id ->
-                                Html.li
+                                ( id
+                                , Html.li
                                     []
                                     [ Html.article
                                         [ HA.class "column"
@@ -4671,15 +4642,19 @@ viewSearchResultsFull model searchModel remaining =
                                         , HA.class "fade-in"
                                         , HA.style "margin-top" "2px"
                                         ]
-                                        (viewDocument model id 0 Nothing)
+                                        [ viewDocument model id
+                                        ]
                                     ]
+                                )
                             )
                             r.documentIds
 
                     Err err ->
-                        [ Html.h2
-                            []
-                            [ Html.text (httpErrorToString err) ]
+                        [ ( "err"
+                          , Html.h2
+                                []
+                                [ Html.text (httpErrorToString err) ]
+                          )
                         ]
             )
             searchModel.searchResults
@@ -4691,7 +4666,7 @@ viewSearchResultsFull model searchModel remaining =
             []
 
       else
-        viewLoadMoreButtons model remaining
+        viewLoadMoreButtons model.pageSize remaining
     ]
 
 
@@ -4815,7 +4790,8 @@ viewSearchResultTable model searchModel =
                     ("name" :: searchModel.tableColumns)
                 )
             ]
-        , Html.tbody
+        , Html.Keyed.node
+            "tbody"
             []
             (List.concatMap
                 (\result ->
@@ -4826,12 +4802,13 @@ viewSearchResultTable model searchModel =
                                 |> List.filterMap Result.toMaybe
                                 |> List.map
                                     (\document ->
-                                        Html.tr
-                                            []
-                                            (List.map
-                                                (viewSearchResultTableCell model document)
-                                                ("name" :: searchModel.tableColumns)
-                                            )
+                                        ( document.id
+                                        , Html.Lazy.lazy3
+                                            viewSearchResultTableRow
+                                            model.viewModel
+                                            searchModel.tableColumns
+                                            document
+                                        )
                                     )
 
                         Err _ ->
@@ -4842,14 +4819,32 @@ viewSearchResultTable model searchModel =
         ]
 
 
-viewSearchResultTableCell : Model -> Document -> String -> Html Msg
-viewSearchResultTableCell model document column =
+viewSearchResultTableRow : ViewModel -> List String -> Document -> Html Msg
+viewSearchResultTableRow viewModel tableColumns document =
+    Html.Keyed.node "tr"
+        []
+        (List.map
+            (\column ->
+                ( document.id ++ column
+                , Html.Lazy.lazy3
+                    viewSearchResultTableCell
+                    viewModel
+                    document
+                    column
+                )
+            )
+            ("name" :: tableColumns)
+        )
+
+
+viewSearchResultTableCell : ViewModel -> Document -> String -> Html Msg
+viewSearchResultTableCell viewModel document column =
     let
         maybeAsMarkdown : Maybe String -> List (Html Msg)
         maybeAsMarkdown maybeString =
             maybeString
                 |> Maybe.withDefault ""
-                |> parseAndViewAsMarkdown model
+                |> parseAndViewAsMarkdown viewModel
     in
     Html.td
         [ HAE.attributeIf (column == "name") (HA.class "sticky-left")
@@ -5194,10 +5189,10 @@ viewSearchResultTableCell model document column =
             [ "name" ] ->
                 [ Html.a
                     (List.append
-                        [ HA.href (getUrl model document)
-                        , HAE.attributeIf model.openInNewTab (HA.target "_blank")
+                        [ HA.href (getUrl viewModel document)
+                        , HAE.attributeIf viewModel.openInNewTab (HA.target "_blank")
                         ]
-                        (linkEventAttributes (getUrl model document))
+                        (linkEventAttributes (getUrl viewModel document))
                     )
                     [ Html.text document.name
                     ]
@@ -5272,7 +5267,7 @@ viewSearchResultTableCell model document column =
 
             [ "release_date" ] ->
                 document.releaseDate
-                    |> Maybe.map (formatDate model)
+                    |> Maybe.map (formatDate viewModel)
                     |> maybeAsText
 
             [ "reload" ] ->
@@ -5406,10 +5401,10 @@ viewSearchResultTableCell model document column =
             [ "url" ] ->
                 [ Html.a
                     (List.append
-                        [ HA.href (getUrl model document)
-                        , HAE.attributeIf model.openInNewTab (HA.target "_blank")
+                        [ HA.href (getUrl viewModel document)
+                        , HAE.attributeIf viewModel.openInNewTab (HA.target "_blank")
                         ]
-                        (linkEventAttributes (getUrl model document))
+                        (linkEventAttributes (getUrl viewModel document))
                     )
                     [ Html.text document.url
                     ]
@@ -5780,7 +5775,7 @@ searchResultTableCellToString model document column =
 
         [ "release_date" ] ->
             document.releaseDate
-                |> Maybe.map (formatDate model)
+                |> Maybe.map (formatDate model.viewModel)
                 |> maybeAsString
 
         [ "reload" ] ->
@@ -5988,7 +5983,8 @@ viewSearchResultsGrouped model searchModel remaining =
             searchModel.searchResults
                 |> List.concatMap (Result.map .documentIds >> Result.withDefault [])
                 |> List.append searchModel.searchGroupResults
-                |> List.Extra.unique
+                |> Set.fromList
+                |> Set.toList
                 |> List.filterMap (\id -> Dict.get id model.documents)
                 |> List.filterMap Result.toMaybe
 
@@ -6018,7 +6014,7 @@ viewSearchResultsGrouped model searchModel remaining =
             []
 
       else
-        viewLoadMoreButtons { model | pageSize = 100000 } remaining
+        viewLoadMoreButtons 100000 remaining
 
     , Html.div
         [ HA.class "column"
@@ -6097,7 +6093,7 @@ viewSearchResultsGrouped model searchModel remaining =
             []
 
       else
-        viewLoadMoreButtons { model | pageSize = 100000 } remaining
+        viewLoadMoreButtons 100000 remaining
     ]
 
 
@@ -6324,176 +6320,166 @@ viewLoadGroupButton model searchModel groups =
 
 viewSearchResultsGroupedLinkList : Model -> SearchModel -> List Document -> Int -> Html Msg
 viewSearchResultsGroupedLinkList model searchModel documents remaining =
-    let
-        sortedDocuments : List Document
-        sortedDocuments =
-            List.sortBy .name documents
+    Html.div
+        [ case searchModel.groupedLinkLayout of
+            Horizontal ->
+                HA.class "row"
 
-        link : Document -> Html Msg
-        link document =
-            Html.a
-                (List.append
-                    [ HA.href (getUrl model document)
-                    ]
-                    (linkEventAttributes (getUrl model document))
+            _ ->
+                HA.class "column"
+        , HA.class "gap-small"
+        ]
+        (List.append
+            (List.map
+                (Html.Lazy.lazy2
+                    (case searchModel.groupedLinkLayout of
+                        Horizontal ->
+                            viewSearchResultGroupedHorizontal
+
+                        Vertical ->
+                            viewSearchResultGroupedVertical
+
+                        VerticalWithSummary ->
+                            viewSearchResultGroupedVerticalWithSummary
+                    )
+                    model.viewModel
                 )
-                [ Html.text document.name ]
+                (List.sortBy .name documents)
+            )
+            [ viewSearchResultsGroupedNotLoaded remaining ]
+        )
 
-        heightenableBadge : Document -> Html msg
-        heightenableBadge document =
-            if model.groupedShowHeightenable && List.length document.heightenLevels >= 2 then
+
+viewSearchResultGroupedHorizontal : ViewModel -> Document -> Html Msg
+viewSearchResultGroupedHorizontal viewModel document =
+    Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        ]
+        [ if viewModel.groupedShowPfs then
+            document.pfs
+                |> Maybe.withDefault ""
+                |> viewPfsIcon 0
+
+          else
+              Html.text ""
+        , viewGroupedLink viewModel document
+        , viewGroupedHeightenableBadge viewModel document
+        , viewGroupedRarityBadge viewModel document
+        ]
+
+
+viewSearchResultGroupedVertical : ViewModel -> Document -> Html Msg
+viewSearchResultGroupedVertical viewModel document =
+    Html.div
+        [ HA.class "row"
+        , HA.class "gap-tiny"
+        ]
+        [ if viewModel.groupedShowPfs then
+            document.pfs
+                |> Maybe.withDefault ""
+                |> viewPfsIcon 0
+          else
+            Html.text ""
+        , viewGroupedLink viewModel document
+        , viewGroupedHeightenableBadge viewModel document
+        , viewGroupedRarityBadge viewModel document
+        ]
+
+
+viewSearchResultGroupedVerticalWithSummary : ViewModel -> Document -> Html Msg
+viewSearchResultGroupedVerticalWithSummary viewModel document =
+    Html.div
+        [ HA.class "inline" ]
+        (List.concat
+            [ if viewModel.groupedShowPfs then
+                [ document.pfs
+                    |> Maybe.withDefault ""
+                    |> viewPfsIcon 0
+                , Html.text " "
+                ]
+
+              else
+                  []
+            , [ viewGroupedLink viewModel document
+              , Html.text " "
+              , viewGroupedHeightenableBadge viewModel document
+              , Html.text " "
+              , viewGroupedRarityBadge viewModel document
+              ]
+            , case document.summary of
+                Just summary ->
+                    List.append
+                        [ Html.text " - " ]
+                        (parseAndViewAsMarkdown viewModel summary)
+
+                Nothing ->
+                    []
+            ]
+        )
+
+
+viewGroupedLink : ViewModel -> Document -> Html Msg
+viewGroupedLink viewModel document =
+    Html.a
+        (List.append
+            [ HA.href (getUrl viewModel document)
+            ]
+            (linkEventAttributes (getUrl viewModel document))
+        )
+        [ Html.text document.name ]
+
+
+viewGroupedHeightenableBadge : ViewModel -> Document -> Html msg
+viewGroupedHeightenableBadge viewModel document =
+    if viewModel.groupedShowHeightenable && List.length document.heightenLevels >= 2 then
+        Html.div
+            [ HA.style "vertical-align" "super"
+            , HA.style "font-size" "10px"
+            , HA.title "Heightenable"
+            ]
+            [ Html.text "H" ]
+
+    else
+        Html.text ""
+
+
+viewGroupedRarityBadge : ViewModel -> Document -> Html msg
+viewGroupedRarityBadge viewModel document =
+    if viewModel.groupedShowRarity then
+        case Maybe.map String.toLower document.rarity of
+            Just "uncommon" ->
                 Html.div
-                    [ HA.style "vertical-align" "super"
-                    , HA.style "font-size" "10px"
-                    , HA.title "Heightenable"
+                    [ HA.class "trait"
+                    , HA.class "trait-uncommon"
+                    , HA.class "traitbadge"
+                    , HA.title "Uncommon"
                     ]
-                    [ Html.text "H" ]
+                    [ Html.text "U" ]
 
-            else
+            Just "rare" ->
+                Html.div
+                    [ HA.class "trait"
+                    , HA.class "trait-rare"
+                    , HA.class "traitbadge"
+                    , HA.title "Rare"
+                    ]
+                    [ Html.text "R" ]
+
+            Just "unique" ->
+                Html.div
+                    [ HA.class "trait"
+                    , HA.class "trait-unique"
+                    , HA.class "traitbadge"
+                    , HA.title "Unique"
+                    ]
+                    [ Html.text "Q" ]
+
+            _ ->
                 Html.text ""
 
-        rarityBadge : Document -> Html msg
-        rarityBadge document =
-            if model.groupedShowRarity then
-                case Maybe.map String.toLower document.rarity of
-                    Just "uncommon" ->
-                        Html.div
-                            [ HA.class "trait"
-                            , HA.class "trait-uncommon"
-                            , HA.class "traitbadge"
-                            , HA.title "Uncommon"
-                            ]
-                            [ Html.text "U" ]
-
-                    Just "rare" ->
-                        Html.div
-                            [ HA.class "trait"
-                            , HA.class "trait-rare"
-                            , HA.class "traitbadge"
-                            , HA.title "Rare"
-                            ]
-                            [ Html.text "R" ]
-
-                    Just "unique" ->
-                        Html.div
-                            [ HA.class "trait"
-                            , HA.class "trait-unique"
-                            , HA.class "traitbadge"
-                            , HA.title "Unique"
-                            ]
-                            [ Html.text "Q" ]
-
-                    _ ->
-                        Html.text ""
-
-            else
-                Html.text ""
-    in
-    case searchModel.groupedLinkLayout of
-        Horizontal ->
-            Html.div
-                [ HA.class "row"
-                , HA.class "gap-small"
-                ]
-                (List.append
-                    (List.map
-                        (\document ->
-                            Html.div
-                                [ HA.class "row"
-                                , HA.class "gap-tiny"
-                                ]
-                                [ if model.groupedShowPfs then
-                                    document.pfs
-                                        |> Maybe.withDefault ""
-                                        |> viewPfsIcon 0
-
-                                  else
-                                      Html.text ""
-                                , link document
-                                , heightenableBadge document
-                                , rarityBadge document
-                                ]
-                        )
-                        sortedDocuments
-                    )
-                    [ viewSearchResultsGroupedNotLoaded remaining ]
-                )
-
-        Vertical ->
-            Html.div
-                [ HA.class "column"
-                , HA.class "gap-small"
-                ]
-                (List.append
-                    (List.map
-                        (\document ->
-                            Html.div
-                                [ HA.class "row"
-                                , HA.class "gap-tiny"
-                                ]
-                                [ if model.groupedShowPfs then
-                                    document.pfs
-                                        |> Maybe.withDefault ""
-                                        |> viewPfsIcon 0
-                                  else
-                                    Html.text ""
-                                , link document
-                                , heightenableBadge document
-                                , rarityBadge document
-                                ]
-                        )
-                        sortedDocuments
-                    )
-                    [ viewSearchResultsGroupedNotLoaded remaining ]
-                )
-
-        VerticalWithSummary ->
-            Html.div
-                [ HA.class "column"
-                , HA.class "gap-small"
-                ]
-                (List.append
-                    (List.map
-                        (\document ->
-                            Html.div
-                                [ HA.class "inline" ]
-                                (List.append
-                                    (if model.groupedShowPfs then
-                                        [ document.pfs
-                                            |> Maybe.withDefault ""
-                                            |> viewPfsIcon 0
-                                        , Html.text " "
-                                        , link document
-                                        , Html.text " "
-                                        , heightenableBadge document
-                                        , Html.text " "
-                                        , rarityBadge document
-                                        ]
-
-                                    else
-                                        [ link document
-                                        , Html.text " "
-                                        , heightenableBadge document
-                                        , Html.text " "
-                                        , rarityBadge document
-                                        ]
-
-                                    )
-                                    (case document.summary of
-                                        Just summary ->
-                                            List.append
-                                                [ Html.text " - " ]
-                                                (parseAndViewAsMarkdown model summary)
-
-                                        Nothing ->
-                                            []
-                                    )
-                                )
-                        )
-                        sortedDocuments
-                    )
-                    [ viewSearchResultsGroupedNotLoaded remaining ]
-                )
+    else
+        Html.text ""
 
 
 viewSearchResultsGroupedNotLoaded : Int -> Html msg
@@ -7117,8 +7103,8 @@ viewGroupedTitle field value =
         Html.text (toTitleCase value)
 
 
-parseAndViewAsMarkdown : Model -> String -> List (Html Msg)
-parseAndViewAsMarkdown model string =
+parseAndViewAsMarkdown : ViewModel -> String -> List (Html Msg)
+parseAndViewAsMarkdown viewModel string =
     if String.isEmpty string then
         []
 
@@ -7127,14 +7113,14 @@ parseAndViewAsMarkdown model string =
             |> Markdown.Parser.parse
             |> Result.map (List.map (Markdown.Block.walk mergeInlines))
             |> Result.mapError (List.map Markdown.Parser.deadEndToString)
-            |> viewMarkdown model "" 0 Nothing
+            |> viewMarkdown viewModel ""
 
 
-viewMarkdown : Model -> String -> Int -> Maybe String -> ParsedMarkdownResult -> List (Html Msg)
-viewMarkdown model id titleLevel overrideRight markdown =
+viewMarkdown : ViewModel -> String -> ParsedMarkdownResult -> List (Html Msg)
+viewMarkdown viewModel id markdown =
     case markdown of
         Ok blocks ->
-            case Markdown.Renderer.render (markdownRenderer model titleLevel overrideRight) blocks of
+            case Markdown.Renderer.render (markdownRenderer viewModel) blocks of
                 Ok v ->
                     List.concat v
 
@@ -7157,8 +7143,8 @@ viewMarkdown model id titleLevel overrideRight markdown =
             ]
 
 
-markdownRenderer : Model -> Int -> Maybe String -> Markdown.Renderer.Renderer (List (Html Msg))
-markdownRenderer model titleLevel overrideRight =
+markdownRenderer : ViewModel -> Markdown.Renderer.Renderer (List (Html Msg))
+markdownRenderer viewModel =
     let
         defaultRenderer : Markdown.Renderer.Renderer (Html msg)
         defaultRenderer =
@@ -7177,7 +7163,7 @@ markdownRenderer model titleLevel overrideRight =
                 , children = List.concat heading.children
                 }
             ]
-    , html = markdownHtmlRenderer model titleLevel overrideRight
+    , html = markdownHtmlRenderer viewModel
     , image =
         \image ->
             [ viewImage 150 image.src
@@ -7186,7 +7172,11 @@ markdownRenderer model titleLevel overrideRight =
         \linkData children ->
             [ Html.a
                 (List.append
-                    [ HA.href linkData.destination
+                    [ if String.startsWith "/" linkData.destination then
+                        HA.href (viewModel.resultBaseUrl ++ linkData.destination)
+
+                      else
+                        HA.href linkData.destination
                     , HAE.attributeMaybe HA.title linkData.title
                     ]
                     (linkEventAttributes linkData.destination)
@@ -7217,12 +7207,8 @@ markdownRenderer model titleLevel overrideRight =
     }
 
 
-markdownHtmlRenderer :
-    Model
-    -> Int
-    -> Maybe String
-    -> Markdown.Html.Renderer (List (List (Html Msg)) -> List (Html Msg))
-markdownHtmlRenderer model titleLevel overrideRight =
+markdownHtmlRenderer : ViewModel -> Markdown.Html.Renderer (List (List (Html Msg)) -> List (Html Msg))
+markdownHtmlRenderer viewModel =
     Markdown.Html.oneOf
         [ Markdown.Html.tag "actions"
             (\string _ ->
@@ -7276,29 +7262,21 @@ markdownHtmlRenderer model titleLevel overrideRight =
         , Markdown.Html.tag "date"
             (\value _ ->
                 [ Html.text " "
-                , Html.text (formatDate model value)
+                , Html.text (formatDate viewModel value)
                 , Html.text " "
                 ]
             )
             |> Markdown.Html.withAttribute "value"
         , Markdown.Html.tag "document"
-            (\id level titleRight _ ->
-                viewDocument
-                    model
-                    id
-                    (max
-                        (level
-                            |> Maybe.andThen String.toInt
-                            |> Maybe.withDefault 1
-                            |> (+) (titleLevel - 1)
-                        )
-                        titleLevel
-                    )
-                    titleRight
+            (\id _ ->
+                [ Html.div
+                    [ HA.class "loader"
+                    , HA.style "margin-top" "20px"
+                    ]
+                    []
+                ]
             )
             |> Markdown.Html.withAttribute "id"
-            |> Markdown.Html.withOptionalAttribute "level"
-            |> Markdown.Html.withOptionalAttribute "override-title-right"
         , Markdown.Html.tag "document-flattened"
             (\children ->
                 List.concat children
@@ -7307,14 +7285,6 @@ markdownHtmlRenderer model titleLevel overrideRight =
             (\_ ->
                 []
             )
-        -- TODO
-        -- , Markdown.Html.tag "filter-button"
-        --     (\type_ value _ ->
-        --         [ viewFilterButton model type_ value
-        --         ]
-        --     )
-        --     |> Markdown.Html.withAttribute "type"
-        --     |> Markdown.Html.withAttribute "value"
         , Markdown.Html.tag "li"
             (\children ->
                 [ Html.li
@@ -7334,15 +7304,6 @@ markdownHtmlRenderer model titleLevel overrideRight =
             (\_ ->
                 []
             )
-        -- TODO
-        -- , Markdown.Html.tag "query-button"
-        --     (\query children ->
-        --         [ Html.button
-        --             [ HE.onClick (QueryButtonPressed query) ]
-        --             (List.concat children)
-        --         ]
-        --     )
-        --     |> Markdown.Html.withAttribute "query"
         , Markdown.Html.tag "search"
             (\_ ->
                 [] -- Rendered elsewhere
@@ -7434,13 +7395,13 @@ markdownHtmlRenderer model titleLevel overrideRight =
                     maybeRightWithOverride : Maybe String
                     maybeRightWithOverride =
                         if level == "1" then
-                            Maybe.Extra.or overrideRight maybeRight
+                            Maybe.Extra.or Nothing maybeRight
 
                         else
                             maybeRight
                 in
                 [ (String.toInt level
-                    |> Maybe.map ((+) titleLevel)
+                    |> Maybe.map ((+) 0) -- titleLevel
                     |> Maybe.withDefault 0
                     |> titleLevelToTag
                   )
@@ -7638,43 +7599,60 @@ viewImage maxWidth url =
         []
 
 
-viewDocument : Model -> String -> Int -> Maybe String -> List (Html Msg)
-viewDocument model id titleLevel overrideRight =
+viewDocument : Model -> String -> Html Msg
+viewDocument model id =
     case Dict.get id model.documents of
         Just (Ok document) ->
             case document.markdown of
                 Parsed parsed ->
-                    viewMarkdown model document.id titleLevel overrideRight parsed
+                    Html.Lazy.lazy3
+                        viewParsedDocument
+                        model.viewModel
+                        document.id
+                        parsed
+
+                ParsedWithUnflattenedChildren parsed ->
+                    Html.Lazy.lazy3
+                        viewParsedDocument
+                        model.viewModel
+                        document.id
+                        parsed
 
                 NotParsed _ ->
-                    [ Html.div
+                    Html.div
                         [ HA.style "color" "red" ]
                         [ Html.text ("Not parsed: " ++ document.id) ]
-                    ]
 
         Just (Err (Http.BadStatus 404)) ->
-            [ Html.div
+            Html.div
                 [ HA.class "row"
                 , HA.class "justify-center"
                 , HA.style "font-size" "var(--font-very-large)"
                 , HA.style "font-variant" "small-caps"
                 ]
                 [ Html.text "Page not found" ]
-            ]
 
         Just (Err _) ->
-            [ Html.div
+            Html.div
                 [ HA.style "color" "red" ]
                 [ Html.text ("Failed to load " ++ id) ]
-            ]
 
         Nothing ->
-            [ Html.div
+            Html.div
                 [ HA.class "loader"
                 , HA.style "margin-top" "20px"
                 ]
                 []
-            ]
+
+
+viewParsedDocument : ViewModel -> String -> Result (List String) (List Markdown.Block.Block) -> Html Msg
+viewParsedDocument viewModel documentId parsed =
+    Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        (viewMarkdown viewModel documentId parsed)
+
 
 
 viewLinkPreview : Model -> Html Msg
@@ -7724,7 +7702,7 @@ viewLinkPreview model =
                           else
                             HA.style "bottom" (String.fromInt bottom ++ "px")
                         ]
-                        (viewDocument model doc.id 0 Nothing)
+                        [ viewDocument model doc.id ]
 
                 _ ->
                     Html.text ""
@@ -8085,6 +8063,54 @@ replaceActionLigatures text ( find, replace ) rem =
 
                 else
                     [ Html.text text ]
+
+
+viewCss : Model -> Html msg
+viewCss model =
+    Html.node "style"
+        []
+        [ Html.text
+            (css
+                { pageWidth = model.pageWidth
+                }
+            )
+
+        , if model.viewModel.showResultAdditionalInfo then
+            Html.text ""
+
+          else
+            Html.text ".additional-info { display:none; }"
+
+        , if model.viewModel.showResultSpoilers then
+            Html.text ""
+
+          else
+            Html.text ".spoilers { display:none; }"
+
+        , if model.viewModel.showResultSummary then
+            Html.text ""
+
+          else
+            Html.text ".summary { display:none; }"
+
+        , if model.viewModel.showResultTraits then
+            Html.text ""
+
+          else
+            Html.text ".traits { display:none; }"
+
+        , if model.viewModel.showResultAdditionalInfo && model.viewModel.showResultSummary then
+            Html.text ""
+
+          else
+            Html.text ".additional-info + hr { display:none; }"
+
+        , if model.viewModel.showResultIndex then
+            Html.text ""
+
+          else
+            Html.text ".results-list { list-style-type: none; }"
+        ]
 
 
 css : { pageWidth : Int } -> String

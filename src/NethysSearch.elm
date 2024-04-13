@@ -68,9 +68,7 @@ init flagsValue =
       , autofocus = flags.autofocus
       , autoQueryType = False
       , bodySize = { width = 0, height = 0 }
-      , browserDateFormat = flags.browserDateFormat
       , dataUrl = flags.dataUrl
-      , dateFormat = "default"
       , documentIndex = Dict.empty
       , documents = Dict.empty
       , documentsToFetch = Set.empty
@@ -78,9 +76,6 @@ init flagsValue =
       , fixedParams = flags.fixedParams
       , groupTraits = False
       , groupedDisplay = Dim
-      , groupedShowHeightenable = True
-      , groupedShowPfs = True
-      , groupedShowRarity = True
       , groupedSort = Alphanum
       , index = ""
       , loadAll = flags.loadAll
@@ -88,7 +83,6 @@ init flagsValue =
       , limitTableWidth = False
       , linkPreviewsEnabled = True
       , noUi = flags.noUi
-      , openInNewTab = False
       , pageDefaultParams = Dict.empty
       , pageId = flags.pageId
       , pageSize = 50
@@ -96,12 +90,6 @@ init flagsValue =
       , pageWidth = 0
       , previewLink = Nothing
       , randomSeed = flags.randomSeed
-      , resultBaseUrl =
-            if String.endsWith "/" flags.resultBaseUrl then
-                String.dropRight 1 flags.resultBaseUrl
-
-            else
-                flags.resultBaseUrl
       , savedColumnConfigurations = Dict.empty
       , savedColumnConfigurationName = ""
       , searchModel =
@@ -111,15 +99,29 @@ init flagsValue =
                 , removeFilters = flags.removeFilters
                 }
       , showLegacyFilters = True
-      , showResultAdditionalInfo = True
-      , showResultIndex = True
-      , showResultPfs = True
-      , showResultSpoilers = True
-      , showResultSummary = True
-      , showResultTraits = True
       , sourcesAggregation = Nothing
       , traitAggregations = Nothing
       , url = url
+      , viewModel =
+            { browserDateFormat = flags.browserDateFormat
+            , dateFormat = "default"
+            , groupedShowHeightenable = True
+            , groupedShowPfs = True
+            , groupedShowRarity = True
+            , openInNewTab = False
+            , resultBaseUrl =
+                if String.endsWith "/" flags.resultBaseUrl then
+                    String.dropRight 1 flags.resultBaseUrl
+
+                else
+                    flags.resultBaseUrl
+            , showResultAdditionalInfo = True
+            , showResultIndex = True
+            , showResultPfs = True
+            , showResultSpoilers = True
+            , showResultSummary = True
+            , showResultTraits = True
+            }
       , windowSize = { width = flags.windowWidth, height = flags.windowHeight }
       }
         |> \model ->
@@ -390,7 +392,11 @@ update msg model =
             )
 
         DateFormatChanged format ->
-            ( { model | dateFormat = format }
+            ( updateViewModel
+                (\viewModel ->
+                    { viewModel | dateFormat = format }
+                )
+                model
             , saveToLocalStorage "date-format" format
             )
 
@@ -836,21 +842,33 @@ update msg model =
             )
 
         GroupedShowHeightenableChanged enabled ->
-            ( { model | groupedShowHeightenable = enabled }
+            ( updateViewModel
+                (\viewModel ->
+                    { viewModel | groupedShowHeightenable = enabled }
+                )
+                model
             , saveToLocalStorage
                 "grouped-show-heightenable"
                 (if enabled then "1" else "0")
             )
 
         GroupedShowPfsIconChanged enabled ->
-            ( { model | groupedShowPfs = enabled }
+            ( updateViewModel
+                (\viewModel ->
+                    { viewModel | groupedShowPfs = enabled }
+                )
+                model
             , saveToLocalStorage
                 "grouped-show-pfs"
                 (if enabled then "1" else "0")
             )
 
         GroupedShowRarityChanged enabled ->
-            ( { model | groupedShowRarity = enabled }
+            ( updateViewModel
+                (\viewModel ->
+                    { viewModel | groupedShowRarity = enabled }
+                )
+                model
             , saveToLocalStorage
                 "grouped-show-rarity"
                 (if enabled then "1" else "0")
@@ -1098,7 +1116,11 @@ update msg model =
             )
 
         OpenInNewTabChanged value ->
-            ( { model | openInNewTab = value }
+            ( updateViewModel
+                (\viewModel ->
+                    { viewModel | openInNewTab = value }
+                )
+                model
             , saveToLocalStorage
                 "open-in-new-tab"
                 (if value then "1" else "0")
@@ -1774,7 +1796,11 @@ update msg model =
             )
 
         ShowAdditionalInfoChanged value ->
-            ( { model | showResultAdditionalInfo = value }
+            ( updateViewModel
+                (\viewModel ->
+                    { viewModel | showResultAdditionalInfo = value }
+                )
+                model
             , saveToLocalStorage
                 "show-additional-info"
                 (if value then "1" else "0")
@@ -1819,35 +1845,55 @@ update msg model =
             )
 
         ShowResultIndexChanged value ->
-            ( { model | showResultIndex = value }
+            ( updateViewModel
+                (\viewModel ->
+                    { viewModel | showResultIndex = value }
+                )
+                model
             , saveToLocalStorage
                 "show-result-index"
                 (if value then "1" else "0")
             )
 
         ShowShortPfsChanged value ->
-            ( { model | showResultPfs = value }
+            ( updateViewModel
+                (\viewModel ->
+                    { viewModel | showResultPfs = value }
+                )
+                model
             , saveToLocalStorage
                 "show-short-pfs"
                 (if value then "1" else "0")
             )
 
         ShowSpoilersChanged value ->
-            ( { model | showResultSpoilers = value }
+            ( updateViewModel
+                (\viewModel ->
+                    { viewModel | showResultSpoilers = value }
+                )
+                model
             , saveToLocalStorage
                 "show-spoilers"
                 (if value then "1" else "0")
             )
 
         ShowSummaryChanged value ->
-            ( { model | showResultSummary = value }
+            ( updateViewModel
+                (\viewModel ->
+                    { viewModel | showResultSummary = value }
+                )
+                model
             , saveToLocalStorage
                 "show-summary"
                 (if value then "1" else "0")
             )
 
         ShowTraitsChanged value ->
-            ( { model | showResultTraits = value }
+            ( updateViewModel
+                (\viewModel ->
+                    { viewModel | showResultTraits = value }
+                )
+                model
             , saveToLocalStorage
                 "show-traits"
                 (if value then "1" else "0")
@@ -2427,13 +2473,18 @@ updateIndex maybeIndex ( model, cmd ) =
 parseAndFetchDocuments : Bool -> List String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 parseAndFetchDocuments alwaysParseMarkdown ids ( model, cmd ) =
     let
+        legacyMode : Bool
+        legacyMode =
+            Maybe.withDefault model.legacyMode model.searchModel.legacyMode
+
         ( parsedDocuments, idsToFetch ) =
             if model.searchModel.resultDisplay == Full || alwaysParseMarkdown then
                 parseMarkdownAndCollectIdsToFetch
                     ids
                     []
                     model.documents
-                    (Maybe.withDefault model.legacyMode model.searchModel.legacyMode)
+                    legacyMode
+                    |> Tuple.mapFirst (flattenDocuments legacyMode)
 
             else if model.searchModel.resultDisplay == Short then
                 ( List.foldl
@@ -2451,6 +2502,8 @@ parseAndFetchDocuments alwaysParseMarkdown ids ( model, cmd ) =
             else
                 ( model.documents, ids )
 
+        -- TODO: If teleport, fetch only first doc
+
         containsTeleport : Bool
         containsTeleport =
             model.url.query
@@ -2467,7 +2520,7 @@ parseAndFetchDocuments alwaysParseMarkdown ids ( model, cmd ) =
                     |> Maybe.andThen List.head
                     |> Maybe.andThen (\id -> Dict.get id model.documents)
                     |> Maybe.andThen Result.toMaybe
-                    |> Maybe.map (getUrl model)
+                    |> Maybe.map (getUrl model.viewModel)
 
             else
                 Nothing
@@ -2543,12 +2596,28 @@ parseMarkdown markdown =
         Parsed _ ->
             markdown
 
+        ParsedWithUnflattenedChildren _ ->
+            markdown
+
         NotParsed string ->
             string
                 |> Markdown.Parser.parse
                 |> Result.map (List.map (Markdown.Block.walk mergeInlines))
                 |> Result.mapError (List.map Markdown.Parser.deadEndToString)
-                |> Parsed
+                |> \result ->
+                    case result of
+                        Ok blocks ->
+                            if List.any
+                                (\block -> findDocumentIdsInBlock block [] |> List.isEmpty |> not)
+                                blocks
+                            then
+                                ParsedWithUnflattenedChildren result
+
+                            else
+                                Parsed result
+
+                        Err _ ->
+                            Parsed result
 
 
 parseDocumentMarkdown : Document -> Document
@@ -2559,16 +2628,6 @@ parseDocumentMarkdown document =
 parseDocumentSearchMarkdown : Document -> Document
 parseDocumentSearchMarkdown document =
     { document | searchMarkdown = parseMarkdown document.searchMarkdown }
-
-
-getParsedMarkdown : Markdown -> Maybe ParsedMarkdownResult
-getParsedMarkdown markdown =
-    case markdown of
-        Parsed parsed ->
-            Just parsed
-
-        NotParsed _ ->
-            Nothing
 
 
 parseMarkdownAndCollectIdsToFetch :
@@ -2590,6 +2649,9 @@ parseMarkdownAndCollectIdsToFetch idsToCheck idsToFetch documents legacyMode =
                                     legacyId
 
                                 ( True, Nothing, _ ) ->
+                                    id
+
+                                ( False, _, Just "0" ) ->
                                     id
 
                                 ( False, _, Just remasterId ) ->
@@ -2664,9 +2726,9 @@ findDocumentIdsInBlock : Markdown.Block.Block -> List String -> List String
 findDocumentIdsInBlock block list =
     case block of
         Markdown.Block.HtmlBlock (Markdown.Block.HtmlElement "document" attributes _) ->
-            case List.Extra.find (.name >> (==) "id") attributes of
-                Just id ->
-                    id.value :: list
+            case getValueFromAttribute "id" attributes of
+                Just value ->
+                    value :: list
 
                 Nothing ->
                     list
@@ -2681,48 +2743,40 @@ findDocumentIdsInBlock block list =
             list
 
 
-getLinksFromMarkdown : ParsedMarkdownResult -> List String
-getLinksFromMarkdown markdown =
-    case markdown of
-        Ok blocks ->
-            List.append
-                (Markdown.Block.inlineFoldl
-                    (\inline list ->
-                        case inline of
-                            Markdown.Block.Link url _ _ ->
-                                url :: list
+flattenDocuments : Bool -> Dict String (Result Http.Error Document) -> Dict String (Result Http.Error Document)
+flattenDocuments legacyMode documents =
+    Dict.map
+        (\id documentResult ->
+            Result.map
+                (\document ->
+                    { document
+                        | markdown =
+                            case document.markdown of
+                                ParsedWithUnflattenedChildren (Ok blocks) ->
+                                    case flattenMarkdown legacyMode documents 1 Nothing blocks of
+                                        ( True, flattenedBlocks ) ->
+                                            ParsedWithUnflattenedChildren (Ok flattenedBlocks)
 
-                            _ ->
-                                list
-                    )
-                    []
-                    blocks
+                                        ( False, flattenedBlocks ) ->
+                                            Parsed (Ok flattenedBlocks)
+
+                                _ ->
+                                    document.markdown
+                    }
                 )
-                (Markdown.Block.foldl
-                    (\block list ->
-                        case block of
-                            Markdown.Block.HtmlBlock (Markdown.Block.HtmlElement "trait" attributes _) ->
-                                case List.Extra.find (.name >> (==) "url") attributes of
-                                    Just url ->
-                                        url.value :: list
-
-                                    Nothing ->
-                                        list
-
-                            _ ->
-                                list
-                    )
-                    []
-                    blocks
-                )
-
-        Err _ ->
-            []
+                documentResult
+        )
+        documents
 
 
 updateCurrentSearchModel : (SearchModel -> SearchModel) -> Model -> Model
 updateCurrentSearchModel updateFun model =
     { model | searchModel = updateFun model.searchModel }
+
+
+updateViewModel : (ViewModel -> ViewModel) -> Model -> Model
+updateViewModel updateFun model =
+    { model | viewModel = updateFun model.viewModel }
 
 
 updateModelFromLocalStorage : ( String, String ) -> Model -> Model
@@ -2759,7 +2813,11 @@ updateModelFromLocalStorage ( key, value ) model =
                     model
 
         "date-format" ->
-            { model | dateFormat = value }
+            updateViewModel
+                (\viewModel ->
+                    { viewModel | dateFormat = value }
+                )
+                model
 
         "grouped-display" ->
             case value of
@@ -2776,37 +2834,49 @@ updateModelFromLocalStorage ( key, value ) model =
                     model
 
         "grouped-show-heightenable" ->
-            case value of
-                "1" ->
-                    { model | groupedShowHeightenable = True }
+            updateViewModel
+                (\viewModel ->
+                    case value of
+                        "1" ->
+                            { viewModel | groupedShowHeightenable = True }
 
-                "0" ->
-                    { model | groupedShowHeightenable = False }
+                        "0" ->
+                            { viewModel | groupedShowHeightenable = False }
 
-                _ ->
-                    model
+                        _ ->
+                            viewModel
+                )
+                model
 
         "grouped-show-pfs" ->
-            case value of
-                "1" ->
-                    { model | groupedShowPfs = True }
+            updateViewModel
+                (\viewModel ->
+                    case value of
+                        "1" ->
+                            { viewModel | groupedShowPfs = True }
 
-                "0" ->
-                    { model | groupedShowPfs = False }
+                        "0" ->
+                            { viewModel | groupedShowPfs = False }
 
-                _ ->
-                    model
+                        _ ->
+                            viewModel
+                )
+                model
 
         "grouped-show-rarity" ->
-            case value of
-                "1" ->
-                    { model | groupedShowRarity = True }
+            updateViewModel
+                (\viewModel ->
+                    case value of
+                        "1" ->
+                            { viewModel | groupedShowRarity = True }
 
-                "0" ->
-                    { model | groupedShowRarity = False }
+                        "0" ->
+                            { viewModel | groupedShowRarity = False }
 
-                _ ->
-                    model
+                        _ ->
+                            viewModel
+                )
+                model
 
         "grouped-sort" ->
             case value of
@@ -2859,15 +2929,19 @@ updateModelFromLocalStorage ( key, value ) model =
                     model
 
         "open-in-new-tab" ->
-            case value of
-                "1" ->
-                    { model | openInNewTab = True }
+            updateViewModel
+                (\viewModel ->
+                    case value of
+                        "1" ->
+                            { viewModel | openInNewTab = True }
 
-                "0" ->
-                    { model | openInNewTab = False }
+                        "0" ->
+                            { viewModel | openInNewTab = False }
 
-                _ ->
-                    model
+                        _ ->
+                            viewModel
+                )
+                model
 
         -- Legacy
         "page-default-displays" ->
@@ -2936,15 +3010,19 @@ updateModelFromLocalStorage ( key, value ) model =
                     model
 
         "show-additional-info" ->
-            case value of
-                "1" ->
-                    { model | showResultAdditionalInfo = True }
+            updateViewModel
+                (\viewModel ->
+                    case value of
+                        "1" ->
+                            { viewModel | showResultAdditionalInfo = True }
 
-                "0" ->
-                    { model | showResultAdditionalInfo = False }
+                        "0" ->
+                            { viewModel | showResultAdditionalInfo = False }
 
-                _ ->
-                    model
+                        _ ->
+                            viewModel
+                )
+                model
 
         "show-legacy-filters" ->
             case value of
@@ -2958,59 +3036,79 @@ updateModelFromLocalStorage ( key, value ) model =
                     model
 
         "show-result-index" ->
-            case value of
-                "1" ->
-                    { model | showResultIndex = True }
+            updateViewModel
+                (\viewModel ->
+                    case value of
+                        "1" ->
+                            { viewModel | showResultIndex = True }
 
-                "0" ->
-                    { model | showResultIndex = False }
+                        "0" ->
+                            { viewModel | showResultIndex = False }
 
-                _ ->
-                    model
+                        _ ->
+                            viewModel
+                )
+                model
 
         "show-short-pfs" ->
-            case value of
-                "1" ->
-                    { model | showResultPfs = True }
+            updateViewModel
+                (\viewModel ->
+                    case value of
+                        "1" ->
+                            { viewModel | showResultPfs = True }
 
-                "0" ->
-                    { model | showResultPfs = False }
+                        "0" ->
+                            { viewModel | showResultPfs = False }
 
-                _ ->
-                    model
+                        _ ->
+                            viewModel
+                )
+                model
 
         "show-spoilers" ->
-            case value of
-                "1" ->
-                    { model | showResultSpoilers = True }
+            updateViewModel
+                (\viewModel ->
+                    case value of
+                        "1" ->
+                            { viewModel | showResultSpoilers = True }
 
-                "0" ->
-                    { model | showResultSpoilers = False }
+                        "0" ->
+                            { viewModel | showResultSpoilers = False }
 
-                _ ->
-                    model
+                        _ ->
+                            viewModel
+                )
+                model
 
         "show-summary" ->
-            case value of
-                "1" ->
-                    { model | showResultSummary = True }
+            updateViewModel
+                (\viewModel ->
+                    case value of
+                        "1" ->
+                            { viewModel | showResultSummary = True }
 
-                "0" ->
-                    { model | showResultSummary = False }
+                        "0" ->
+                            { viewModel | showResultSummary = False }
 
-                _ ->
-                    model
+                        _ ->
+                            viewModel
+                )
+                model
 
         "show-traits" ->
-            case value of
-                "1" ->
-                    { model | showResultTraits = True }
+            updateViewModel
+                (\viewModel ->
+                    case value of
+                        "1" ->
+                            { viewModel | showResultTraits = True }
 
-                "0" ->
-                    { model | showResultTraits = False }
+                        "0" ->
+                            { viewModel | showResultTraits = False }
 
-                _ ->
-                    model
+                        _ ->
+                            viewModel
+                )
+                model
 
         _ ->
             model

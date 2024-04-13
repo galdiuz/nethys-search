@@ -23,9 +23,7 @@ type alias Model =
     , autofocus : Bool
     , autoQueryType : Bool
     , bodySize : Size
-    , browserDateFormat : String
     , dataUrl : String
-    , dateFormat : String
     , documentIndex : Dict String String
     , documents : Dict String (Result Http.Error Document)
     , documentsToFetch : Set String
@@ -33,9 +31,6 @@ type alias Model =
     , fixedParams : Dict String (List String)
     , groupTraits : Bool
     , groupedDisplay : GroupedDisplay
-    , groupedShowHeightenable : Bool
-    , groupedShowPfs : Bool
-    , groupedShowRarity : Bool
     , groupedSort : GroupedSort
     , index : String
     , loadAll : Bool
@@ -43,7 +38,6 @@ type alias Model =
     , limitTableWidth : Bool
     , linkPreviewsEnabled : Bool
     , noUi : Bool
-    , openInNewTab : Bool
     , pageDefaultParams : Dict String (Dict String (List String))
     , pageId : String
     , pageSize : Int
@@ -51,21 +45,32 @@ type alias Model =
     , pageWidth : Int
     , previewLink : Maybe PreviewLink
     , randomSeed : Int
-    , resultBaseUrl : String
     , savedColumnConfigurations : Dict String (List String)
     , savedColumnConfigurationName : String
     , searchModel : SearchModel
     , showLegacyFilters : Bool
+    , sourcesAggregation : Maybe (Result Http.Error (List Source))
+    , traitAggregations : Maybe (Result Http.Error (Dict String (List String)))
+    , url : Url
+    , viewModel : ViewModel
+    , windowSize : Size
+    }
+
+
+type alias ViewModel =
+    { browserDateFormat : String
+    , dateFormat : String
+    , groupedShowHeightenable : Bool
+    , groupedShowPfs : Bool
+    , groupedShowRarity : Bool
+    , openInNewTab : Bool
+    , resultBaseUrl : String
     , showResultAdditionalInfo : Bool
     , showResultIndex : Bool
     , showResultPfs : Bool
     , showResultSpoilers : Bool
     , showResultSummary : Bool
     , showResultTraits : Bool
-    , sourcesAggregation : Maybe (Result Http.Error (List Source))
-    , traitAggregations : Maybe (Result Http.Error (Dict String (List String)))
-    , url : Url
-    , windowSize : Size
     }
 
 
@@ -750,6 +755,7 @@ type Msg
 
 type Markdown
     = Parsed ParsedMarkdownResult
+    | ParsedWithUnflattenedChildren ParsedMarkdownResult
     | NotParsed String
 
 
@@ -2064,7 +2070,7 @@ getIntFromString str =
         |> String.toInt
 
 
-formatDate : Model -> String -> String
+formatDate : ViewModel -> String -> String
 formatDate model date =
     let
         format : String
@@ -2080,9 +2086,9 @@ formatDate model date =
         |> Result.withDefault date
 
 
-getUrl : Model -> Document -> String
-getUrl model doc =
-    model.resultBaseUrl ++ doc.url
+getUrl : ViewModel -> Document -> String
+getUrl viewModel doc =
+    viewModel.resultBaseUrl ++ doc.url
 
 
 httpErrorToString : Http.Error -> String
@@ -2316,6 +2322,226 @@ getSpeedTypeValue type_ values =
 
         _ ->
             Nothing
+
+
+flattenMarkdown :
+    Bool
+    -> Dict String (Result Http.Error Document)
+    -> Int
+    -> Maybe String
+    -> List Markdown.Block.Block
+    -> ( Bool, List Markdown.Block.Block )
+flattenMarkdown legacyMode documents parentLevel overrideTitleRight blocks =
+    List.foldr
+        (\block ( previousBlocksHaveChildren, flattenedBlocks ) ->
+            let
+                ( currentBlockHasChildren, flattenedBlock ) =
+                    flattenMarkdownBlock legacyMode documents parentLevel overrideTitleRight block
+            in
+            ( previousBlocksHaveChildren || currentBlockHasChildren
+            , flattenedBlock :: flattenedBlocks
+            )
+        )
+        ( False, [] )
+        blocks
+
+
+flattenMarkdownBlock :
+    Bool
+    -> Dict String (Result Http.Error Document)
+    -> Int
+    -> Maybe String
+    -> Markdown.Block.Block
+    -> ( Bool, Markdown.Block.Block )
+flattenMarkdownBlock legacyMode documents parentLevel overrideTitleRight block =
+    case block of
+        Markdown.Block.HtmlBlock (Markdown.Block.HtmlElement "title" attributes children) ->
+            let
+                originalTitleLevel : Int
+                originalTitleLevel =
+                    getValueFromAttribute "original-level" attributes
+                        |> Maybe.Extra.orElse (getValueFromAttribute "level" attributes)
+                        |> Maybe.andThen String.toInt
+                        |> Maybe.withDefault 1
+
+                titleLevel : Int
+                titleLevel =
+                    originalTitleLevel + parentLevel - 1
+
+                right : Maybe String
+                right =
+                    if originalTitleLevel == 1 then
+                        overrideTitleRight
+                            |> Maybe.Extra.orElse (getValueFromAttribute "right" attributes)
+
+                    else
+                        getValueFromAttribute "right" attributes
+            in
+            ( False
+            , Markdown.Block.HtmlElement
+                "title"
+                (List.append
+                    (attributes
+                        |> List.filter (.name >> (/=) "level")
+                        |> List.filter (.name >> (/=) "right")
+                    )
+                    [ { name = "level"
+                      , value = String.fromInt titleLevel
+                      }
+                    , { name = "original-level"
+                      , value = String.fromInt originalTitleLevel
+                      }
+                    , { name = "right"
+                      , value = Maybe.withDefault "" right
+                      }
+                    ]
+                )
+                children
+                |> Markdown.Block.HtmlBlock
+            )
+
+        Markdown.Block.HtmlBlock (Markdown.Block.HtmlElement "document" attributes _) ->
+            let
+                originalDocumentLevel : Int
+                originalDocumentLevel =
+                    getValueFromAttribute "level" attributes
+                        |> Maybe.andThen String.toInt
+                        |> Maybe.withDefault 2
+
+                documentLevel : Int
+                documentLevel =
+                    originalDocumentLevel + parentLevel - 1
+
+                documentId : String
+                documentId =
+                    getValueFromAttribute "id" attributes
+                        |> Maybe.withDefault ""
+
+                idToWorkWith : String
+                idToWorkWith =
+                    case Dict.get documentId documents of
+                        Just (Ok doc) ->
+                            case ( legacyMode, doc.legacyId, doc.remasterId ) of
+                                ( True, Just legacyId, _ ) ->
+                                    legacyId
+
+                                ( True, Nothing, _ ) ->
+                                    documentId
+
+                                ( False, _, Just "0" ) ->
+                                    documentId
+
+                                ( False, _, Just remasterId ) ->
+                                    remasterId
+
+                                ( False, _, _ ) ->
+                                    documentId
+                        _ ->
+                            documentId
+
+                document : Maybe Document
+                document =
+                    Dict.get idToWorkWith documents
+                        |> Maybe.andThen Result.toMaybe
+
+                documentBlocks : Maybe (List Markdown.Block.Block)
+                documentBlocks =
+                    document
+                        |> Maybe.map .markdown
+                        |> Maybe.andThen getParsedMarkdown
+                        |> Maybe.andThen Result.toMaybe
+            in
+            case documentBlocks of
+                Just blocks ->
+                    let
+                        ( hasChildren, flattenedBlocks ) =
+                            flattenMarkdown
+                                legacyMode
+                                documents
+                                documentLevel
+                                (getValueFromAttribute "override-title-right" attributes)
+                                blocks
+                    in
+                    ( hasChildren
+                    , Markdown.Block.HtmlBlock
+                        (Markdown.Block.HtmlElement
+                            "document-flattened"
+                            (List.append
+                                (attributes
+                                    |> List.filter (.name >> (/=) "id")
+                                    |> List.filter (.name >> (/=) "level")
+                                )
+                                [ { name = "id"
+                                  , value = idToWorkWith
+                                  }
+                                , { name = "level"
+                                  , value = String.fromInt documentLevel
+                                  }
+                                ]
+                            )
+                            flattenedBlocks
+                        )
+                    )
+
+                Nothing ->
+                    ( True, block )
+
+        Markdown.Block.HtmlBlock (Markdown.Block.HtmlElement "document-flattened" attributes blocks) ->
+            let
+                documentLevel : Int
+                documentLevel =
+                    getValueFromAttribute "level" attributes
+                        |> Maybe.andThen String.toInt
+                        |> Maybe.withDefault 1
+
+                ( hasChildren, flattenedBlocks ) =
+                    flattenMarkdown legacyMode documents documentLevel Nothing blocks
+            in
+            ( hasChildren
+            , Markdown.Block.HtmlBlock
+                (Markdown.Block.HtmlElement
+                    "document-flattened"
+                    attributes
+                    flattenedBlocks
+                )
+            )
+
+        Markdown.Block.HtmlBlock (Markdown.Block.HtmlElement tag attributes blocks) ->
+            let
+                ( hasChildren, flattenedBlocks ) =
+                    flattenMarkdown legacyMode documents parentLevel Nothing blocks
+            in
+            ( hasChildren
+            , Markdown.Block.HtmlBlock
+                (Markdown.Block.HtmlElement
+                    tag
+                    attributes
+                    flattenedBlocks
+                )
+            )
+
+        _ ->
+            ( False, block )
+
+
+getParsedMarkdown : Markdown -> Maybe ParsedMarkdownResult
+getParsedMarkdown markdown =
+    case markdown of
+        Parsed parsed ->
+            Just parsed
+
+        ParsedWithUnflattenedChildren parsed ->
+            Just parsed
+
+        NotParsed _ ->
+            Nothing
+
+
+getValueFromAttribute : String -> List { name : String, value : String } -> Maybe String
+getValueFromAttribute name attributes =
+    attributes
+        |> List.Extra.find (.name >> (==) name)
+        |> Maybe.map .value
 
 
 mergeInlines : Markdown.Block.Block -> Markdown.Block.Block
