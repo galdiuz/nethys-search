@@ -2540,6 +2540,15 @@ parseAndFetchDocuments alwaysParseMarkdown ids ( model, cmd ) =
 
 fetchDocuments : Bool -> List String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 fetchDocuments alwaysParseMarkdown ids ( model, cmd ) =
+    if model.dataUrl /= "" then
+        fetchDocumentsFromJson alwaysParseMarkdown ids ( model, cmd )
+
+    else
+        fetchDocumentsFromElasticsearch alwaysParseMarkdown ids ( model, cmd )
+
+
+fetchDocumentsFromJson : Bool -> List String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+fetchDocumentsFromJson alwaysParseMarkdown ids ( model, cmd ) =
     let
         idsToFetch : List String
         idsToFetch =
@@ -2573,20 +2582,69 @@ fetchDocuments alwaysParseMarkdown ids ( model, cmd ) =
         |> List.map
             (\( file, fileIds ) ->
                 Http.get
-                    { expect = Http.expectJson
-                        (GotDocuments alwaysParseMarkdown fileIds)
-                        (Decode.list
-                            (Decode.oneOf
-                                [ Decode.map Ok documentDecoder
-                                , Decode.map Err (Decode.field "id" Decode.string)
-                                ]
+                    { expect =
+                        Http.expectJson
+                            (GotDocuments alwaysParseMarkdown fileIds)
+                            (Decode.list
+                                (Decode.oneOf
+                                    [ Decode.map Ok documentDecoder
+                                    , Decode.map Err (Decode.field "id" Decode.string)
+                                    ]
+                                )
                             )
-                        )
                     , url = model.dataUrl ++ "/" ++ file ++ ".json"
                     }
             )
         |> List.append [ cmd ]
         |> Cmd.batch
+    )
+
+
+fetchDocumentsFromElasticsearch : Bool -> List String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+fetchDocumentsFromElasticsearch alwaysParseMarkdown ids ( model, cmd ) =
+    let
+        idsToFetch : List String
+        idsToFetch =
+            List.filter
+                (\id -> not (Dict.member id model.documents))
+                ids
+                |> List.Extra.unique
+    in
+    ( model
+    , if List.isEmpty idsToFetch then
+        cmd
+
+      else
+        Cmd.batch
+            [ cmd
+            , Http.post
+                { body =
+                    Http.jsonBody
+                        (Encode.object
+                            [ ( "docs"
+                              , Encode.list
+                                    (\id ->
+                                        Encode.object [ ( "_id", Encode.string id ) ]
+                                    )
+                                    idsToFetch
+                              )
+                            ]
+                        )
+                , expect =
+                    Http.expectJson
+                        (GotDocuments alwaysParseMarkdown idsToFetch)
+                        (Decode.field
+                            "docs"
+                            (Decode.list
+                                (Decode.field
+                                    "_source"
+                                    (Decode.map Ok documentDecoder)
+                                )
+                            )
+                        )
+                , url = model.elasticUrl ++ "/_mget"
+                }
+            ]
     )
 
 
@@ -4793,7 +4851,7 @@ buildCompositeTermsSource missing ( name, field ) =
 
 getDocumentIndex : Model -> Cmd Msg
 getDocumentIndex model =
-    if model.index /= "" then
+    if model.index /= "" && model.dataUrl /= "" then
         Http.get
             { expect =
                 Http.expectJson
@@ -4821,7 +4879,7 @@ getDocumentIndex model =
 
 getSourcesAggregation : Model -> Cmd Msg
 getSourcesAggregation model =
-    if model.index /= "" then
+    if model.index /= "" && model.dataUrl /= "" then
         Http.get
             { expect = Http.expectJson GotSourcesAggregationResult sourcesAggregationDecoder
             , url = model.dataUrl ++ "/" ++ model.index ++ "-source-agg.json"
@@ -4833,7 +4891,7 @@ getSourcesAggregation model =
 
 getTraitAggregations : Model -> Cmd Msg
 getTraitAggregations model =
-    if model.index /= "" then
+    if model.index /= "" && model.dataUrl /= "" then
         Http.get
             { expect = Http.expectJson GotTraitAggregationsResult traitAggregationsDecoder
             , url = model.dataUrl ++ "/" ++ model.index ++ "-trait-agg.json"
