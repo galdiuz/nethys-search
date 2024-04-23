@@ -1788,7 +1788,7 @@ viewFilterNumbers model searchModel =
     [ Html.button
         [ HA.style "align-self" "flex-start"
         , HA.style "justify-self" "flex-start"
-        , HE.onClick RemoveAllValueFiltersPressed
+        , HE.onClick RemoveAllRangeValueFiltersPressed
         ]
         [ Html.text "Reset all values" ]
     , Html.div
@@ -2285,7 +2285,7 @@ viewFilterAttributes model searchModel =
         , HA.class "gap-medium"
         ]
         [ Html.button
-            [ HE.onClick RemoveAllAttributeFiltersPressed ]
+            [ HE.onClick (RemoveAllFiltersOfTypePressed "attributes") ]
             [ Html.text "Reset selection" ]
         ]
     , Html.div
@@ -2298,10 +2298,10 @@ viewFilterAttributes model searchModel =
                 Html.button
                     [ HA.class "row"
                     , HA.class "gap-tiny"
-                    , HE.onClick (AttributeFilterAdded attribute)
+                    , HE.onClick (FilterToggled "attributes" attribute)
                     ]
                     [ Html.text (toTitleCase attribute)
-                    , viewFilterIcon (Dict.get attribute searchModel.filteredAttributes)
+                    , viewFilterIcon (nestedDictGet "attributes" attribute searchModel.filteredValues)
                     ]
             )
             Data.allAttributes
@@ -2313,7 +2313,7 @@ viewFilterActions : Model -> SearchModel -> List (Html Msg)
 viewFilterActions model searchModel =
     [ Html.button
         [ HA.style "align-self" "flex-start"
-        , HE.onClick RemoveAllActionsFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "actions")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -2329,12 +2329,12 @@ viewFilterActions model searchModel =
                             [ HA.class "row"
                             , HA.class "align-center"
                             , HA.class "gap-tiny"
-                            , HE.onClick (ActionsFilterAdded actions)
+                            , HE.onClick (FilterToggled "actions" actions)
                             ]
                             [ Html.span
                                 []
                                 (viewTextWithActionIcons actions)
-                            , viewFilterIcon (Dict.get actions searchModel.filteredActions)
+                            , viewFilterIcon (nestedDictGet "actions" actions searchModel.filteredValues)
                             ]
                     )
                     (List.sortBy actionsToInt aggregations.actions)
@@ -2356,7 +2356,7 @@ viewFilterAlignments model searchModel =
         , HA.class "gap-medium"
         ]
         [ Html.button
-            [ HE.onClick RemoveAllAlignmentFiltersPressed ]
+            [ HE.onClick (RemoveAllFiltersOfTypePressed "alignments") ]
             [ Html.text "Reset selection" ]
         ]
     , Html.div
@@ -2371,10 +2371,10 @@ viewFilterAlignments model searchModel =
                     , HA.class "gap-tiny"
                     , HA.class "trait"
                     , HA.class "trait-alignment"
-                    , HE.onClick (AlignmentFilterAdded alignment)
+                    , HE.onClick (FilterToggled "alignments" alignment)
                     ]
                     [ Html.text label
-                    , viewFilterIcon (Dict.get alignment searchModel.filteredAlignments)
+                    , viewFilterIcon (nestedDictGet "alignments" alignment searchModel.filteredValues)
                     ]
             )
             Data.alignments
@@ -2390,7 +2390,7 @@ viewFilterArmor model searchModel =
     , Html.button
         [ HA.style "align-self" "flex-start"
         , HA.style "justify-self" "flex-start"
-        , HE.onClick RemoveAllArmorCategoryFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "armor-categories")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -2403,10 +2403,10 @@ viewFilterArmor model searchModel =
                 Html.button
                     [ HA.class "row"
                     , HA.class "gap-tiny"
-                    , HE.onClick (ArmorCategoryFilterAdded category)
+                    , HE.onClick (FilterToggled "armor-categories" category)
                     ]
                     [ Html.text (toTitleCase category)
-                    , viewFilterIcon (Dict.get category searchModel.filteredArmorCategories)
+                    , viewFilterIcon (nestedDictGet "armor-categories" category searchModel.filteredValues)
                     ]
             )
             Data.armorCategories
@@ -2418,7 +2418,7 @@ viewFilterArmor model searchModel =
     , Html.button
         [ HA.style "align-self" "flex-start"
         , HA.style "justify-self" "flex-start"
-        , HE.onClick RemoveAllArmorGroupFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "armor-groups")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -2431,10 +2431,10 @@ viewFilterArmor model searchModel =
                 Html.button
                     [ HA.class "row"
                     , HA.class "gap-tiny"
-                    , HE.onClick (ArmorGroupFilterAdded group)
+                    , HE.onClick (FilterToggled "armor-groups" group)
                     ]
                     [ Html.text (toTitleCase group)
-                    , viewFilterIcon (Dict.get group searchModel.filteredArmorGroups)
+                    , viewFilterIcon (nestedDictGet "armor-groups" group searchModel.filteredValues)
                     ]
             )
             Data.armorGroups
@@ -2450,7 +2450,7 @@ viewFilterComponents model searchModel =
         , HA.class "gap-medium"
         ]
         [ Html.button
-            [ HE.onClick RemoveAllComponentFiltersPressed ]
+            [ HE.onClick (RemoveAllFiltersOfTypePressed "components") ]
             [ Html.text "Reset selection" ]
         ]
     , Html.div
@@ -2463,10 +2463,10 @@ viewFilterComponents model searchModel =
                 Html.button
                     [ HA.class "row"
                     , HA.class "gap-tiny"
-                    , HE.onClick (ComponentFilterAdded component)
+                    , HE.onClick (FilterToggled "components" component)
                     ]
                     [ Html.text (toTitleCase component)
-                    , viewFilterIcon (Dict.get component searchModel.filteredComponents)
+                    , viewFilterIcon (nestedDictGet "components" component searchModel.filteredValues)
                     ]
             )
             [ "focus"
@@ -2482,7 +2482,7 @@ viewFilterCreatureFamilies : Model -> SearchModel -> List (Html Msg)
 viewFilterCreatureFamilies model searchModel =
     [ Html.button
         [ HA.style "align-self" "flex-start"
-        , HE.onClick RemoveAllCreatureFamilyFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "creature-families")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -2522,10 +2522,10 @@ viewFilterCreatureFamilies model searchModel =
                             , HA.class "nowrap"
                             , HA.class "align-center"
                             , HA.style "text-align" "left"
-                            , HE.onClick (CreatureFamilyFilterAdded (String.toLower creatureFamily))
+                            , HE.onClick (FilterToggled "creature-families" (String.toLower creatureFamily))
                             ]
                             [ Html.text (toTitleCase creatureFamily)
-                            , viewFilterIcon (Dict.get (String.toLower creatureFamily) searchModel.filteredCreatureFamilies)
+                            , viewFilterIcon (nestedDictGet "creature-families" (String.toLower creatureFamily) searchModel.filteredValues)
                             ]
                     )
                     (aggregations.creatureFamilies
@@ -2552,7 +2552,7 @@ viewFilterDomains model searchModel =
         [ Html.button
             [ HA.style "align-self" "flex-start"
             , HA.style "justify-self" "flex-start"
-            , HE.onClick RemoveAllDomainFiltersPressed
+            , HE.onClick (RemoveAllFiltersOfTypePressed "domains")
             ]
             [ Html.text "Reset selection" ]
 
@@ -2583,10 +2583,10 @@ viewFilterDomains model searchModel =
                         Html.button
                             [ HA.class "row"
                             , HA.class "gap-tiny"
-                            , HE.onClick (DomainFilterAdded domain)
+                            , HE.onClick (FilterToggled "domains" domain)
                             ]
                             [ Html.text (toTitleCase domain)
-                            , viewFilterIcon (Dict.get domain searchModel.filteredDomains)
+                            , viewFilterIcon (nestedDictGet "domains" domain searchModel.filteredValues)
                             ]
                     )
                     (List.sort domains)
@@ -2606,7 +2606,7 @@ viewFilterHands model searchModel =
     [ Html.button
         [ HA.style "align-self" "flex-start"
         , HA.style "justify-self" "flex-start"
-        , HE.onClick RemoveAllHandFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "hands")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -2621,10 +2621,10 @@ viewFilterHands model searchModel =
                         Html.button
                             [ HA.class "row"
                             , HA.class "gap-tiny"
-                            , HE.onClick (HandFilterAdded hand)
+                            , HE.onClick (FilterToggled "hands" hand)
                             ]
                             [ Html.text hand
-                            , viewFilterIcon (Dict.get hand searchModel.filteredHands)
+                            , viewFilterIcon (nestedDictGet "hands" hand searchModel.filteredValues)
                             ]
                     )
                     (List.sort hands)
@@ -2646,7 +2646,7 @@ viewFilterItemCategories model searchModel =
         [ Html.text "Item categories" ]
     , Html.button
         [ HA.style "align-self" "flex-start"
-        , HE.onClick RemoveAllItemCategoryFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "item-categories")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -2684,12 +2684,12 @@ viewFilterItemCategories model searchModel =
                             [ HA.class "row"
                             , HA.class "gap-tiny"
                             , HA.class "nowrap"
-                            , HE.onClick (ItemCategoryFilterAdded category)
+                            , HE.onClick (FilterToggled "item-categories" category)
                             ]
                             [ Html.div
                                 []
                                 [ Html.text (toTitleCase category) ]
-                            , viewFilterIcon (Dict.get category searchModel.filteredItemCategories)
+                            , viewFilterIcon (nestedDictGet "item-categories" category searchModel.filteredValues)
                             ]
                     )
                     (aggregations.itemCategories
@@ -2708,7 +2708,7 @@ viewFilterItemCategories model searchModel =
         [ Html.text "Item subcategories" ]
     , Html.button
         [ HA.style "align-self" "flex-start"
-        , HE.onClick RemoveAllItemSubcategoryFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "item-subcategories")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -2743,49 +2743,39 @@ viewFilterItemCategories model searchModel =
                 List.map
                     (\subcategory ->
                         let
-                            filteredCategory : Maybe Bool
-                            filteredCategory =
-                                Maybe.Extra.or
-                                    (case boolDictIncluded searchModel.filteredItemCategories of
+                            parentIsFiltered : Bool
+                            parentIsFiltered =
+                                (||)
+                                    (case boolDictIncluded "item-categories" searchModel.filteredValues of
                                         [] ->
-                                            Nothing
+                                            False
 
                                         categories ->
-                                            if List.member subcategory.category categories then
-                                                Nothing
-
-                                            else
-                                                Just False
+                                            not (List.member subcategory.category categories)
                                     )
-                                    (case boolDictExcluded searchModel.filteredItemCategories of
+                                    (case boolDictExcluded "item-categories" searchModel.filteredValues of
                                         [] ->
-                                            Nothing
+                                            False
 
                                         categories ->
-                                            if List.member subcategory.category categories then
-                                                Just False
-
-                                            else
-                                                Nothing
+                                            List.member subcategory.category categories
                                     )
                         in
-                        Html.button
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            , HA.class "nowrap"
-                            , HA.disabled (Maybe.Extra.isJust filteredCategory)
-                            , HAE.attributeIf (Maybe.Extra.isJust filteredCategory) (HA.class "excluded")
-                            , HE.onClick (ItemSubcategoryFilterAdded subcategory.name)
-                            ]
-                            [ Html.div
-                                []
-                                [ Html.text (toTitleCase subcategory.name) ]
-                            , viewFilterIcon
-                                (Maybe.Extra.or
-                                    (Dict.get subcategory.name searchModel.filteredItemSubcategories)
-                                    filteredCategory
-                                )
-                            ]
+                        if parentIsFiltered then
+                            Html.text ""
+
+                        else
+                            Html.button
+                                [ HA.class "row"
+                                , HA.class "gap-tiny"
+                                , HA.class "nowrap"
+                                , HE.onClick (FilterToggled "item-subcategories" subcategory.name)
+                                ]
+                                [ Html.div
+                                    []
+                                    [ Html.text (toTitleCase subcategory.name) ]
+                                , viewFilterIcon (nestedDictGet "item-subcategories" subcategory.name searchModel.filteredValues)
+                                ]
                     )
                     (aggregations.itemSubcategories
                         |> List.filter
@@ -2840,7 +2830,7 @@ viewFilterMagicSchools : Model -> SearchModel -> List (Html Msg)
 viewFilterMagicSchools model searchModel =
     [ Html.button
         [ HA.style "align-self" "flex-start"
-        , HE.onClick RemoveAllSchoolFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "schools")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -2857,10 +2847,10 @@ viewFilterMagicSchools model searchModel =
                     , HA.class "align-center"
                     , HA.style "text-align" "left"
                     , HA.class "trait"
-                    , HE.onClick (SchoolFilterAdded school)
+                    , HE.onClick (FilterToggled "schools" school)
                     ]
                     [ Html.text (toTitleCase school)
-                    , viewFilterIcon (Dict.get school searchModel.filteredSchools)
+                    , viewFilterIcon (nestedDictGet "schools" school searchModel.filteredValues)
                     ]
             )
             Data.magicSchools
@@ -2876,7 +2866,7 @@ viewFilterPfs model searchModel =
         , HA.class "gap-medium"
         ]
         [ Html.button
-            [ HE.onClick RemoveAllPfsFiltersPressed ]
+            [ HE.onClick (RemoveAllFiltersOfTypePressed "pfs") ]
             [ Html.text "Reset selection" ]
         ]
     , Html.div
@@ -2890,11 +2880,11 @@ viewFilterPfs model searchModel =
                     [ HA.class "row"
                     , HA.class "gap-tiny"
                     , HA.class "align-center"
-                    , HE.onClick (PfsFilterAdded pfs)
+                    , HE.onClick (FilterToggled "pfs" pfs)
                     ]
                     [ viewPfsIcon 16 pfs
                     , Html.text (toTitleCase pfs)
-                    , viewFilterIcon (Dict.get pfs searchModel.filteredPfs)
+                    , viewFilterIcon (nestedDictGet "pfs" pfs searchModel.filteredValues)
                     ]
             )
             [ "none"
@@ -2914,7 +2904,7 @@ viewFilterRarities model searchModel =
         , HA.class "gap-medium"
         ]
         [ Html.button
-            [ HE.onClick RemoveAllRarityFiltersPressed ]
+            [ HE.onClick (RemoveAllFiltersOfTypePressed "rarities") ]
             [ Html.text "Reset selection" ]
         ]
     , Html.div
@@ -2931,10 +2921,10 @@ viewFilterRarities model searchModel =
                             , HA.class "gap-tiny"
                             , HA.class "trait"
                             , HA.class ("trait-" ++ rarity)
-                            , HE.onClick (RarityFilterAdded rarity)
+                            , HE.onClick (FilterToggled "rarities" rarity)
                             ]
                             [ Html.text (toTitleCase rarity)
-                            , viewFilterIcon (Dict.get rarity searchModel.filteredRarities)
+                            , viewFilterIcon (nestedDictGet "rarities" rarity searchModel.filteredValues)
                             ]
                     )
                     (aggregations.traits
@@ -2957,7 +2947,7 @@ viewFilterRegions model searchModel =
     [ Html.button
         [ HA.style "align-self" "flex-start"
         , HA.style "justify-self" "flex-start"
-        , HE.onClick RemoveAllRegionFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "regions")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -2973,10 +2963,10 @@ viewFilterRegions model searchModel =
                         Html.button
                             [ HA.class "row"
                             , HA.class "gap-tiny"
-                            , HE.onClick (RegionFilterAdded region)
+                            , HE.onClick (FilterToggled "regions" region)
                             ]
                             [ Html.text (toTitleCase region)
-                            , viewFilterIcon (Dict.get region searchModel.filteredRegions)
+                            , viewFilterIcon (nestedDictGet "regions" region searchModel.filteredValues)
                             ]
                     )
                     (List.sort regions)
@@ -2995,7 +2985,7 @@ viewFilterSavingThrows : Model -> SearchModel -> List (Html Msg)
 viewFilterSavingThrows model searchModel =
     [ Html.button
         [ HA.style "align-self" "flex-start"
-        , HE.onClick RemoveAllSavingThrowFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "saving-throws")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -3011,10 +3001,10 @@ viewFilterSavingThrows model searchModel =
                     , HA.class "nowrap"
                     , HA.class "align-center"
                     , HA.style "text-align" "left"
-                    , HE.onClick (SavingThrowFilterAdded save)
+                    , HE.onClick (FilterToggled "saving-throws" save)
                     ]
                     [ Html.text (toTitleCase save)
-                    , viewFilterIcon (Dict.get save searchModel.filteredSavingThrows)
+                    , viewFilterIcon (nestedDictGet "saving-throws" save searchModel.filteredValues)
                     ]
             )
             Data.saves
@@ -3030,7 +3020,7 @@ viewFilterSizes model searchModel =
         , HA.class "gap-medium"
         ]
         [ Html.button
-            [ HE.onClick RemoveAllSizeFiltersPressed ]
+            [ HE.onClick (RemoveAllFiltersOfTypePressed "sizes") ]
             [ Html.text "Reset selection" ]
         ]
     , Html.div
@@ -3045,10 +3035,10 @@ viewFilterSizes model searchModel =
                     , HA.class "gap-tiny"
                     , HA.class "trait"
                     , HA.class "trait-size"
-                    , HE.onClick (SizeFilterAdded size)
+                    , HE.onClick (FilterToggled "sizes" size)
                     ]
                     [ Html.text (toTitleCase size)
-                    , viewFilterIcon (Dict.get size searchModel.filteredSizes)
+                    , viewFilterIcon (nestedDictGet "sizes" size searchModel.filteredValues)
                     ]
             )
             Data.allSizes
@@ -3064,7 +3054,7 @@ viewFilterSkills model searchModel =
         , HA.class "gap-medium"
         ]
         [ Html.button
-            [ HE.onClick RemoveAllSkillFiltersPressed ]
+            [ HE.onClick (RemoveAllFiltersOfTypePressed "skills") ]
             [ Html.text "Reset selection" ]
         ]
     , Html.div
@@ -3077,10 +3067,10 @@ viewFilterSkills model searchModel =
                 Html.button
                     [ HA.class "row"
                     , HA.class "gap-tiny"
-                    , HE.onClick (SkillFilterAdded skill)
+                    , HE.onClick (FilterToggled "skills" skill)
                     ]
                     [ Html.text (toTitleCase skill)
-                    , viewFilterIcon (Dict.get skill searchModel.filteredSkills)
+                    , viewFilterIcon (nestedDictGet "skills" skill searchModel.filteredValues)
                     ]
             )
             Data.allSkills
@@ -3106,7 +3096,7 @@ viewFilterSources model searchModel =
     , Html.button
         [ HA.style "align-self" "flex-start"
         , HA.style "justify-self" "flex-start"
-        , HE.onClick RemoveAllSourceCategoryFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "source-categories")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -3119,10 +3109,10 @@ viewFilterSources model searchModel =
                 Html.button
                     [ HA.class "row"
                     , HA.class "gap-tiny"
-                    , HE.onClick (SourceCategoryFilterAdded category)
+                    , HE.onClick (FilterToggled "source-categories" category)
                     ]
                     [ Html.text (toTitleCase category)
-                    , viewFilterIcon (Dict.get category searchModel.filteredSourceCategories)
+                    , viewFilterIcon (nestedDictGet "source-categories" category searchModel.filteredValues)
                     ]
             )
             Data.sourceCategories
@@ -3133,7 +3123,7 @@ viewFilterSources model searchModel =
     , Html.button
         [ HA.style "align-self" "flex-start"
         , HA.style "justify-self" "flex-start"
-        , HE.onClick RemoveAllSourceFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "sources")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -3168,51 +3158,41 @@ viewFilterSources model searchModel =
                 (List.map
                     (\source ->
                         let
-                            filteredCategory : Maybe Bool
-                            filteredCategory =
-                                Maybe.Extra.or
-                                    (case boolDictIncluded searchModel.filteredSourceCategories of
+                            parentIsFiltered : Bool
+                            parentIsFiltered =
+                                (||)
+                                    (case boolDictIncluded "source-categories" searchModel.filteredValues of
                                         [] ->
-                                            Nothing
+                                            False
 
                                         categories ->
-                                            if List.member source.category categories then
-                                                Nothing
-
-                                            else
-                                                Just False
+                                            not (List.member source.category categories)
                                     )
-                                    (case boolDictExcluded searchModel.filteredSourceCategories of
+                                    (case boolDictExcluded "source-categories" searchModel.filteredValues of
                                         [] ->
-                                            Nothing
+                                            False
 
                                         categories ->
-                                            if List.member source.category categories then
-                                                Just False
-
-                                            else
-                                                Nothing
+                                            List.member source.category categories
                                     )
                         in
-                        Html.button
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            , HA.class "nowrap"
-                            , HA.class "align-center"
-                            , HA.style "text-align" "left"
-                            , HA.disabled (Maybe.Extra.isJust filteredCategory)
-                            , HAE.attributeIf (Maybe.Extra.isJust filteredCategory) (HA.class "excluded")
-                            , HE.onClick (SourceFilterAdded source.name)
-                            ]
-                            [ Html.div
-                                []
-                                [ Html.text source.name ]
-                            , viewFilterIcon
-                                (Maybe.Extra.or
-                                    (Dict.get source.name searchModel.filteredSources)
-                                    filteredCategory
-                                )
-                            ]
+                        if parentIsFiltered then
+                            Html.text ""
+
+                        else
+                            Html.button
+                                [ HA.class "row"
+                                , HA.class "gap-tiny"
+                                , HA.class "nowrap"
+                                , HA.class "align-center"
+                                , HA.style "text-align" "left"
+                                , HE.onClick (FilterToggled "sources" source.name)
+                                ]
+                                [ Html.div
+                                    []
+                                    [ Html.text source.name ]
+                                , viewFilterIcon (nestedDictGet "sources" source.name searchModel.filteredValues)
+                                ]
                     )
                     (allSources
                         |> List.filter
@@ -3244,7 +3224,7 @@ viewFilterStrongestSaves model searchModel =
         [ Html.text "Strongest saves" ]
     , Html.button
         [ HA.style "align-self" "flex-start"
-        , HE.onClick RemoveAllStrongestSaveFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "strongest-saves")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -3260,10 +3240,10 @@ viewFilterStrongestSaves model searchModel =
                     , HA.class "nowrap"
                     , HA.class "align-center"
                     , HA.style "text-align" "left"
-                    , HE.onClick (StrongestSaveFilterAdded (String.toLower save))
+                    , HE.onClick (FilterToggled "strongest-saves" (String.toLower save))
                     ]
                     [ Html.text (toTitleCase save)
-                    , viewFilterIcon (Dict.get (String.toLower save) searchModel.filteredStrongestSaves)
+                    , viewFilterIcon (nestedDictGet "strongest-saves" (String.toLower save) searchModel.filteredValues)
                     ]
             )
             Data.saves
@@ -3274,7 +3254,7 @@ viewFilterStrongestSaves model searchModel =
         [ Html.text "Weakest saves" ]
     , Html.button
         [ HA.style "align-self" "flex-start"
-        , HE.onClick RemoveAllWeakestSaveFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "weakest-saves")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -3290,10 +3270,10 @@ viewFilterStrongestSaves model searchModel =
                     , HA.class "nowrap"
                     , HA.class "align-center"
                     , HA.style "text-align" "left"
-                    , HE.onClick (WeakestSaveFilterAdded (String.toLower save))
+                    , HE.onClick (FilterToggled "weakest-saves" (String.toLower save))
                     ]
                     [ Html.text (toTitleCase save)
-                    , viewFilterIcon (Dict.get (String.toLower save) searchModel.filteredWeakestSaves)
+                    , viewFilterIcon (nestedDictGet "weakest-saves" (String.toLower save) searchModel.filteredValues)
                     ]
             )
             Data.saves
@@ -3309,7 +3289,7 @@ viewFilterTraditions model searchModel =
         , HA.class "gap-medium"
         ]
         [ Html.button
-            [ HE.onClick RemoveAllTraditionFiltersPressed ]
+            [ HE.onClick (RemoveAllFiltersOfTypePressed "traditions") ]
             [ Html.text "Reset selection" ]
         , viewRadioButton
             { checked = searchModel.filterTraditionsOperator
@@ -3336,10 +3316,10 @@ viewFilterTraditions model searchModel =
                 Html.button
                     [ HA.class "row"
                     , HA.class "gap-tiny"
-                    , HE.onClick (TraditionFilterAdded tradition)
+                    , HE.onClick (FilterToggled "traditions" tradition)
                     ]
                     [ Html.text (toTitleCase tradition)
-                    , viewFilterIcon (Dict.get tradition searchModel.filteredTraditions)
+                    , viewFilterIcon (nestedDictGet "traditions" tradition searchModel.filteredValues)
                     ]
             )
             Data.traditionsAndSpellLists
@@ -3360,7 +3340,7 @@ viewFilterTraits model searchModel =
         , HA.class "gap-medium"
         ]
         [ Html.button
-            [ HE.onClick RemoveAllTraitFiltersPressed ]
+            [ HE.onClick (RemoveAllFiltersOfTypePressed "traits") ]
             [ Html.text "Reset selection" ]
         , viewRadioButton
             { checked = searchModel.filterTraitsOperator
@@ -3440,10 +3420,10 @@ viewFilterTraits model searchModel =
                                         Html.button
                                             [ HA.class "row"
                                             , HA.class "gap-tiny"
-                                            , HE.onClick (TraitGroupFilterAdded group)
+                                            , HE.onClick (FilterToggled "trait-groups" group)
                                             ]
                                             [ Html.text "Filter group"
-                                            , viewFilterIcon (Dict.get group searchModel.filteredTraitGroups)
+                                            , viewFilterIcon (nestedDictGet "trait-groups" group searchModel.filteredValues)
                                             ]
 
                                       else
@@ -3466,10 +3446,10 @@ viewFilterTraits model searchModel =
                                                 , HA.class "row"
                                                 , HA.class "align-center"
                                                 , HA.class "gap-tiny"
-                                                , HE.onClick (TraitFilterAdded trait)
+                                                , HE.onClick (FilterToggled "traits" trait)
                                                 ]
                                                 [ Html.text (toTitleCase trait)
-                                                , viewFilterIcon (Dict.get trait searchModel.filteredTraits)
+                                                , viewFilterIcon (nestedDictGet "traits" trait searchModel.filteredValues)
                                                 ]
                                         )
                                         (List.sort traits)
@@ -3519,10 +3499,10 @@ viewFilterTraits model searchModel =
                                 , HA.class "row"
                                 , HA.class "align-center"
                                 , HA.class "gap-tiny"
-                                , HE.onClick (TraitFilterAdded trait)
+                                , HE.onClick (FilterToggled "traits" trait)
                                 ]
                                 [ Html.text (toTitleCase trait)
-                                , viewFilterIcon (Dict.get trait searchModel.filteredTraits)
+                                , viewFilterIcon (nestedDictGet "traits" trait searchModel.filteredValues)
                                 ]
                         )
                         (aggregations.traits
@@ -3549,7 +3529,7 @@ viewFilterTypes model searchModel =
         , HA.class "gap-medium"
         ]
         [ Html.button
-            [ HE.onClick RemoveAllTypeFiltersPressed ]
+            [ HE.onClick (RemoveAllFiltersOfTypePressed "types") ]
             [ Html.text "Reset selection" ]
         ]
 
@@ -3590,10 +3570,10 @@ viewFilterTypes model searchModel =
                             , HA.class "row"
                             , HA.class "align-center"
                             , HA.class "gap-tiny"
-                            , HE.onClick (TypeFilterAdded type_)
+                            , HE.onClick (FilterToggled "types" type_)
                             ]
                             [ Html.text (toTitleCase type_)
-                            , viewFilterIcon (Dict.get type_ searchModel.filteredTypes)
+                            , viewFilterIcon (nestedDictGet "types" type_ searchModel.filteredValues)
                             ]
                     )
                     (List.filter
@@ -3618,7 +3598,7 @@ viewFilterWeapons model searchModel =
     , Html.button
         [ HA.style "align-self" "flex-start"
         , HA.style "justify-self" "flex-start"
-        , HE.onClick RemoveAllWeaponCategoryFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "weapon-categories")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -3631,10 +3611,10 @@ viewFilterWeapons model searchModel =
                 Html.button
                     [ HA.class "row"
                     , HA.class "gap-tiny"
-                    , HE.onClick (WeaponCategoryFilterAdded category)
+                    , HE.onClick (FilterToggled "weapon-categories" category)
                     ]
                     [ Html.text (toTitleCase category)
-                    , viewFilterIcon (Dict.get category searchModel.filteredWeaponCategories)
+                    , viewFilterIcon (nestedDictGet "weapon-categories" category searchModel.filteredValues)
                     ]
             )
             Data.weaponCategories
@@ -3646,7 +3626,7 @@ viewFilterWeapons model searchModel =
     , Html.button
         [ HA.style "align-self" "flex-start"
         , HA.style "justify-self" "flex-start"
-        , HE.onClick RemoveAllWeaponGroupFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "weapon-groups")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -3661,10 +3641,10 @@ viewFilterWeapons model searchModel =
                         Html.button
                             [ HA.class "row"
                             , HA.class "gap-tiny"
-                            , HE.onClick (WeaponGroupFilterAdded group)
+                            , HE.onClick (FilterToggled "weapon-groups" group)
                             ]
                             [ Html.text (toTitleCase group)
-                            , viewFilterIcon (Dict.get group searchModel.filteredWeaponGroups)
+                            , viewFilterIcon (nestedDictGet "weapon-groups" group searchModel.filteredValues)
                             ]
                     )
                     (List.sort weaponGroups)
@@ -3683,7 +3663,7 @@ viewFilterWeapons model searchModel =
     , Html.button
         [ HA.style "align-self" "flex-start"
         , HA.style "justify-self" "flex-start"
-        , HE.onClick RemoveAllWeaponTypeFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "weapon-types")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -3696,10 +3676,10 @@ viewFilterWeapons model searchModel =
                 Html.button
                     [ HA.class "row"
                     , HA.class "gap-tiny"
-                    , HE.onClick (WeaponTypeFilterAdded type_)
+                    , HE.onClick (FilterToggled "weapon-types" type_)
                     ]
                     [ Html.text (toTitleCase type_)
-                    , viewFilterIcon (Dict.get type_ searchModel.filteredWeaponTypes)
+                    , viewFilterIcon (nestedDictGet "weapon-types" type_ searchModel.filteredValues)
                     ]
             )
             Data.weaponTypes
@@ -3716,7 +3696,7 @@ viewFilterWeapons model searchModel =
         [ Html.button
             [ HA.style "align-self" "flex-start"
             , HA.style "justify-self" "flex-start"
-            , HE.onClick RemoveAllDamageTypeFiltersPressed
+            , HE.onClick (RemoveAllFiltersOfTypePressed "damage-types")
             ]
             [ Html.text "Reset selection" ]
         , viewRadioButton
@@ -3744,10 +3724,10 @@ viewFilterWeapons model searchModel =
                 Html.button
                     [ HA.class "row"
                     , HA.class "gap-tiny"
-                    , HE.onClick (DamageTypeFilterAdded type_)
+                    , HE.onClick (FilterToggled "damage-types" type_)
                     ]
                     [ Html.text (toTitleCase type_)
-                    , viewFilterIcon (Dict.get type_ searchModel.filteredDamageTypes)
+                    , viewFilterIcon (nestedDictGet "damage-types" type_ searchModel.filteredValues)
                     ]
             )
             [ "bludgeoning"
@@ -3762,7 +3742,7 @@ viewFilterWeapons model searchModel =
     , Html.button
         [ HA.style "align-self" "flex-start"
         , HA.style "justify-self" "flex-start"
-        , HE.onClick RemoveAllReloadFiltersPressed
+        , HE.onClick (RemoveAllFiltersOfTypePressed "reloads")
         ]
         [ Html.text "Reset selection" ]
     , Html.div
@@ -3777,10 +3757,10 @@ viewFilterWeapons model searchModel =
                         Html.button
                             [ HA.class "row"
                             , HA.class "gap-tiny"
-                            , HE.onClick (ReloadFilterAdded reload)
+                            , HE.onClick (FilterToggled "reloads" reload)
                             ]
                             [ Html.text reload
-                            , viewFilterIcon (Dict.get reload searchModel.filteredReloads)
+                            , viewFilterIcon (nestedDictGet "reloads" reload searchModel.filteredValues)
                             ]
                     )
                     (List.sort reloads)
@@ -3903,53 +3883,53 @@ viewActiveFilters canClick searchModel =
                 )
                 [ { class = Nothing
                   , label = "Include actions:"
-                  , list = boolDictIncluded searchModel.filteredActions
-                  , removeMsg = ActionsFilterRemoved
+                  , list = boolDictIncluded "actions" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "actions"
                   }
                 , { class = Nothing
                   , label = "Exclude actions:"
-                  , list = boolDictExcluded searchModel.filteredActions
-                  , removeMsg = ActionsFilterRemoved
+                  , list = boolDictExcluded "actions "searchModel.filteredValues
+                  , removeMsg = FilterRemoved "actions"
                   }
                 , { class = Nothing
                   , label = "Include attributes:"
-                  , list = boolDictIncluded searchModel.filteredAttributes
-                  , removeMsg = AttributeFilterRemoved
+                  , list = boolDictIncluded "attributes" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "attributes"
                   }
                 , { class = Nothing
                   , label = "Exclude attributes:"
-                  , list = boolDictExcluded searchModel.filteredAttributes
-                  , removeMsg = AttributeFilterRemoved
+                  , list = boolDictExcluded "attributes "searchModel.filteredValues
+                  , removeMsg = FilterRemoved "attributes"
                   }
                 , { class = Just "trait trait-alignment"
                   , label = "Include alignments:"
-                  , list = boolDictIncluded searchModel.filteredAlignments
-                  , removeMsg = AlignmentFilterRemoved
+                  , list = boolDictIncluded "alignments" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "alignments"
                   }
                 , { class = Just "trait trait-alignment"
                   , label = "Exclude alignments:"
-                  , list = boolDictExcluded searchModel.filteredAlignments
-                  , removeMsg = AlignmentFilterRemoved
+                  , list = boolDictExcluded "alignments" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "alignments"
                   }
                 , { class = Nothing
                   , label = "Include armor categories:"
-                  , list = boolDictIncluded searchModel.filteredArmorCategories
-                  , removeMsg = ArmorCategoryFilterRemoved
+                  , list = boolDictIncluded "armor-categories" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "armor-categories"
                   }
                 , { class = Nothing
                   , label = "Exclude armor categories:"
-                  , list = boolDictExcluded searchModel.filteredArmorCategories
-                  , removeMsg = ArmorCategoryFilterRemoved
+                  , list = boolDictExcluded "armor-categories" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "armor-categories"
                   }
                 , { class = Nothing
                   , label = "Include armor groups:"
-                  , list = boolDictIncluded searchModel.filteredArmorGroups
-                  , removeMsg = ArmorGroupFilterRemoved
+                  , list = boolDictIncluded "armor-groups" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "armor-groups"
                   }
                 , { class = Nothing
                   , label = "Exclude armor groups:"
-                  , list = boolDictExcluded searchModel.filteredArmorGroups
-                  , removeMsg = ArmorGroupFilterRemoved
+                  , list = boolDictExcluded "armor-groups" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "armor-groups"
                   }
                 , { class = Nothing
                   , label =
@@ -3958,23 +3938,23 @@ viewActiveFilters canClick searchModel =
 
                         else
                             "Include any component:"
-                  , list = boolDictIncluded searchModel.filteredComponents
-                  , removeMsg = ComponentFilterRemoved
+                  , list = boolDictIncluded "components" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "components"
                   }
                 , { class = Nothing
                   , label = "Exclude components:"
-                  , list = boolDictExcluded searchModel.filteredComponents
-                  , removeMsg = ComponentFilterRemoved
+                  , list = boolDictExcluded "components" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "components"
                   }
                 , { class = Nothing
                   , label = "Include creature families:"
-                  , list = boolDictIncluded searchModel.filteredCreatureFamilies
-                  , removeMsg = CreatureFamilyFilterRemoved
+                  , list = boolDictIncluded "creature-families" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "creature-families"
                   }
                 , { class = Nothing
                   , label = "Exclude creature families:"
-                  , list = boolDictExcluded searchModel.filteredCreatureFamilies
-                  , removeMsg = CreatureFamilyFilterRemoved
+                  , list = boolDictExcluded "creature-families" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "creature-families"
                   }
                 , { class = Nothing
                   , label =
@@ -3983,143 +3963,143 @@ viewActiveFilters canClick searchModel =
 
                         else
                             "Include any domains:"
-                  , list = boolDictIncluded searchModel.filteredDomains
-                  , removeMsg = DomainFilterRemoved
+                  , list = boolDictIncluded "domains" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "domains"
                   }
                 , { class = Nothing
                   , label = "Exclude domains:"
-                  , list = boolDictExcluded searchModel.filteredDomains
-                  , removeMsg = DomainFilterRemoved
+                  , list = boolDictExcluded "domains" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "domains"
                   }
                 , { class = Nothing
                   , label = "Include hands:"
-                  , list = boolDictIncluded searchModel.filteredHands
-                  , removeMsg = HandFilterRemoved
+                  , list = boolDictIncluded "hands" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "hands"
                   }
                 , { class = Nothing
                   , label = "Exclude hands:"
-                  , list = boolDictExcluded searchModel.filteredHands
-                  , removeMsg = HandFilterRemoved
+                  , list = boolDictExcluded "hands" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "hands"
                   }
                 , { class = Nothing
                   , label = "Include item categories:"
-                  , list = boolDictIncluded searchModel.filteredItemCategories
-                  , removeMsg = ItemCategoryFilterRemoved
+                  , list = boolDictIncluded "item-categories" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "item-categories"
                   }
                 , { class = Nothing
                   , label = "Exclude item categories:"
-                  , list = boolDictExcluded searchModel.filteredItemCategories
-                  , removeMsg = ItemCategoryFilterRemoved
+                  , list = boolDictExcluded "item-categories" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "item-categories"
                   }
                 , { class = Nothing
                   , label = "Include item subcategories:"
-                  , list = boolDictIncluded searchModel.filteredItemSubcategories
-                  , removeMsg = ItemSubcategoryFilterRemoved
+                  , list = boolDictIncluded "item-subcategories" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "item-subcategories"
                   }
                 , { class = Nothing
                   , label = "Exclude item subcategories:"
-                  , list = boolDictExcluded searchModel.filteredItemSubcategories
-                  , removeMsg = ItemSubcategoryFilterRemoved
+                  , list = boolDictExcluded "item-subcategories" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "item-subcategories"
                   }
                 , { class = Nothing
                   , label = "Include PFS:"
-                  , list = boolDictIncluded searchModel.filteredPfs
-                  , removeMsg = PfsFilterRemoved
+                  , list = boolDictIncluded "pfs" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "pfs"
                   }
                 , { class = Nothing
                   , label = "Exclude PFS:"
-                  , list = boolDictExcluded searchModel.filteredPfs
-                  , removeMsg = PfsFilterRemoved
+                  , list = boolDictExcluded "pfs" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "pfs"
                   }
                 , { class = Just "trait"
                   , label = "Include rarity:"
-                  , list = boolDictIncluded searchModel.filteredRarities
-                  , removeMsg = RarityFilterRemoved
+                  , list = boolDictIncluded "rarities" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "rarities"
                   }
                 , { class = Just "trait"
                   , label = "Exclude rarity:"
-                  , list = boolDictExcluded searchModel.filteredRarities
-                  , removeMsg = RarityFilterRemoved
+                  , list = boolDictExcluded "rarities" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "rarities"
                   }
                 , { class = Nothing
                   , label = "Include reload:"
-                  , list = boolDictIncluded searchModel.filteredReloads
-                  , removeMsg = ReloadFilterRemoved
+                  , list = boolDictIncluded "reloads" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "reloads"
                   }
                 , { class = Nothing
                   , label = "Exclude reload:"
-                  , list = boolDictExcluded searchModel.filteredReloads
-                  , removeMsg = ReloadFilterRemoved
+                  , list = boolDictExcluded "reloads" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "reloads"
                   }
                 , { class = Nothing
                   , label = "Include saving throws:"
-                  , list = boolDictIncluded searchModel.filteredSavingThrows
-                  , removeMsg = SavingThrowFilterRemoved
+                  , list = boolDictIncluded "saving-throws" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "saving-throws"
                   }
                 , { class = Nothing
                   , label = "Exclude saving throws:"
-                  , list = boolDictExcluded searchModel.filteredSavingThrows
-                  , removeMsg = SavingThrowFilterRemoved
+                  , list = boolDictExcluded "saving-throws" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "saving-throws"
                   }
                 , { class = Just "trait"
                   , label = "Include schools:"
-                  , list = boolDictIncluded searchModel.filteredSchools
-                  , removeMsg = SchoolFilterRemoved
+                  , list = boolDictIncluded "schools" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "schools"
                   }
                 , { class = Just "trait"
                   , label = "Exclude schools:"
-                  , list = boolDictExcluded searchModel.filteredSchools
-                  , removeMsg = SchoolFilterRemoved
+                  , list = boolDictExcluded "schools" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "schools"
                   }
                 , { class = Just "trait trait-size"
                   , label = "Include sizes:"
-                  , list = boolDictIncluded searchModel.filteredSizes
-                  , removeMsg = SizeFilterRemoved
+                  , list = boolDictIncluded "sizes" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "sizes"
                   }
                 , { class = Just "trait trait-size"
                   , label = "Exclude sizes:"
-                  , list = boolDictExcluded searchModel.filteredSizes
-                  , removeMsg = SizeFilterRemoved
+                  , list = boolDictExcluded "sizes" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "sizes"
                   }
                 , { class = Nothing
                   , label = "Include skills:"
-                  , list = boolDictIncluded searchModel.filteredSkills
-                  , removeMsg = SkillFilterRemoved
+                  , list = boolDictIncluded "skills" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "skills"
                   }
                 , { class = Nothing
                   , label = "Exclude skills:"
-                  , list = boolDictExcluded searchModel.filteredSkills
-                  , removeMsg = SkillFilterRemoved
+                  , list = boolDictExcluded "skills" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "skills"
                   }
                 , { class = Nothing
                   , label = "Include sources:"
-                  , list = boolDictIncluded searchModel.filteredSources
-                  , removeMsg = SourceFilterRemoved
+                  , list = boolDictIncluded "sources" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "sources"
                   }
                 , { class = Nothing
                   , label = "Exclude sources:"
-                  , list = boolDictExcluded searchModel.filteredSources
-                  , removeMsg = SourceFilterRemoved
+                  , list = boolDictExcluded "sources" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "sources"
                   }
                 , { class = Nothing
                   , label = "Include source categories:"
-                  , list = boolDictIncluded searchModel.filteredSourceCategories
-                  , removeMsg = SourceCategoryFilterRemoved
+                  , list = boolDictIncluded "source-categories" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "source-categories"
                   }
                 , { class = Nothing
                   , label = "Exclude source categories:"
-                  , list = boolDictExcluded searchModel.filteredSourceCategories
-                  , removeMsg = SourceCategoryFilterRemoved
+                  , list = boolDictExcluded "source-categories" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "source-categories"
                   }
                 , { class = Nothing
                   , label = "Include strongest saves:"
-                  , list = boolDictIncluded searchModel.filteredStrongestSaves
-                  , removeMsg = StrongestSaveFilterRemoved
+                  , list = boolDictIncluded "strongest-saves" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "strongest-saves"
                   }
                 , { class = Nothing
                   , label = "Exclude strongest saves:"
-                  , list = boolDictExcluded searchModel.filteredStrongestSaves
-                  , removeMsg = StrongestSaveFilterRemoved
+                  , list = boolDictExcluded "strongest-saves" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "strongest-saves"
                   }
                 , { class = Nothing
                   , label =
@@ -4128,13 +4108,13 @@ viewActiveFilters canClick searchModel =
 
                         else
                             "Include any tradition:"
-                  , list = boolDictIncluded searchModel.filteredTraditions
-                  , removeMsg = TraditionFilterRemoved
+                  , list = boolDictIncluded "traditions" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "traditions"
                   }
                 , { class = Nothing
                   , label = "Exclude traditions:"
-                  , list = boolDictExcluded searchModel.filteredTraditions
-                  , removeMsg = TraditionFilterRemoved
+                  , list = boolDictExcluded "traditions" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "traditions"
                   }
                 , { class = Just "trait"
                   , label =
@@ -4143,13 +4123,13 @@ viewActiveFilters canClick searchModel =
 
                         else
                             "Include any trait:"
-                  , list = boolDictIncluded searchModel.filteredTraits
-                  , removeMsg = TraitFilterRemoved
+                  , list = boolDictIncluded "traits" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "traits"
                   }
                 , { class = Just "trait"
                   , label = "Exclude traits:"
-                  , list = boolDictExcluded searchModel.filteredTraits
-                  , removeMsg = TraitFilterRemoved
+                  , list = boolDictExcluded "traits" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "traits"
                   }
                 , { class = Nothing
                   , label =
@@ -4158,63 +4138,63 @@ viewActiveFilters canClick searchModel =
 
                         else
                             "Include any trait group:"
-                  , list = boolDictIncluded searchModel.filteredTraitGroups
-                  , removeMsg = TraitGroupFilterRemoved
+                  , list = boolDictIncluded "trait-groups" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "trait-groups"
                   }
                 , { class = Nothing
                   , label = "Exclude trait groups:"
-                  , list = boolDictExcluded searchModel.filteredTraitGroups
-                  , removeMsg = TraitGroupFilterRemoved
+                  , list = boolDictExcluded "trait-groups" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "trait-groups"
                   }
                 , { class = Just "filter-type"
                   , label = "Include types:"
-                  , list = boolDictIncluded searchModel.filteredTypes
-                  , removeMsg = TypeFilterRemoved
+                  , list = boolDictIncluded "types" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "types"
                   }
                 , { class = Just "filter-type"
                   , label = "Exclude types:"
-                  , list = boolDictExcluded searchModel.filteredTypes
-                  , removeMsg = TypeFilterRemoved
+                  , list = boolDictExcluded "types" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "types"
                   }
                 , { class = Nothing
                   , label = "Include weakest saves:"
-                  , list = boolDictIncluded searchModel.filteredWeakestSaves
-                  , removeMsg = WeakestSaveFilterRemoved
+                  , list = boolDictIncluded "weakest-saves" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "weakest-saves"
                   }
                 , { class = Nothing
                   , label = "Exclude weakest saves:"
-                  , list = boolDictExcluded searchModel.filteredWeakestSaves
-                  , removeMsg = WeakestSaveFilterRemoved
+                  , list = boolDictExcluded "weakest-saves" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "weakest-saves"
                   }
                 , { class = Nothing
                   , label = "Include weapon categories:"
-                  , list = boolDictIncluded searchModel.filteredWeaponCategories
-                  , removeMsg = WeaponCategoryFilterRemoved
+                  , list = boolDictIncluded "weapon-categories" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "weapon-categories"
                   }
                 , { class = Nothing
                   , label = "Exclude weapon categories:"
-                  , list = boolDictExcluded searchModel.filteredWeaponCategories
-                  , removeMsg = WeaponCategoryFilterRemoved
+                  , list = boolDictExcluded "weapon-categories" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "weapon-categories"
                   }
                 , { class = Nothing
                   , label = "Include weapon groups:"
-                  , list = boolDictIncluded searchModel.filteredWeaponGroups
-                  , removeMsg = WeaponGroupFilterRemoved
+                  , list = boolDictIncluded "weapon-groups" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "weapon-groups"
                   }
                 , { class = Nothing
                   , label = "Exclude weapon groups:"
-                  , list = boolDictExcluded searchModel.filteredWeaponGroups
-                  , removeMsg = WeaponGroupFilterRemoved
+                  , list = boolDictExcluded "weapon-groups" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "weapon-groups"
                   }
                 , { class = Nothing
                   , label = "Include weapon types:"
-                  , list = boolDictIncluded searchModel.filteredWeaponTypes
-                  , removeMsg = WeaponTypeFilterRemoved
+                  , list = boolDictIncluded "weapon-types" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "weapon-types"
                   }
                 , { class = Nothing
                   , label = "Exclude weapon types:"
-                  , list = boolDictExcluded searchModel.filteredWeaponTypes
-                  , removeMsg = WeaponTypeFilterRemoved
+                  , list = boolDictExcluded "weapon-types" searchModel.filteredValues
+                  , removeMsg = FilterRemoved "weapon-types"
                   }
                 , { class = Nothing
                   , label = "AP creatures:"

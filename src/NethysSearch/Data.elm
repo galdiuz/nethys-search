@@ -15,6 +15,7 @@ import Markdown.Renderer
 import Maybe.Extra
 import Set exposing (Set)
 import String.Extra
+import Tuple3
 import Url exposing (Url)
 
 
@@ -78,39 +79,9 @@ type alias SearchModel =
     { aggregations : Maybe (Result Http.Error Aggregations)
     , debounce : Int
     , defaultQuery : String
-    , filteredAttributes : Dict String Bool
-    , filteredActions : Dict String Bool
-    , filteredAlignments : Dict String Bool
-    , filteredArmorCategories : Dict String Bool
-    , filteredArmorGroups : Dict String Bool
-    , filteredComponents : Dict String Bool
-    , filteredCreatureFamilies : Dict String Bool
-    , filteredDamageTypes : Dict String Bool
-    , filteredDomains : Dict String Bool
     , filteredFromValues : Dict String String
-    , filteredHands : Dict String Bool
-    , filteredItemCategories : Dict String Bool
-    , filteredItemSubcategories : Dict String Bool
-    , filteredPfs : Dict String Bool
-    , filteredRarities : Dict String Bool
-    , filteredRegions : Dict String Bool
-    , filteredReloads : Dict String Bool
-    , filteredSavingThrows : Dict String Bool
-    , filteredSchools : Dict String Bool
-    , filteredSizes : Dict String Bool
-    , filteredSkills : Dict String Bool
-    , filteredSourceCategories : Dict String Bool
-    , filteredSources : Dict String Bool
-    , filteredStrongestSaves : Dict String Bool
     , filteredToValues : Dict String String
-    , filteredTraditions : Dict String Bool
-    , filteredTraitGroups : Dict String Bool
-    , filteredTraits : Dict String Bool
-    , filteredTypes : Dict String Bool
-    , filteredWeakestSaves : Dict String Bool
-    , filteredWeaponCategories : Dict String Bool
-    , filteredWeaponGroups : Dict String Bool
-    , filteredWeaponTypes : Dict String Bool
+    , filteredValues : Dict String (Dict String Bool)
     , filterApCreatures : Bool
     , filterComponentsOperator : Bool
     , filterDamageTypesOperator : Bool
@@ -169,39 +140,9 @@ emptySearchModel { defaultQuery, fixedQueryString, removeFilters } =
     { aggregations = Nothing
     , debounce = 0
     , defaultQuery = defaultQuery
-    , filteredAttributes = Dict.empty
-    , filteredActions = Dict.empty
-    , filteredAlignments = Dict.empty
-    , filteredArmorCategories = Dict.empty
-    , filteredArmorGroups = Dict.empty
-    , filteredComponents = Dict.empty
-    , filteredCreatureFamilies = Dict.empty
-    , filteredDamageTypes = Dict.empty
-    , filteredDomains = Dict.empty
     , filteredFromValues = Dict.empty
-    , filteredHands = Dict.empty
-    , filteredItemCategories = Dict.empty
-    , filteredItemSubcategories = Dict.empty
-    , filteredRarities = Dict.empty
-    , filteredRegions = Dict.empty
-    , filteredReloads = Dict.empty
-    , filteredSavingThrows = Dict.empty
-    , filteredSchools = Dict.empty
-    , filteredPfs = Dict.empty
-    , filteredSizes = Dict.empty
-    , filteredSkills = Dict.empty
-    , filteredSourceCategories = Dict.empty
-    , filteredSources = Dict.empty
-    , filteredStrongestSaves = Dict.empty
     , filteredToValues = Dict.empty
-    , filteredTraditions = Dict.empty
-    , filteredTraitGroups = Dict.empty
-    , filteredTraits = Dict.empty
-    , filteredTypes = Dict.empty
-    , filteredWeakestSaves = Dict.empty
-    , filteredWeaponCategories = Dict.empty
-    , filteredWeaponGroups = Dict.empty
-    , filteredWeaponTypes = Dict.empty
+    , filteredValues = Dict.empty
     , filterApCreatures = False
     , filterComponentsOperator = True
     , filterDamageTypesOperator = True
@@ -558,32 +499,14 @@ type alias Source =
 
 
 type Msg
-    = ActionsFilterAdded String
-    | ActionsFilterRemoved String
-    | AlignmentFilterAdded String
-    | AlignmentFilterRemoved String
-    | AlwaysShowFiltersChanged Bool
-    | ArmorCategoryFilterAdded String
-    | ArmorCategoryFilterRemoved String
-    | ArmorGroupFilterAdded String
-    | ArmorGroupFilterRemoved String
-    | AttributeFilterAdded String
-    | AttributeFilterRemoved String
+    = AlwaysShowFiltersChanged Bool
     | AutoQueryTypeChanged Bool
     | ColumnResistanceChanged String
     | ColumnSpeedChanged String
     | ColumnWeaknessChanged String
-    | ComponentFilterAdded String
-    | ComponentFilterRemoved String
-    | CreatureFamilyFilterAdded String
-    | CreatureFamilyFilterRemoved String
-    | DamageTypeFilterAdded String
-    | DamageTypeFilterRemoved String
     | DateFormatChanged String
     | DebouncePassed Int
     | DeleteColumnConfigurationPressed
-    | DomainFilterAdded String
-    | DomainFilterRemoved String
     | ExportAsCsvPressed
     | ExportAsJsonPressed
     | GotAggregationsResult (Result Http.Error Aggregations)
@@ -595,6 +518,8 @@ type Msg
     | GotSearchResult (Result Http.Error SearchResult)
     | GotSourcesAggregationResult (Result Http.Error (List Source))
     | GotTraitAggregationsResult (Result Http.Error (Dict String (List String)))
+    | FilterRemoved String String
+    | FilterToggled String String
     | FilterApCreaturesChanged Bool
     | FilterAttributeChanged String
     | FilterComponentsOperatorChanged Bool
@@ -618,12 +543,6 @@ type Msg
     | GroupedShowPfsIconChanged Bool
     | GroupedShowRarityChanged Bool
     | GroupedSortChanged GroupedSort
-    | HandFilterAdded String
-    | HandFilterRemoved String
-    | ItemCategoryFilterAdded String
-    | ItemCategoryFilterRemoved String
-    | ItemSubcategoryFilterAdded String
-    | ItemSubcategoryFilterRemoved String
     | LegacyModeChanged (Maybe Bool)
     | LimitTableWidthChanged Bool
     | LinkEntered String Position
@@ -638,59 +557,18 @@ type Msg
     | PageSizeChanged Int
     | PageSizeDefaultsChanged String Int
     | PageWidthChanged Int
-    | PfsFilterAdded String
-    | PfsFilterRemoved String
     | QueryChanged String
     | QueryTypeSelected QueryType
     | RandomSeedGenerated Int
-    | RarityFilterAdded String
-    | RarityFilterRemoved String
-    | RegionFilterAdded String
-    | RegionFilterRemoved String
-    | ReloadFilterAdded String
-    | ReloadFilterRemoved String
-    | RemoveAllActionsFiltersPressed
-    | RemoveAllAlignmentFiltersPressed
-    | RemoveAllArmorCategoryFiltersPressed
-    | RemoveAllArmorGroupFiltersPressed
-    | RemoveAllAttributeFiltersPressed
-    | RemoveAllComponentFiltersPressed
-    | RemoveAllCreatureFamilyFiltersPressed
-    | RemoveAllDamageTypeFiltersPressed
-    | RemoveAllDomainFiltersPressed
-    | RemoveAllHandFiltersPressed
-    | RemoveAllItemCategoryFiltersPressed
-    | RemoveAllItemSubcategoryFiltersPressed
-    | RemoveAllPfsFiltersPressed
-    | RemoveAllRarityFiltersPressed
-    | RemoveAllRegionFiltersPressed
-    | RemoveAllReloadFiltersPressed
-    | RemoveAllSavingThrowFiltersPressed
-    | RemoveAllSchoolFiltersPressed
-    | RemoveAllSizeFiltersPressed
-    | RemoveAllSkillFiltersPressed
+    | RemoveAllFiltersOfTypePressed String
+    | RemoveAllRangeValueFiltersPressed
     | RemoveAllSortsPressed
-    | RemoveAllSourceCategoryFiltersPressed
-    | RemoveAllSourceFiltersPressed
-    | RemoveAllStrongestSaveFiltersPressed
-    | RemoveAllTraditionFiltersPressed
-    | RemoveAllTraitFiltersPressed
-    | RemoveAllTypeFiltersPressed
-    | RemoveAllValueFiltersPressed
-    | RemoveAllWeakestSaveFiltersPressed
-    | RemoveAllWeaponCategoryFiltersPressed
-    | RemoveAllWeaponGroupFiltersPressed
-    | RemoveAllWeaponTypeFiltersPressed
     | ResetDefaultParamsPressed
     | ResultDisplayChanged ResultDisplay
     | SaveColumnConfigurationPressed
     | SaveDefaultParamsPressed
     | SavedColumnConfigurationNameChanged String
     | SavedColumnConfigurationSelected String
-    | SavingThrowFilterAdded String
-    | SavingThrowFilterRemoved String
-    | SchoolFilterAdded String
-    | SchoolFilterRemoved String
     | ScrollToTopPressed
     | SearchCreatureFamiliesChanged String
     | SearchItemCategoriesChanged String
@@ -708,10 +586,6 @@ type Msg
     | ShowSpoilersChanged Bool
     | ShowSummaryChanged Bool
     | ShowTraitsChanged Bool
-    | SizeFilterAdded String
-    | SizeFilterRemoved String
-    | SkillFilterAdded String
-    | SkillFilterRemoved String
     | SortAttributeChanged String
     | SortAdded String SortDir
     | SortOrderChanged Int Int
@@ -721,35 +595,13 @@ type Msg
     | SortSpeedChanged String
     | SortToggled String
     | SortWeaknessChanged String
-    | SourceCategoryFilterAdded String
-    | SourceCategoryFilterRemoved String
-    | SourceFilterAdded String
-    | SourceFilterRemoved String
-    | StrongestSaveFilterAdded String
-    | StrongestSaveFilterRemoved String
     | TableColumnAdded String
     | TableColumnMoved Int Int
     | TableColumnRemoved String
     | TableColumnSetChosen (List String)
-    | TraditionFilterAdded String
-    | TraditionFilterRemoved String
     | TraitGroupDeselectPressed (List String)
-    | TraitGroupFilterAdded String
-    | TraitGroupFilterRemoved String
-    | TraitFilterAdded String
-    | TraitFilterRemoved String
-    | TypeFilterAdded String
-    | TypeFilterRemoved String
     | UrlChanged String
     | UrlRequested Browser.UrlRequest
-    | WeakestSaveFilterAdded String
-    | WeakestSaveFilterRemoved String
-    | WeaponCategoryFilterAdded String
-    | WeaponCategoryFilterRemoved String
-    | WeaponGroupFilterAdded String
-    | WeaponGroupFilterRemoved String
-    | WeaponTypeFilterAdded String
-    | WeaponTypeFilterRemoved String
     | WindowResized Int Int
 
 
@@ -1062,39 +914,39 @@ fields =
     ]
 
 
-filterFields : SearchModel -> List ( String, Dict String Bool, Bool )
+filterFields : SearchModel -> List ( String, String, Bool )
 filterFields searchModel =
-    [ ( "actions.keyword", searchModel.filteredActions, False )
-    , ( "alignment", searchModel.filteredAlignments, False )
-    , ( "armor_category", searchModel.filteredArmorCategories, False )
-    , ( "armor_group", searchModel.filteredArmorGroups, False )
-    , ( "attribute", searchModel.filteredAttributes, False )
-    , ( "component", searchModel.filteredComponents, searchModel.filterComponentsOperator )
-    , ( "creature_family", searchModel.filteredCreatureFamilies, False )
-    , ( "damage_type", searchModel.filteredDamageTypes, searchModel.filterDamageTypesOperator )
-    , ( "domain", searchModel.filteredDomains, searchModel.filterDomainsOperator )
-    , ( "hands.keyword", searchModel.filteredHands, False )
-    , ( "item_category", searchModel.filteredItemCategories, False )
-    , ( "item_subcategory", searchModel.filteredItemSubcategories, False )
-    , ( "pfs", searchModel.filteredPfs, False )
-    , ( "rarity", searchModel.filteredRarities, False )
-    , ( "region", searchModel.filteredRegions, False )
-    , ( "reload_raw.keyword", searchModel.filteredReloads, False )
-    , ( "saving_throw", searchModel.filteredSavingThrows, False )
-    , ( "school", searchModel.filteredSchools, False )
-    , ( "size", searchModel.filteredSizes, False )
-    , ( "skill", searchModel.filteredSkills, False )
-    , ( "source", searchModel.filteredSources, False )
-    , ( "source_category", searchModel.filteredSourceCategories, False )
-    , ( "strongest_save", searchModel.filteredStrongestSaves, False )
-    , ( "tradition", searchModel.filteredTraditions, searchModel.filterTraditionsOperator )
-    , ( "trait_group", searchModel.filteredTraitGroups, searchModel.filterTraitsOperator )
-    , ( "trait", searchModel.filteredTraits, searchModel.filterTraitsOperator )
-    , ( "type", searchModel.filteredTypes, False )
-    , ( "weakest_save", searchModel.filteredWeakestSaves, False )
-    , ( "weapon_category", searchModel.filteredWeaponCategories, False )
-    , ( "weapon_group", searchModel.filteredWeaponGroups, False )
-    , ( "weapon_type", searchModel.filteredWeaponTypes, False )
+    [ ( "actions.keyword", "actions", False )
+    , ( "alignment", "alignments", False )
+    , ( "armor_category", "armor-categories", False )
+    , ( "armor_group", "armor-groups", False )
+    , ( "attribute", "attributes", False )
+    , ( "component", "components", searchModel.filterComponentsOperator )
+    , ( "creature_family", "creature-families", False )
+    , ( "damage_type", "damage-types", searchModel.filterDamageTypesOperator )
+    , ( "domain", "domains", searchModel.filterDomainsOperator )
+    , ( "hands.keyword", "hands", False )
+    , ( "item_category", "item-categories", False )
+    , ( "item_subcategory", "item-subcategories", False )
+    , ( "pfs", "pfs", False )
+    , ( "rarity", "rarities", False )
+    , ( "region", "regions", False )
+    , ( "reload_raw.keyword", "reloads", False )
+    , ( "saving_throw", "saving-throws", False )
+    , ( "school", "schools", False )
+    , ( "size", "sizes", False )
+    , ( "skill", "skills", False )
+    , ( "source", "sources", False )
+    , ( "source_category", "source-categories", False )
+    , ( "strongest_save", "strongest-saves", False )
+    , ( "tradition", "traditions", searchModel.filterTraditionsOperator )
+    , ( "trait_group", "trait-groups", searchModel.filterTraitsOperator )
+    , ( "trait", "traits", searchModel.filterTraitsOperator )
+    , ( "type", "types", False )
+    , ( "weakest_save", "weakest-saves", False )
+    , ( "weapon_category", "weapon-categories", False )
+    , ( "weapon_group", "weapon-groups", False )
+    , ( "weapon_type", "weapon-types", False )
     ]
 
 
@@ -1589,38 +1441,6 @@ updateSearchModelFromParams params model searchModel =
 
                     else
                         Standard
-        , filteredAttributes = getBoolDictFromParams params "abilities"
-            |> Dict.union (getBoolDictFromParams params "attributes")
-        , filteredActions = getBoolDictFromParams params "actions"
-        , filteredAlignments = getBoolDictFromParams params "alignments"
-        , filteredArmorCategories = getBoolDictFromParams params "armor-categories"
-        , filteredArmorGroups = getBoolDictFromParams params "armor-groups"
-        , filteredComponents = getBoolDictFromParams params "components"
-        , filteredCreatureFamilies = getBoolDictFromParams params "creature-families"
-        , filteredDamageTypes = getBoolDictFromParams params "damage-types"
-        , filteredDomains = getBoolDictFromParams params "domains"
-        , filteredHands = getBoolDictFromParams params "hands"
-        , filteredItemCategories = getBoolDictFromParams params "item-categories"
-        , filteredItemSubcategories = getBoolDictFromParams params "item-subcategories"
-        , filteredPfs = getBoolDictFromParams params "pfs"
-        , filteredRarities = getBoolDictFromParams params "rarities"
-        , filteredRegions = getBoolDictFromParams params "regions"
-        , filteredReloads = getBoolDictFromParams params "reloads"
-        , filteredSavingThrows = getBoolDictFromParams params "saving-throws"
-        , filteredSchools = getBoolDictFromParams params "schools"
-        , filteredSizes = getBoolDictFromParams params "sizes"
-        , filteredSkills = getBoolDictFromParams params "skills"
-        , filteredSourceCategories = getBoolDictFromParams params "source-categories"
-        , filteredSources = getBoolDictFromParams params "sources"
-        , filteredStrongestSaves = getBoolDictFromParams params "strongest-saves"
-        , filteredTraditions = getBoolDictFromParams params "traditions"
-        , filteredTraitGroups = getBoolDictFromParams params "trait-groups"
-        , filteredTraits = getBoolDictFromParams params "traits"
-        , filteredTypes = getBoolDictFromParams params "types"
-        , filteredWeakestSaves = getBoolDictFromParams params "weakest-saves"
-        , filteredWeaponCategories = getBoolDictFromParams params "weapon-categories"
-        , filteredWeaponGroups = getBoolDictFromParams params "weapon-groups"
-        , filteredWeaponTypes = getBoolDictFromParams params "weapon-types"
         , filterApCreatures = Dict.get "ap-creatures" params == Just [ "hide" ]
         , filterSpoilers = Dict.get "spoilers" params == Just [ "hide" ]
         , filterComponentsOperator = Dict.get "components-operator" params /= Just [ "or" ]
@@ -1628,6 +1448,22 @@ updateSearchModelFromParams params model searchModel =
         , filterDomainsOperator = Dict.get "domains-operator" params /= Just [ "or" ]
         , filterTraditionsOperator = Dict.get "traditions-operator" params /= Just [ "or" ]
         , filterTraitsOperator = Dict.get "traits-operator" params /= Just [ "or" ]
+        , filteredValues =
+            List.map
+                (\filter ->
+                    ( filter
+                    , getBoolDictFromParams params filter
+                        |> if filter == "attributes" then
+                            Dict.union (getBoolDictFromParams params "abilities")
+
+                           else
+                            identity
+                    )
+                )
+                (filterFields searchModel
+                    |> List.map Tuple3.second
+                )
+                |> Dict.fromList
         , filteredFromValues =
             Dict.get "values-from" params
                 |> Maybe.withDefault []
@@ -1834,31 +1670,43 @@ currentQueryAsComplex searchModel =
             else
                 s
 
-        surroundWithParantheses : Dict String Bool -> String -> String
-        surroundWithParantheses dict s =
-            if Dict.size dict > 1 || List.length (boolDictExcluded dict) /= 0 then
+        surroundWithParantheses : Dict String Bool -> Dict String Bool -> String -> String
+        surroundWithParantheses dict excluded s =
+            if Dict.size dict > 1 || Dict.size excluded /= 0 then
                 "(" ++ s ++ ")"
+
             else
                 s
     in
     [ filterFields searchModel
         |> List.filterMap
-            (\( field, dict, isAnd ) ->
+            (\( field, filterType, isAnd ) ->
+                let
+                    dict : Dict String Bool
+                    dict =
+                        Dict.get filterType searchModel.filteredValues
+                            |> Maybe.withDefault Dict.empty
+
+                    ( included, excluded ) =
+                        Dict.get filterType searchModel.filteredValues
+                            |> Maybe.withDefault Dict.empty
+                            |> Dict.partition (\_ v -> v)
+                in
                 if Dict.isEmpty dict then
                     Nothing
 
                 else
-                    [ boolDictIncluded dict
+                    [ Dict.keys included
                         |> List.map surroundWithQuotes
                         |> String.join (if isAnd then " AND " else " OR ")
-                    , boolDictExcluded dict
+                    , Dict.keys excluded
                         |> List.map surroundWithQuotes
                         |> List.map (String.append "-")
                         |> String.join " "
                     ]
                         |> List.filter (not << String.isEmpty)
                         |> String.join " "
-                        |> surroundWithParantheses dict
+                        |> surroundWithParantheses dict excluded
                         |> String.append ":"
                         |> String.append field
                         |> Just
@@ -1966,6 +1814,25 @@ sortDirFromString str =
             Nothing
 
 
+nestedDictGet : comparable -> comparable -> Dict comparable (Dict comparable a) -> Maybe a
+nestedDictGet key1 key2 dict =
+    Dict.get key1 dict
+        |> Maybe.withDefault Dict.empty
+        |> Dict.get key2
+
+
+nestedDictFilter :
+    comparable
+    -> (comparable -> v -> Bool)
+    -> Dict comparable (Dict comparable v)
+    -> Dict comparable (Dict comparable v)
+nestedDictFilter key fun dict =
+    Dict.update
+        key
+        (Maybe.map (Dict.filter fun))
+        dict
+
+
 toggleBoolDict : comparable -> Dict comparable Bool -> Dict comparable Bool
 toggleBoolDict key dict =
     Dict.update
@@ -1984,20 +1851,20 @@ toggleBoolDict key dict =
         dict
 
 
-boolDictIncluded : Dict comparable Bool -> List comparable
-boolDictIncluded dict =
-    dict
-        |> Dict.toList
-        |> List.filter (Tuple.second)
-        |> List.map Tuple.first
+boolDictIncluded : comparable -> Dict comparable (Dict comparable Bool) -> List comparable
+boolDictIncluded key dict =
+    Dict.get key dict
+        |> Maybe.withDefault Dict.empty
+        |> Dict.filter (\_ v -> v)
+        |> Dict.keys
 
 
-boolDictExcluded : Dict comparable Bool -> List comparable
-boolDictExcluded dict =
-    dict
-        |> Dict.toList
-        |> List.filter (Tuple.second >> not)
-        |> List.map Tuple.first
+boolDictExcluded : comparable -> Dict comparable (Dict comparable Bool) -> List comparable
+boolDictExcluded key dict =
+    Dict.get key dict
+        |> Maybe.withDefault Dict.empty
+        |> Dict.filter (\_ v -> not v)
+        |> Dict.keys
 
 
 mergeFromToValues : SearchModel -> List ( String, Maybe String, Maybe String )

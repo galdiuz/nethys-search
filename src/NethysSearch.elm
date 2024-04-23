@@ -183,46 +183,6 @@ linkEnteredDecoder =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        ActionsFilterAdded actions ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredActions = toggleBoolDict actions searchModel.filteredActions }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        ActionsFilterRemoved actions ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredActions = Dict.remove actions searchModel.filteredActions }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        AlignmentFilterAdded alignment ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredAlignments = toggleBoolDict alignment searchModel.filteredAlignments }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        AlignmentFilterRemoved alignment ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredAlignments = Dict.remove alignment searchModel.filteredAlignments }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
         AlwaysShowFiltersChanged enabled ->
             ( updateCurrentSearchModel
                 (\searchModel ->
@@ -232,66 +192,6 @@ update msg model =
             , saveToLocalStorage
                 "always-show-filters"
                 (if enabled then "1" else "0")
-            )
-
-        ArmorCategoryFilterAdded category ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredArmorCategories = toggleBoolDict category searchModel.filteredArmorCategories }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        ArmorCategoryFilterRemoved category ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredArmorCategories = Dict.remove category searchModel.filteredArmorCategories }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        ArmorGroupFilterAdded group ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredArmorGroups = toggleBoolDict group searchModel.filteredArmorGroups }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        ArmorGroupFilterRemoved group ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredArmorGroups = Dict.remove group searchModel.filteredArmorGroups }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        AttributeFilterAdded attributes ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredAttributes = toggleBoolDict attributes searchModel.filteredAttributes }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        AttributeFilterRemoved attributes ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredAttributes = Dict.remove attributes searchModel.filteredAttributes }
-                )
-                model
-                |> updateUrlWithSearchParams
             )
 
         AutoQueryTypeChanged enabled ->
@@ -331,66 +231,6 @@ update msg model =
             , Cmd.none
             )
 
-        ComponentFilterAdded component ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredComponents = toggleBoolDict component searchModel.filteredComponents }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        ComponentFilterRemoved component ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredComponents = Dict.remove component searchModel.filteredComponents }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        CreatureFamilyFilterAdded creatureFamily ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredCreatureFamilies = toggleBoolDict creatureFamily searchModel.filteredCreatureFamilies }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        CreatureFamilyFilterRemoved creatureFamily ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredCreatureFamilies = Dict.remove creatureFamily searchModel.filteredCreatureFamilies }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        DamageTypeFilterAdded component ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredDamageTypes = toggleBoolDict component searchModel.filteredDamageTypes }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        DamageTypeFilterRemoved component ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredDamageTypes = Dict.remove component searchModel.filteredDamageTypes }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
         DateFormatChanged format ->
             ( updateViewModel
                 (\viewModel ->
@@ -419,26 +259,6 @@ update msg model =
             , Cmd.none
             )
                 |> saveColumnConfigurationsToLocalStorage
-
-        DomainFilterAdded component ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredDomains = toggleBoolDict component searchModel.filteredDomains }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        DomainFilterRemoved component ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredDomains = Dict.remove component searchModel.filteredDomains }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
 
         ExportAsCsvPressed ->
             ( model
@@ -499,6 +319,137 @@ update msg model =
                     )
                 |> Encode.encode 0
                 |> File.Download.string "table-data.json" "application/json"
+            )
+
+        FilterRemoved filterType value ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | filteredValues =
+                            Dict.update
+                                filterType
+                                (Maybe.withDefault Dict.empty
+                                    >> Dict.remove value
+                                    >> Just
+                                )
+                                searchModel.filteredValues
+                    }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
+        FilterToggled filterType value ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | filteredValues =
+                            searchModel.filteredValues
+                                |> Dict.update
+                                    filterType
+                                    (Maybe.withDefault Dict.empty
+                                        >> toggleBoolDict value
+                                        >> Just
+                                    )
+                                |> (\newFilteredValues ->
+                                    case filterType of
+                                        "item-categories" ->
+                                            let
+                                                newValue : Maybe Bool
+                                                newValue =
+                                                    nestedDictGet filterType value newFilteredValues
+
+                                                includedItemCategories : List String
+                                                includedItemCategories =
+                                                    boolDictIncluded "item-categories" newFilteredValues
+                                            in
+                                            case newValue of
+                                                Just True ->
+                                                    nestedDictFilter
+                                                        "item-subcategories"
+                                                        (\source _ ->
+                                                            searchModel.aggregations
+                                                                |> Maybe.andThen Result.toMaybe
+                                                                |> Maybe.map .itemSubcategories
+                                                                |> Maybe.withDefault []
+                                                                |> List.filter
+                                                                    (\sc ->
+                                                                        List.member sc.category includedItemCategories
+                                                                    )
+                                                                |> List.map .name
+                                                                |> List.member source
+                                                        )
+                                                        newFilteredValues
+
+                                                Just False ->
+                                                    nestedDictFilter
+                                                        "item-subcategories"
+                                                        (\source _ ->
+                                                            searchModel.aggregations
+                                                                |> Maybe.andThen Result.toMaybe
+                                                                |> Maybe.map .itemSubcategories
+                                                                |> Maybe.andThen (List.Extra.find (.name >> ((==) source)))
+                                                                |> Maybe.map .category
+                                                                |> Maybe.map String.toLower
+                                                                |> (/=) (Just value)
+                                                        )
+                                                        newFilteredValues
+
+                                                Nothing ->
+                                                    newFilteredValues
+
+                                        "source-categories" ->
+                                            let
+                                                newValue : Maybe Bool
+                                                newValue =
+                                                    nestedDictGet filterType value newFilteredValues
+
+                                                includedSourceCategories : List String
+                                                includedSourceCategories =
+                                                    boolDictIncluded "source-categories" newFilteredValues
+                                            in
+                                            case newValue of
+                                                Just True ->
+                                                    nestedDictFilter
+                                                        "sources"
+                                                        (\source _ ->
+                                                            model.sourcesAggregation
+                                                                |> Maybe.andThen Result.toMaybe
+                                                                |> Maybe.withDefault []
+                                                                |> List.filter
+                                                                    (\s ->
+                                                                        List.member s.category includedSourceCategories
+                                                                    )
+                                                                |> List.map .name
+                                                                |> List.member source
+                                                        )
+                                                        newFilteredValues
+
+                                                Just False ->
+                                                    nestedDictFilter
+                                                        "sources"
+                                                        (\source _ ->
+                                                            model.sourcesAggregation
+                                                                |> Maybe.andThen Result.toMaybe
+                                                                |> Maybe.andThen (List.Extra.find (.name >> ((==) source)))
+                                                                |> Maybe.map .category
+                                                                |> Maybe.map String.toLower
+                                                                |> (/=) (Just value)
+                                                        )
+                                                        newFilteredValues
+
+                                                Nothing ->
+                                                    newFilteredValues
+
+                                        _ ->
+                                            newFilteredValues
+                                   )
+                    }
+                )
+                model
+                |> updateUrlWithSearchParams
             )
 
         FilterApCreaturesChanged value ->
@@ -890,108 +841,6 @@ update msg model =
                 )
             )
 
-        HandFilterAdded subcategory ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredHands = toggleBoolDict subcategory searchModel.filteredHands }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        HandFilterRemoved subcategory ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredHands = Dict.remove subcategory searchModel.filteredHands }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        ItemCategoryFilterAdded category ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    let
-                        newFilteredItemCategories : Dict String Bool
-                        newFilteredItemCategories =
-                            toggleBoolDict category searchModel.filteredItemCategories
-                    in
-                    { searchModel
-                        | filteredItemCategories = newFilteredItemCategories
-                        , filteredItemSubcategories =
-                            case Dict.get category newFilteredItemCategories of
-                                Just True ->
-                                    Dict.filter
-                                        (\source _ ->
-                                            searchModel.aggregations
-                                                |> Maybe.andThen Result.toMaybe
-                                                |> Maybe.map .itemSubcategories
-                                                |> Maybe.withDefault []
-                                                |> List.filter
-                                                    (\sc ->
-                                                        List.member
-                                                            sc.category
-                                                            (boolDictIncluded newFilteredItemCategories)
-                                                    )
-                                                |> List.map .name
-                                                |> List.member source
-                                        )
-                                        searchModel.filteredItemSubcategories
-
-                                Just False ->
-                                    Dict.filter
-                                        (\source _ ->
-                                            searchModel.aggregations
-                                                |> Maybe.andThen Result.toMaybe
-                                                |> Maybe.map .itemSubcategories
-                                                |> Maybe.andThen (List.Extra.find (.name >> ((==) source)))
-                                                |> Maybe.map .category
-                                                |> Maybe.map String.toLower
-                                                |> (/=) (Just category)
-                                        )
-                                        searchModel.filteredItemSubcategories
-
-                                Nothing ->
-                                    searchModel.filteredItemSubcategories
-                    }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        ItemCategoryFilterRemoved category ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredItemCategories = Dict.remove category searchModel.filteredItemCategories }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        ItemSubcategoryFilterAdded subcategory ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredItemSubcategories = toggleBoolDict subcategory searchModel.filteredItemSubcategories }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        ItemSubcategoryFilterRemoved subcategory ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredItemSubcategories = Dict.remove subcategory searchModel.filteredItemSubcategories }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
         LegacyModeChanged value ->
             ( model
             , updateCurrentSearchModel
@@ -1157,26 +1006,6 @@ update msg model =
                 (String.fromInt width)
             )
 
-        PfsFilterAdded pfs ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredPfs = toggleBoolDict pfs searchModel.filteredPfs }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        PfsFilterRemoved pfs ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredPfs = Dict.remove pfs searchModel.filteredPfs }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
         QueryChanged str ->
             ( updateCurrentSearchModel
                 (\searchModel ->
@@ -1211,61 +1040,14 @@ update msg model =
                         identity
                    )
 
-        RarityFilterAdded rarity ->
+        RemoveAllFiltersOfTypePressed filterType ->
             ( model
             , updateCurrentSearchModel
                 (\searchModel ->
-                    { searchModel | filteredRarities = toggleBoolDict rarity searchModel.filteredRarities }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RarityFilterRemoved rarity ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredRarities = Dict.remove rarity searchModel.filteredRarities }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RegionFilterAdded region ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredRegions = toggleBoolDict region searchModel.filteredRegions }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RegionFilterRemoved region ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredRegions = Dict.remove region searchModel.filteredRegions }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        ReloadFilterAdded reload ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredReloads = toggleBoolDict reload searchModel.filteredReloads }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        ReloadFilterRemoved reload ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredReloads = Dict.remove reload searchModel.filteredReloads }
+                    { searchModel
+                        | filteredValues =
+                            Dict.remove filterType searchModel.filteredValues
+                    }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -1281,270 +1063,7 @@ update msg model =
                 |> updateUrlWithSearchParams
             )
 
-        RemoveAllActionsFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredActions = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllAlignmentFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredAlignments = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllArmorCategoryFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredArmorCategories = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllArmorGroupFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredArmorGroups = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllAttributeFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredAttributes = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllComponentFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredComponents = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllCreatureFamilyFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredCreatureFamilies = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllDamageTypeFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredDamageTypes = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllDomainFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredDomains = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllHandFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredHands = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllItemCategoryFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredItemCategories = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllItemSubcategoryFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredItemSubcategories = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllPfsFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredPfs = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllRarityFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredRarities = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllRegionFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredRegions = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllReloadFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredReloads = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllSavingThrowFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSavingThrows = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllSchoolFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSchools = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllSizeFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSizes = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllSkillFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSkills = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllSourceCategoryFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSourceCategories = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllSourceFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSources = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllStrongestSaveFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredStrongestSaves = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllTraditionFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredTraditions = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllTraitFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel
-                        | filteredTraits = Dict.empty
-                        , filteredTraitGroups = Dict.empty
-                    }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllTypeFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredTypes = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllValueFiltersPressed ->
+        RemoveAllRangeValueFiltersPressed ->
             ( model
             , updateCurrentSearchModel
                 (\searchModel ->
@@ -1552,46 +1071,6 @@ update msg model =
                         | filteredFromValues = Dict.empty
                         , filteredToValues = Dict.empty
                     }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllWeakestSaveFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredWeakestSaves = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllWeaponCategoryFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredWeaponCategories = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllWeaponGroupFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredWeaponGroups = Dict.empty }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        RemoveAllWeaponTypeFiltersPressed ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredWeaponTypes = Dict.empty }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -1682,46 +1161,6 @@ update msg model =
                             Dict.get name model.savedColumnConfigurations
                                 |> Maybe.withDefault searchModel.tableColumns
                     }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        SavingThrowFilterAdded savingThrow ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSavingThrows = toggleBoolDict savingThrow searchModel.filteredSavingThrows }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        SavingThrowFilterRemoved savingThrow ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSavingThrows = Dict.remove savingThrow searchModel.filteredSavingThrows }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        SchoolFilterAdded school ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSchools = toggleBoolDict school searchModel.filteredSchools }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        SchoolFilterRemoved school ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSchools = Dict.remove school searchModel.filteredSchools }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -1899,46 +1338,6 @@ update msg model =
                 (if value then "1" else "0")
             )
 
-        SizeFilterAdded size ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSizes = toggleBoolDict size searchModel.filteredSizes }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        SizeFilterRemoved size ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSizes = Dict.remove size searchModel.filteredSizes }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        SkillFilterAdded skill ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSkills = toggleBoolDict skill searchModel.filteredSkills }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        SkillFilterRemoved skill ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSkills = Dict.remove skill searchModel.filteredSkills }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
         SortAttributeChanged value ->
             ( updateCurrentSearchModel
                 (\searchModel ->
@@ -2083,106 +1482,6 @@ update msg model =
             , Cmd.none
             )
 
-        SourceCategoryFilterAdded category ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    let
-                        newFilteredSourceCategories : Dict String Bool
-                        newFilteredSourceCategories =
-                            toggleBoolDict category searchModel.filteredSourceCategories
-                    in
-                    { searchModel
-                        | filteredSourceCategories = newFilteredSourceCategories
-                        , filteredSources =
-                            case Dict.get category newFilteredSourceCategories of
-                                Just True ->
-                                    Dict.filter
-                                        (\source _ ->
-                                            model.sourcesAggregation
-                                                |> Maybe.andThen Result.toMaybe
-                                                |> Maybe.withDefault []
-                                                |> List.filter
-                                                    (\s ->
-                                                        List.member
-                                                            s.category
-                                                            (boolDictIncluded newFilteredSourceCategories)
-                                                    )
-                                                |> List.map .name
-                                                |> List.member source
-                                        )
-                                        searchModel.filteredSources
-
-                                Just False ->
-                                    Dict.filter
-                                        (\source _ ->
-                                            model.sourcesAggregation
-                                                |> Maybe.andThen Result.toMaybe
-                                                |> Maybe.andThen (List.Extra.find (.name >> ((==) source)))
-                                                |> Maybe.map .category
-                                                |> Maybe.map String.toLower
-                                                |> (/=) (Just category)
-                                        )
-                                        searchModel.filteredSources
-
-                                Nothing ->
-                                    searchModel.filteredSources
-                    }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        SourceCategoryFilterRemoved category ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSourceCategories = Dict.remove category searchModel.filteredSourceCategories }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        SourceFilterAdded book ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSources = toggleBoolDict book searchModel.filteredSources }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        SourceFilterRemoved book ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredSources = Dict.remove book searchModel.filteredSources }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        StrongestSaveFilterAdded strongestSave ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredStrongestSaves = toggleBoolDict strongestSave searchModel.filteredStrongestSaves }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        StrongestSaveFilterRemoved strongestSave ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredStrongestSaves = Dict.remove strongestSave searchModel.filteredStrongestSaves }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
         TableColumnAdded column ->
             ( model
             , updateCurrentSearchModel
@@ -2223,99 +1522,17 @@ update msg model =
                 |> updateUrlWithSearchParams
             )
 
-        TraditionFilterAdded tradition ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredTraditions = toggleBoolDict tradition searchModel.filteredTraditions }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        TraditionFilterRemoved tradition ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredTraditions = Dict.remove tradition searchModel.filteredTraditions }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
         TraitGroupDeselectPressed traits ->
             ( model
             , updateCurrentSearchModel
                 (\searchModel ->
                     { searchModel
-                        | filteredTraits =
-                            List.foldl
-                                (\trait ->
-                                    Dict.remove trait
-                                )
-                                searchModel.filteredTraits
-                                traits
+                        | filteredValues =
+                            nestedDictFilter
+                                "traits"
+                                (\trait _ -> not (List.member trait traits))
+                                searchModel.filteredValues
                     }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        TraitGroupFilterAdded group ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredTraitGroups = toggleBoolDict group searchModel.filteredTraitGroups }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        TraitGroupFilterRemoved group ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredTraitGroups = Dict.remove group searchModel.filteredTraitGroups }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        TraitFilterAdded trait ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredTraits = toggleBoolDict trait searchModel.filteredTraits }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        TraitFilterRemoved trait ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredTraits = Dict.remove trait searchModel.filteredTraits }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        TypeFilterAdded type_ ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredTypes = toggleBoolDict type_ searchModel.filteredTypes }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        TypeFilterRemoved type_ ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredTypes = Dict.remove type_ searchModel.filteredTypes }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -2350,86 +1567,6 @@ update msg model =
                     ( model
                     , navigation_loadUrl url
                     )
-
-        WeakestSaveFilterAdded weakestSave ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredWeakestSaves = toggleBoolDict weakestSave searchModel.filteredWeakestSaves }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        WeakestSaveFilterRemoved weakestSave ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredWeakestSaves = Dict.remove weakestSave searchModel.filteredWeakestSaves }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        WeaponCategoryFilterAdded category ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredWeaponCategories = toggleBoolDict category searchModel.filteredWeaponCategories }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        WeaponCategoryFilterRemoved category ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredWeaponCategories = Dict.remove category searchModel.filteredWeaponCategories }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        WeaponGroupFilterAdded group ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredWeaponGroups = toggleBoolDict group searchModel.filteredWeaponGroups }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        WeaponGroupFilterRemoved group ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredWeaponGroups = Dict.remove group searchModel.filteredWeaponGroups }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        WeaponTypeFilterAdded type_ ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredWeaponTypes = toggleBoolDict type_ searchModel.filteredWeaponTypes }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        WeaponTypeFilterRemoved type_ ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filteredWeaponTypes = Dict.remove type_ searchModel.filteredWeaponTypes }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
 
         WindowResized width height ->
             ( { model | windowSize = { width = width, height = height } }
@@ -3508,268 +2645,97 @@ updateUrlWithSearchParams ({ searchModel, url } as model) =
 
 getSearchModelQueryParams : Model -> SearchModel -> List ( String, List String )
 getSearchModelQueryParams model searchModel =
-    [ ( "q"
-      , searchModel.query
+    List.concat
+    [ [ ( "q"
+        , searchModel.query
             |> String.Extra.nonEmpty
             |> Maybe.map (String.split " ")
             |> Maybe.withDefault []
-      )
-    , ( "type"
-      , if model.autoQueryType then
+        )
+      , ( "type"
+        , if model.autoQueryType then
             if queryCouldBeComplex searchModel.query then
                 [ "eqs" ]
 
             else
                 []
 
-        else
+          else
             case searchModel.queryType of
                 Standard ->
                     []
 
                 ElasticsearchQueryString ->
                     [ "eqs" ]
-      )
-    , ( "include-attributes"
-      , boolDictIncluded searchModel.filteredAttributes
-      )
-    , ( "exclude-attributes"
-      , boolDictExcluded searchModel.filteredAttributes
-      )
-    , ( "include-actions"
-      , boolDictIncluded searchModel.filteredActions
-      )
-    , ( "exclude-actions"
-      , boolDictExcluded searchModel.filteredActions
-      )
-    , ( "include-alignments"
-      , boolDictIncluded searchModel.filteredAlignments
-      )
-    , ( "exclude-alignments"
-      , boolDictExcluded searchModel.filteredAlignments
-      )
-    , ( "include-armor-categories"
-      , boolDictIncluded searchModel.filteredArmorCategories
-      )
-    , ( "exclude-armor-categories"
-      , boolDictExcluded searchModel.filteredArmorCategories
-      )
-    , ( "include-armor-groups"
-      , boolDictIncluded searchModel.filteredArmorGroups
-      )
-    , ( "exclude-armor-groups"
-      , boolDictExcluded searchModel.filteredArmorGroups
-      )
-    , ( "include-components"
-      , boolDictIncluded searchModel.filteredComponents
-      )
-    , ( "exclude-components"
-      , boolDictExcluded searchModel.filteredComponents
-      )
-    , ( "components-operator"
-      , if searchModel.filterComponentsOperator then
+        )
+      ]
+    , List.concatMap
+        (\filterType ->
+            [ ( "include-" ++ filterType
+              , boolDictIncluded filterType searchModel.filteredValues
+              )
+            , ( "exclude-" ++ filterType
+              , boolDictExcluded filterType searchModel.filteredValues
+              )
+            ]
+        )
+        (filterFields searchModel
+            |> List.map Tuple3.second
+        )
+    , [ ( "components-operator"
+        , if searchModel.filterComponentsOperator then
             []
 
-        else
+          else
             [ "or" ]
-      )
-    , ( "include-creature-families"
-      , boolDictIncluded searchModel.filteredCreatureFamilies
-      )
-    , ( "exclude-creature-families"
-      , boolDictExcluded searchModel.filteredCreatureFamilies
-      )
-    , ( "include-damage-types"
-      , boolDictIncluded searchModel.filteredDamageTypes
-      )
-    , ( "exclude-damage-types"
-      , boolDictExcluded searchModel.filteredDamageTypes
-      )
-    , ( "damage-types-operator"
-      , if searchModel.filterDamageTypesOperator then
+        )
+      , ( "damage-types-operator"
+        , if searchModel.filterDamageTypesOperator then
             []
 
-        else
+          else
             [ "or" ]
-      )
-    , ( "include-domains"
-      , boolDictIncluded searchModel.filteredDomains
-      )
-    , ( "exclude-domains"
-      , boolDictExcluded searchModel.filteredDomains
-      )
-    , ( "domains-operator"
-      , if searchModel.filterDomainsOperator then
+        )
+      , ( "domains-operator"
+        , if searchModel.filterDomainsOperator then
             []
 
-        else
+          else
             [ "or" ]
-      )
-    , ( "include-hands"
-      , boolDictIncluded searchModel.filteredHands
-      )
-    , ( "exclude-hands"
-      , boolDictExcluded searchModel.filteredHands
-      )
-    , ( "include-item-categories"
-      , boolDictIncluded searchModel.filteredItemCategories
-      )
-    , ( "exclude-item-categories"
-      , boolDictExcluded searchModel.filteredItemCategories
-      )
-    , ( "include-item-subcategories"
-      , boolDictIncluded searchModel.filteredItemSubcategories
-      )
-    , ( "exclude-item-subcategories"
-      , boolDictExcluded searchModel.filteredItemSubcategories
-      )
-    , ( "include-pfs"
-      , boolDictIncluded searchModel.filteredPfs
-      )
-    , ( "exclude-pfs"
-      , boolDictExcluded searchModel.filteredPfs
-      )
-    , ( "include-rarities"
-      , boolDictIncluded searchModel.filteredRarities
-      )
-    , ( "exclude-rarities"
-      , boolDictExcluded searchModel.filteredRarities
-      )
-    , ( "include-regions"
-      , boolDictIncluded searchModel.filteredRegions
-      )
-    , ( "exclude-regions"
-      , boolDictExcluded searchModel.filteredRegions
-      )
-    , ( "include-reloads"
-      , boolDictIncluded searchModel.filteredReloads
-      )
-    , ( "exclude-reloads"
-      , boolDictExcluded searchModel.filteredReloads
-      )
-    , ( "include-saving-throws"
-      , boolDictIncluded searchModel.filteredSavingThrows
-      )
-    , ( "exclude-saving-throws"
-      , boolDictExcluded searchModel.filteredSavingThrows
-      )
-    , ( "include-schools"
-      , boolDictIncluded searchModel.filteredSchools
-      )
-    , ( "exclude-schools"
-      , boolDictExcluded searchModel.filteredSchools
-      )
-    , ( "include-sizes"
-      , boolDictIncluded searchModel.filteredSizes
-      )
-    , ( "exclude-sizes"
-      , boolDictExcluded searchModel.filteredSizes
-      )
-    , ( "include-skills"
-      , boolDictIncluded searchModel.filteredSkills
-      )
-    , ( "exclude-skills"
-      , boolDictExcluded searchModel.filteredSkills
-      )
-    , ( "include-sources"
-      , boolDictIncluded searchModel.filteredSources
-      )
-    , ( "exclude-sources"
-      , boolDictExcluded searchModel.filteredSources
-      )
-    , ( "include-source-categories"
-      , boolDictIncluded searchModel.filteredSourceCategories
-      )
-    , ( "exclude-source-categories"
-      , boolDictExcluded searchModel.filteredSourceCategories
-      )
-    , ( "include-strongest-saves"
-      , boolDictIncluded searchModel.filteredStrongestSaves
-      )
-    , ( "exclude-strongest-saves"
-      , boolDictExcluded searchModel.filteredStrongestSaves
-      )
-    , ( "include-traditions"
-      , boolDictIncluded searchModel.filteredTraditions
-      )
-    , ( "exclude-traditions"
-      , boolDictExcluded searchModel.filteredTraditions
-      )
-    , ( "traditions-operator"
-      , if searchModel.filterTraditionsOperator then
+        )
+      , ( "traditions-operator"
+        , if searchModel.filterTraditionsOperator then
             []
 
-        else
+          else
             [ "or" ]
-      )
-    , ( "include-trait-groups"
-      , boolDictIncluded searchModel.filteredTraitGroups
-      )
-    , ( "exclude-trait-groups"
-      , boolDictExcluded searchModel.filteredTraitGroups
-      )
-    , ( "include-traits"
-      , boolDictIncluded searchModel.filteredTraits
-      )
-    , ( "exclude-traits"
-      , boolDictExcluded searchModel.filteredTraits
-      )
-    , ( "traits-operator"
-      , if searchModel.filterTraitsOperator then
+        )
+      , ( "traits-operator"
+        , if searchModel.filterTraitsOperator then
             []
 
-        else
+          else
             [ "or" ]
-      )
-    , ( "include-types"
-      , boolDictIncluded searchModel.filteredTypes
-      )
-    , ( "exclude-types"
-      , boolDictExcluded searchModel.filteredTypes
-      )
-    , ( "include-weakest-saves"
-      , boolDictIncluded searchModel.filteredWeakestSaves
-      )
-    , ( "exclude-weakest-saves"
-      , boolDictExcluded searchModel.filteredWeakestSaves
-      )
-    , ( "include-weapon-categories"
-      , boolDictIncluded searchModel.filteredWeaponCategories
-      )
-    , ( "exclude-weapon-categories"
-      , boolDictExcluded searchModel.filteredWeaponCategories
-      )
-    , ( "include-weapon-groups"
-      , boolDictIncluded searchModel.filteredWeaponGroups
-      )
-    , ( "exclude-weapon-groups"
-      , boolDictExcluded searchModel.filteredWeaponGroups
-      )
-    , ( "include-weapon-types"
-      , boolDictIncluded searchModel.filteredWeaponTypes
-      )
-    , ( "exclude-weapon-types"
-      , boolDictExcluded searchModel.filteredWeaponTypes
-      )
-    , ( "values-from"
-      , searchModel.filteredFromValues
+        )
+      , ( "values-from"
+        , searchModel.filteredFromValues
             |> Dict.toList
             |> List.map (\( field, value ) -> field ++ ":" ++ value)
-      )
-    , ( "values-to"
-      , searchModel.filteredToValues
+        )
+      , ( "values-to"
+        , searchModel.filteredToValues
             |> Dict.toList
             |> List.map (\( field, value ) -> field ++ ":" ++ value)
-      )
-    , ( "ap-creatures"
-      , if searchModel.filterApCreatures then
+        )
+      , ( "ap-creatures"
+        , if searchModel.filterApCreatures then
             [ "hide" ]
 
-        else
+          else
             []
-      )
-    , ( "legacy"
-      , case searchModel.legacyMode of
+        )
+      , ( "legacy"
+        , case searchModel.legacyMode of
             Just True ->
                 [ "yes" ]
 
@@ -3778,27 +2744,27 @@ getSearchModelQueryParams model searchModel =
 
             Nothing ->
                 []
-      )
-    , ( "spoilers"
-      , if searchModel.filterSpoilers then
+        )
+      , ( "spoilers"
+        , if searchModel.filterSpoilers then
             [ "hide" ]
 
-        else
+          else
             []
-      )
-    , ( "sort"
-      , searchModel.sort
+        )
+      , ( "sort"
+        , searchModel.sort
             |> List.map
                 (\( field, dir ) ->
                     if field == "random" then
                         field
 
-                    else
+                      else
                         field ++ "-" ++ sortDirToString dir
                 )
-      )
-    , ( "display"
-      , [ case searchModel.resultDisplay of
+        )
+      , ( "display"
+        , [ case searchModel.resultDisplay of
             Full ->
                 "full"
 
@@ -3811,27 +2777,27 @@ getSearchModelQueryParams model searchModel =
             Table ->
                 "table"
         ]
-      )
-    , ( "columns"
-      , if searchModel.resultDisplay == Table then
+        )
+      , ( "columns"
+        , if searchModel.resultDisplay == Table then
             searchModel.tableColumns
 
-        else
+          else
             []
-      )
-    , ( "group-fields"
-      , if searchModel.resultDisplay == Grouped then
+        )
+      , ( "group-fields"
+        , if searchModel.resultDisplay == Grouped then
             [ Just searchModel.groupField1
             , searchModel.groupField2
             , searchModel.groupField3
             ]
                 |> Maybe.Extra.values
 
-        else
+          else
             []
-      )
-    , ( "link-layout"
-      , if searchModel.resultDisplay == Grouped then
+        )
+      , ( "link-layout"
+        , if searchModel.resultDisplay == Grouped then
             [ case searchModel.groupedLinkLayout of
                 Horizontal ->
                     "horizontal"
@@ -3843,9 +2809,10 @@ getSearchModelQueryParams model searchModel =
                     "vertical-with-summary"
             ]
 
-        else
+          else
             []
-      )
+        )
+      ]
     ]
         |> List.filter (Tuple.second >> List.isEmpty >> not)
 
@@ -4127,11 +3094,11 @@ buildSearchFilterTerms :
 buildSearchFilterTerms model searchModel groupFilters =
     List.concat
         [ List.concatMap
-            (\( field, dict, isAnd ) ->
+            (\( field, filterType, isAnd ) ->
                 let
                     list : List String
                     list =
-                        boolDictIncluded dict
+                        boolDictIncluded filterType searchModel.filteredValues
                 in
                 if List.isEmpty list then
                     []
@@ -4309,11 +3276,11 @@ buildSearchMustNotTerms : Model -> SearchModel -> List (List ( String, Encode.Va
 buildSearchMustNotTerms model searchModel =
     List.concat
         [ List.concatMap
-            (\( field, dict, _ ) ->
+            (\( field, filterType, _ ) ->
                 let
                     list : List String
                     list =
-                        boolDictExcluded dict
+                        boolDictExcluded filterType searchModel.filteredValues
                 in
                 if List.isEmpty list then
                     []
@@ -4382,7 +3349,7 @@ buildSearchMustNotTerms model searchModel =
                   )
                 ]
             )
-            (boolDictExcluded searchModel.filteredSourceCategories)
+            (boolDictExcluded "source-categories" searchModel.filteredValues)
 
         , if searchModel.filterApCreatures then
             [ ( "query_string"
