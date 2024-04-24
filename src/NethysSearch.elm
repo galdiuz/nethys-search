@@ -281,7 +281,7 @@ update msg model =
                                 List.map
                                     (\column ->
                                         ( column
-                                        , View.searchResultTableCellToString model document column
+                                        , View.searchResultTableCellToString model.viewModel document column
                                         )
                                     )
                                     ("name" :: model.searchModel.tableColumns)
@@ -310,7 +310,7 @@ update msg model =
                         List.map
                             (\column ->
                                 ( column
-                                , View.searchResultTableCellToString model document column
+                                , View.searchResultTableCellToString model.viewModel document column
                                     |> Encode.string
                                 )
                             )
@@ -471,31 +471,11 @@ update msg model =
             , Cmd.none
             )
 
-        FilterComponentsOperatorChanged value ->
+        FilterOperatorChanged filterType value ->
             ( model
             , updateCurrentSearchModel
                 (\searchModel ->
-                    { searchModel | filterComponentsOperator = value }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        FilterDamageTypesOperatorChanged value ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filterDamageTypesOperator = value }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        FilterDomainsOperatorChanged value ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filterDomainsOperator = value }
+                    { searchModel | filterOperators = Dict.insert filterType value searchModel.filterOperators }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -524,26 +504,6 @@ update msg model =
             , updateCurrentSearchModel
                 (\searchModel ->
                     { searchModel | filterSpoilers = value }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        FilterTraditionsOperatorChanged value ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filterTraditionsOperator = value }
-                )
-                model
-                |> updateUrlWithSearchParams
-            )
-
-        FilterTraitsOperatorChanged value ->
-            ( model
-            , updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | filterTraitsOperator = value }
                 )
                 model
                 |> updateUrlWithSearchParams
@@ -2670,54 +2630,30 @@ getSearchModelQueryParams model searchModel =
         )
       ]
     , List.concatMap
-        (\filterType ->
-            [ ( "include-" ++ filterType
-              , boolDictIncluded filterType searchModel.filteredValues
+        (\{ key } ->
+            [ ( "include-" ++ key
+              , boolDictIncluded key searchModel.filteredValues
               )
-            , ( "exclude-" ++ filterType
-              , boolDictExcluded filterType searchModel.filteredValues
+            , ( "exclude-" ++ key
+              , boolDictExcluded key searchModel.filteredValues
               )
             ]
         )
+        (filterFields searchModel)
+    , List.map
+        (\{ key } ->
+            ( key ++ "-operator"
+            , if Maybe.withDefault True (Dict.get key searchModel.filterOperators) then
+                []
+
+              else
+                [ "or" ]
+            )
+        )
         (filterFields searchModel
-            |> List.map Tuple3.second
+            |> List.filter .useOperator
         )
-    , [ ( "components-operator"
-        , if searchModel.filterComponentsOperator then
-            []
-
-          else
-            [ "or" ]
-        )
-      , ( "damage-types-operator"
-        , if searchModel.filterDamageTypesOperator then
-            []
-
-          else
-            [ "or" ]
-        )
-      , ( "domains-operator"
-        , if searchModel.filterDomainsOperator then
-            []
-
-          else
-            [ "or" ]
-        )
-      , ( "traditions-operator"
-        , if searchModel.filterTraditionsOperator then
-            []
-
-          else
-            [ "or" ]
-        )
-      , ( "traits-operator"
-        , if searchModel.filterTraitsOperator then
-            []
-
-          else
-            [ "or" ]
-        )
-      , ( "values-from"
+    , [ ( "values-from"
         , searchModel.filteredFromValues
             |> Dict.toList
             |> List.map (\( field, value ) -> field ++ ":" ++ value)
@@ -3094,11 +3030,16 @@ buildSearchFilterTerms :
 buildSearchFilterTerms model searchModel groupFilters =
     List.concat
         [ List.concatMap
-            (\( field, filterType, isAnd ) ->
+            (\filter ->
                 let
                     list : List String
                     list =
-                        boolDictIncluded filterType searchModel.filteredValues
+                        boolDictIncluded filter.key searchModel.filteredValues
+
+                    isAnd : Bool
+                    isAnd =
+                        Dict.get filter.key searchModel.filterOperators
+                            |> Maybe.withDefault True
                 in
                 if List.isEmpty list then
                     []
@@ -3108,7 +3049,7 @@ buildSearchFilterTerms model searchModel groupFilters =
                         (\value ->
                             [ ( "term"
                               , Encode.object
-                                    [ ( field
+                                    [ ( filter.field
                                       , Encode.object
                                             [ ( "value", Encode.string value )
                                             ]
@@ -3131,7 +3072,7 @@ buildSearchFilterTerms model searchModel groupFilters =
                                           else
                                             [ ( "terms"
                                               , Encode.object
-                                                    [ ( field
+                                                    [ ( filter.field
                                                       , Encode.list Encode.string (List.filter ((/=) "none") list)
                                                       )
                                                     ]
@@ -3146,7 +3087,7 @@ buildSearchFilterTerms model searchModel groupFilters =
                                                       , Encode.object
                                                             [ ( "exists"
                                                               , Encode.object
-                                                                    [ ( "field", Encode.string field )
+                                                                    [ ( "field", Encode.string filter.field )
                                                                     ]
                                                               )
                                                             ]
@@ -3276,11 +3217,11 @@ buildSearchMustNotTerms : Model -> SearchModel -> List (List ( String, Encode.Va
 buildSearchMustNotTerms model searchModel =
     List.concat
         [ List.concatMap
-            (\( field, filterType, _ ) ->
+            (\filter ->
                 let
                     list : List String
                     list =
-                        boolDictExcluded filterType searchModel.filteredValues
+                        boolDictExcluded filter.key searchModel.filteredValues
                 in
                 if List.isEmpty list then
                     []
@@ -3293,7 +3234,7 @@ buildSearchMustNotTerms model searchModel =
                           else
                             [ ( "terms"
                               , Encode.object
-                                    [ ( field
+                                    [ ( filter.field
                                       , Encode.list Encode.string (List.filter ((/=) "none") list)
                                       )
                                     ]
@@ -3308,7 +3249,7 @@ buildSearchMustNotTerms model searchModel =
                                       , Encode.list Encode.object
                                             [ [ ( "exists"
                                                 , Encode.object
-                                                    [ ( "field", Encode.string field )
+                                                    [ ( "field", Encode.string filter.field )
                                                     ]
                                                 )
                                               ]

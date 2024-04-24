@@ -234,9 +234,9 @@ allFilters model =
       , view = viewFilterComponents
       , visibleIf = \_ -> model.showLegacyFilters
       }
-    , { id = "creature-families"
-      , label = "Creature families"
-      , view = viewFilterCreatureFamilies
+    , { id = "creature"
+      , label = "Creatures"
+      , view = viewFilterCreatures
       , visibleIf = moreThanOneAggregation .creatureFamilies
       }
     , { id = "domains"
@@ -300,11 +300,6 @@ allFilters model =
     , { id = "sources"
       , label = "Sources & Spoilers"
       , view = viewFilterSources
-      , visibleIf = \_ -> True
-      }
-    , { id = "strongest-saves"
-      , label = "Strongest / Weakest saves"
-      , view = viewFilterStrongestSaves
       , visibleIf = \_ -> True
       }
     , { id = "traditions"
@@ -1733,8 +1728,14 @@ viewSortButtons searchModel field =
 viewWhatsNew : Model -> SearchModel -> List (Html Msg)
 viewWhatsNew model _ =
     [ Html.div
-        [ HA.class "no-ul-margin" ]
+        [ HA.class "no-ul-margin"
+        , HA.class "column"
+        , HA.class "gap-small"
+        ]
         ("""
+        ### Previous updates
+
+        <details summary="2024-03-13">
         - Added option under _General settings_ to hide legacy filters (hides alignment, casting component, and spell school filters).
         - Added table data export functionality. Found under _Result display_ when set to "Table", where you can export to CSV or JSON.
         - "List" display option renamed to "Short". The old name made more sense when there only was it and "Table", but now "Grouped" is probably more list-y than "Short".
@@ -1748,7 +1749,7 @@ viewWhatsNew model _ =
         - Items with no bulk are now treated as 0 bulk.
         - Added domain filter buttons.
         - Added trait group filter buttons.
-        - Added filter under _Sources & Spoilers_ that hides creatures from Adventure Paths.
+        - Added filter under _Sources &amp; Spoilers_ that hides creatures from Adventure Paths.
         - In "Grouped" display "N/A" group headers are no longer displayed if they're the sole group on that level. This reduces clutter when grouping on item category + item subcategory, for example.
         - Added a "skip to results"-link when tabbing from the query input field.
         - New/changed fields:
@@ -1773,12 +1774,10 @@ viewWhatsNew model _ =
             - `skill_mod` - new: can be used to find creatures with a specific skill modifier, except lore skills for technical reasons
             - `trait_group` - changed: is now indexed on everything, e.g. `type:feat trait_group:ancestry` matches all feats with an ancestry trait
             - `url` - changed: now available as a table column
+        </details>
         """
             |> String.Extra.unindent
-            |> Markdown.Parser.parse
-            |> Result.withDefault []
-            |> Markdown.Renderer.render Markdown.Renderer.defaultHtmlRenderer
-            |> Result.withDefault []
+            |> parseAndViewAsMarkdown model.viewModel
         )
     ]
 
@@ -2478,67 +2477,222 @@ viewFilterComponents model searchModel =
     ]
 
 
-viewFilterCreatureFamilies : Model -> SearchModel -> List (Html Msg)
-viewFilterCreatureFamilies model searchModel =
-    [ Html.button
-        [ HA.style "align-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "creature-families")
-        ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "input-container"
-        ]
-        [ Html.input
-            [ HA.placeholder "Search among creature families"
-            , HA.value searchModel.searchCreatureFamilies
-            , HA.type_ "text"
-            , HE.onInput SearchCreatureFamiliesChanged
-            ]
-            []
-        , if String.isEmpty searchModel.searchCreatureFamilies then
-            Html.text ""
-
-          else
-            Html.button
-                [ HA.class "input-button"
-                , HA.attribute "aria-label" "Clear search"
-                , HE.onClick (SearchCreatureFamiliesChanged "")
-                ]
-                [ FontAwesome.view FontAwesome.Solid.times ]
-        ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (case searchModel.aggregations of
-            Just (Ok aggregations) ->
-                List.map
-                    (\creatureFamily ->
-                        Html.button
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            , HA.class "nowrap"
-                            , HA.class "align-center"
-                            , HA.style "text-align" "left"
-                            , HE.onClick (FilterToggled "creature-families" (String.toLower creatureFamily))
-                            ]
-                            [ Html.text (toTitleCase creatureFamily)
-                            , viewFilterIcon (nestedDictGet "creature-families" (String.toLower creatureFamily) searchModel.filteredValues)
-                            ]
-                    )
-                    (aggregations.creatureFamilies
-                        |> List.filter (String.toLower >> String.contains (String.toLower searchModel.searchCreatureFamilies))
-                        |> List.sort
-                    )
-
-            Just (Err _) ->
+viewFilterCreatures : Model -> SearchModel -> List (Html Msg)
+viewFilterCreatures model searchModel =
+    let
+        details : String -> List (Html msg) -> Html msg
+        details label children =
+            Html.details
                 []
+                [ Html.summary
+                    [ HA.class "h4" ]
+                    [ Html.text label ]
+                , Html.div
+                    [ HA.class "column"
+                    , HA.class "gap-small"
+                    , HA.style "margin-top" "var(--gap-small)"
+                    , HA.style "margin-left" "var(--gap-large)"
+                    ]
+                    children
+                ]
 
-            Nothing ->
-                [ viewScrollboxLoader ]
+        scaleDetails : String -> String -> List String -> Html Msg
+        scaleDetails label filterType values =
+            details
+                label
+                [ Html.button
+                    [ HA.style "align-self" "flex-start"
+                    , HE.onClick (RemoveAllFiltersOfTypePressed filterType)
+                    ]
+                    [ Html.text "Reset selection" ]
+                , Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HA.class "scrollbox"
+                    ]
+                    (List.map
+                        (\save ->
+                            Html.button
+                                [ HA.class "row"
+                                , HA.class "gap-tiny"
+                                , HA.class "nowrap"
+                                , HA.class "align-center"
+                                , HA.style "text-align" "left"
+                                , HE.onClick (FilterToggled filterType save)
+                                ]
+                                [ Html.text (toTitleCase save)
+                                , viewFilterIcon (nestedDictGet filterType save searchModel.filteredValues)
+                                ]
+                        )
+                        values
+                    )
+                ]
+    in
+    [ details
+        "Creature families"
+        [ Html.button
+            [ HA.style "align-self" "flex-start"
+            , HE.onClick (RemoveAllFiltersOfTypePressed "creature-families")
+            ]
+            [ Html.text "Reset selection" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "input-container"
+            ]
+            [ Html.input
+                [ HA.placeholder "Search among creature families"
+                , HA.value searchModel.searchCreatureFamilies
+                , HA.type_ "text"
+                , HE.onInput SearchCreatureFamiliesChanged
+                ]
+                []
+            , if String.isEmpty searchModel.searchCreatureFamilies then
+                Html.text ""
+
+              else
+                Html.button
+                    [ HA.class "input-button"
+                    , HA.attribute "aria-label" "Clear search"
+                    , HE.onClick (SearchCreatureFamiliesChanged "")
+                    ]
+                    [ FontAwesome.view FontAwesome.Solid.times ]
+            ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "scrollbox"
+            ]
+            (case searchModel.aggregations of
+                Just (Ok aggregations) ->
+                    List.map
+                        (\creatureFamily ->
+                            Html.button
+                                [ HA.class "row"
+                                , HA.class "gap-tiny"
+                                , HA.class "nowrap"
+                                , HA.class "align-center"
+                                , HA.style "text-align" "left"
+                                , HE.onClick (FilterToggled "creature-families" (String.toLower creatureFamily))
+                                ]
+                                [ Html.text (toTitleCase creatureFamily)
+                                , viewFilterIcon (nestedDictGet "creature-families" (String.toLower creatureFamily) searchModel.filteredValues)
+                                ]
+                        )
+                        (aggregations.creatureFamilies
+                            |> List.filter (String.toLower >> String.contains (String.toLower searchModel.searchCreatureFamilies))
+                            |> List.sort
+                        )
+
+                Just (Err _) ->
+                    []
+
+                Nothing ->
+                    [ viewScrollboxLoader ]
+            )
+        ]
+
+    , details
+        "Offensive scales"
+        (List.map
+            (\( filterType, label, values ) ->
+                scaleDetails label filterType values
+            )
+            [ ( "attack-bonus-scales", "Attack bonus scale", [ "extreme", "high", "moderate", "low" ] )
+            , ( "strike-damage-scales", "Strike damage scale", [ "extreme", "high", "moderate", "low" ] )
+            , ( "spell-attack-bonus-scales", "Spell attack bonus scale", [ "extreme", "high", "moderate" ] )
+            , ( "spell-dc-scales", "Spell DC scale", [ "extreme", "high", "moderate" ] )
+            ]
         )
+
+    , details
+        "Defensive scales"
+        (List.map
+            (\( filterType, label, values ) ->
+                scaleDetails label filterType values
+            )
+            [ ( "hp-scales", "HP scale", [ "high", "moderate", "low" ] )
+            , ( "ac-scales", "AC scale", [ "extreme", "high", "moderate", "low" ] )
+            , ( "fortitude-scales", "Fortitude save scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
+            , ( "reflex-scales", "Reflex save scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
+            , ( "will-scales", "Will save scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
+            , ( "perception-scales", "Perception scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
+            ]
+        )
+
+    , details
+        "Attribute scales"
+        (List.map
+            (\( filterType, label, values ) ->
+                scaleDetails label filterType values
+            )
+            [ ( "strength-scales", "Strength scale", [ "extreme", "high", "moderate", "low" ] )
+            , ( "dexterity-scales", "Dexterity scale", [ "extreme", "high", "moderate", "low" ] )
+            , ( "constitution-scales", "Constitution scale", [ "extreme", "high", "moderate", "low" ] )
+            , ( "intelligence-scales", "Intelligence scale", [ "extreme", "high", "moderate", "low" ] )
+            , ( "wisdom-scales", "Wisdom scale", [ "extreme", "high", "moderate", "low" ] )
+            , ( "charisma-scales", "Charisma scale", [ "extreme", "high", "moderate", "low" ] )
+            ]
+        )
+
+    , details
+        "Strongest save"
+        [ Html.button
+            [ HA.style "align-self" "flex-start"
+            , HE.onClick (RemoveAllFiltersOfTypePressed "strongest-saves")
+            ]
+            [ Html.text "Reset selection" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "scrollbox"
+            ]
+            (List.map
+                (\save ->
+                    Html.button
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HA.class "nowrap"
+                        , HA.class "align-center"
+                        , HA.style "text-align" "left"
+                        , HE.onClick (FilterToggled "strongest-saves" (String.toLower save))
+                        ]
+                        [ Html.text (toTitleCase save)
+                        , viewFilterIcon (nestedDictGet "strongest-saves" (String.toLower save) searchModel.filteredValues)
+                        ]
+                )
+                Data.saves
+            )
+        ]
+
+    , details
+        "Weakest save"
+        [ Html.button
+            [ HA.style "align-self" "flex-start"
+            , HE.onClick (RemoveAllFiltersOfTypePressed "weakest-saves")
+            ]
+            [ Html.text "Reset selection" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "scrollbox"
+            ]
+            (List.map
+                (\save ->
+                    Html.button
+                        [ HA.class "row"
+                        , HA.class "gap-tiny"
+                        , HA.class "nowrap"
+                        , HA.class "align-center"
+                        , HA.style "text-align" "left"
+                        , HE.onClick (FilterToggled "weakest-saves" (String.toLower save))
+                        ]
+                        [ Html.text (toTitleCase save)
+                        , viewFilterIcon (nestedDictGet "weakest-saves" (String.toLower save) searchModel.filteredValues)
+                        ]
+                )
+                Data.saves
+            )
+        ]
     ]
 
 
@@ -2557,17 +2711,22 @@ viewFilterDomains model searchModel =
             [ Html.text "Reset selection" ]
 
             , viewRadioButton
-                { checked = searchModel.filterDomainsOperator
+                { checked =
+                    Dict.get "domains" searchModel.filterOperators
+                        |> Maybe.withDefault True
                 , enabled = True
                 , name = "filter-domains"
-                , onInput = FilterDomainsOperatorChanged True
+                , onInput = FilterOperatorChanged "domains" True
                 , text = "Include all (AND)"
                 }
             , viewRadioButton
-                { checked = not searchModel.filterDomainsOperator
+                { checked =
+                    Dict.get "domains" searchModel.filterOperators
+                        |> Maybe.withDefault True
+                        |> not
                 , enabled = True
                 , name = "filter-domains"
-                , onInput = FilterDomainsOperatorChanged False
+                , onInput = FilterOperatorChanged "domains" False
                 , text = "Include any (OR)"
                 }
         ]
@@ -3217,70 +3376,6 @@ viewFilterSources model searchModel =
     ]
 
 
-viewFilterStrongestSaves : Model -> SearchModel -> List (Html Msg)
-viewFilterStrongestSaves model searchModel =
-    [ Html.h4
-        []
-        [ Html.text "Strongest saves" ]
-    , Html.button
-        [ HA.style "align-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "strongest-saves")
-        ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (List.map
-            (\save ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HA.class "nowrap"
-                    , HA.class "align-center"
-                    , HA.style "text-align" "left"
-                    , HE.onClick (FilterToggled "strongest-saves" (String.toLower save))
-                    ]
-                    [ Html.text (toTitleCase save)
-                    , viewFilterIcon (nestedDictGet "strongest-saves" (String.toLower save) searchModel.filteredValues)
-                    ]
-            )
-            Data.saves
-        )
-
-    , Html.h4
-        []
-        [ Html.text "Weakest saves" ]
-    , Html.button
-        [ HA.style "align-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "weakest-saves")
-        ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (List.map
-            (\save ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HA.class "nowrap"
-                    , HA.class "align-center"
-                    , HA.style "text-align" "left"
-                    , HE.onClick (FilterToggled "weakest-saves" (String.toLower save))
-                    ]
-                    [ Html.text (toTitleCase save)
-                    , viewFilterIcon (nestedDictGet "weakest-saves" (String.toLower save) searchModel.filteredValues)
-                    ]
-            )
-            Data.saves
-        )
-    ]
-
-
 viewFilterTraditions : Model -> SearchModel -> List (Html Msg)
 viewFilterTraditions model searchModel =
     [ Html.div
@@ -3292,17 +3387,22 @@ viewFilterTraditions model searchModel =
             [ HE.onClick (RemoveAllFiltersOfTypePressed "traditions") ]
             [ Html.text "Reset selection" ]
         , viewRadioButton
-            { checked = searchModel.filterTraditionsOperator
+            { checked =
+                Dict.get "traditions" searchModel.filterOperators
+                    |> Maybe.withDefault True
             , enabled = True
             , name = "filter-traditions"
-            , onInput = FilterTraditionsOperatorChanged True
+            , onInput = FilterOperatorChanged "traditions" True
             , text = "Include all (AND)"
             }
         , viewRadioButton
-            { checked = not searchModel.filterTraditionsOperator
+            { checked =
+                Dict.get "traditions" searchModel.filterOperators
+                    |> Maybe.withDefault True
+                    |> not
             , enabled = True
             , name = "filter-traditions"
-            , onInput = FilterTraditionsOperatorChanged False
+            , onInput = FilterOperatorChanged "traditions" False
             , text = "Include any (OR)"
             }
         ]
@@ -3343,17 +3443,22 @@ viewFilterTraits model searchModel =
             [ HE.onClick (RemoveAllFiltersOfTypePressed "traits") ]
             [ Html.text "Reset selection" ]
         , viewRadioButton
-            { checked = searchModel.filterTraitsOperator
+            { checked =
+                Dict.get "traits" searchModel.filterOperators
+                    |> Maybe.withDefault True
             , enabled = True
             , name = "filter-traits"
-            , onInput = FilterTraitsOperatorChanged True
+            , onInput = FilterOperatorChanged "traits" True
             , text = "Include all (AND)"
             }
         , viewRadioButton
-            { checked = not searchModel.filterTraitsOperator
+            { checked =
+                Dict.get "traits" searchModel.filterOperators
+                    |> Maybe.withDefault True
+                    |> not
             , enabled = True
             , name = "filter-traits"
-            , onInput = FilterTraitsOperatorChanged False
+            , onInput = FilterOperatorChanged "traits" False
             , text = "Include any (OR)"
             }
         ]
@@ -3700,17 +3805,22 @@ viewFilterWeapons model searchModel =
             ]
             [ Html.text "Reset selection" ]
         , viewRadioButton
-            { checked = searchModel.filterDamageTypesOperator
+            { checked =
+                Dict.get "damage-types" searchModel.filterOperators
+                    |> Maybe.withDefault True
             , enabled = True
             , name = "filter-damageTypes"
-            , onInput = FilterDamageTypesOperatorChanged True
+            , onInput = FilterOperatorChanged "damage-types" True
             , text = "Include all (AND)"
             }
         , viewRadioButton
-            { checked = not searchModel.filterDamageTypesOperator
+            { checked =
+                Dict.get "damage-types" searchModel.filterOperators
+                    |> Maybe.withDefault True
+                    |> not
             , enabled = True
             , name = "filter-damageTypes"
-            , onInput = FilterDamageTypesOperatorChanged False
+            , onInput = FilterOperatorChanged "damage-types" False
             , text = "Include any (OR)"
             }
         ]
@@ -3881,356 +3991,104 @@ viewActiveFilters canClick searchModel =
                                 )
                             )
                 )
-                [ { class = Nothing
-                  , label = "Include actions:"
-                  , list = boolDictIncluded "actions" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "actions"
-                  }
-                , { class = Nothing
-                  , label = "Exclude actions:"
-                  , list = boolDictExcluded "actions "searchModel.filteredValues
-                  , removeMsg = FilterRemoved "actions"
-                  }
-                , { class = Nothing
-                  , label = "Include attributes:"
-                  , list = boolDictIncluded "attributes" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "attributes"
-                  }
-                , { class = Nothing
-                  , label = "Exclude attributes:"
-                  , list = boolDictExcluded "attributes "searchModel.filteredValues
-                  , removeMsg = FilterRemoved "attributes"
-                  }
-                , { class = Just "trait trait-alignment"
-                  , label = "Include alignments:"
-                  , list = boolDictIncluded "alignments" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "alignments"
-                  }
-                , { class = Just "trait trait-alignment"
-                  , label = "Exclude alignments:"
-                  , list = boolDictExcluded "alignments" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "alignments"
-                  }
-                , { class = Nothing
-                  , label = "Include armor categories:"
-                  , list = boolDictIncluded "armor-categories" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "armor-categories"
-                  }
-                , { class = Nothing
-                  , label = "Exclude armor categories:"
-                  , list = boolDictExcluded "armor-categories" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "armor-categories"
-                  }
-                , { class = Nothing
-                  , label = "Include armor groups:"
-                  , list = boolDictIncluded "armor-groups" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "armor-groups"
-                  }
-                , { class = Nothing
-                  , label = "Exclude armor groups:"
-                  , list = boolDictExcluded "armor-groups" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "armor-groups"
-                  }
-                , { class = Nothing
-                  , label =
-                        if searchModel.filterComponentsOperator then
-                            "Include all components:"
+                (List.append
+                    (List.concatMap
+                        (\filter ->
+                            let
+                                class : Maybe String
+                                class =
+                                    case filter.key of
+                                        "alignments" ->
+                                            Just "trait trait-alignment"
 
-                        else
-                            "Include any component:"
-                  , list = boolDictIncluded "components" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "components"
-                  }
-                , { class = Nothing
-                  , label = "Exclude components:"
-                  , list = boolDictExcluded "components" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "components"
-                  }
-                , { class = Nothing
-                  , label = "Include creature families:"
-                  , list = boolDictIncluded "creature-families" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "creature-families"
-                  }
-                , { class = Nothing
-                  , label = "Exclude creature families:"
-                  , list = boolDictExcluded "creature-families" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "creature-families"
-                  }
-                , { class = Nothing
-                  , label =
-                        if searchModel.filterDomainsOperator then
-                            "Include all domains:"
+                                        "rarities" ->
+                                            Just "trait"
 
-                        else
-                            "Include any domains:"
-                  , list = boolDictIncluded "domains" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "domains"
-                  }
-                , { class = Nothing
-                  , label = "Exclude domains:"
-                  , list = boolDictExcluded "domains" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "domains"
-                  }
-                , { class = Nothing
-                  , label = "Include hands:"
-                  , list = boolDictIncluded "hands" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "hands"
-                  }
-                , { class = Nothing
-                  , label = "Exclude hands:"
-                  , list = boolDictExcluded "hands" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "hands"
-                  }
-                , { class = Nothing
-                  , label = "Include item categories:"
-                  , list = boolDictIncluded "item-categories" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "item-categories"
-                  }
-                , { class = Nothing
-                  , label = "Exclude item categories:"
-                  , list = boolDictExcluded "item-categories" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "item-categories"
-                  }
-                , { class = Nothing
-                  , label = "Include item subcategories:"
-                  , list = boolDictIncluded "item-subcategories" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "item-subcategories"
-                  }
-                , { class = Nothing
-                  , label = "Exclude item subcategories:"
-                  , list = boolDictExcluded "item-subcategories" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "item-subcategories"
-                  }
-                , { class = Nothing
-                  , label = "Include PFS:"
-                  , list = boolDictIncluded "pfs" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "pfs"
-                  }
-                , { class = Nothing
-                  , label = "Exclude PFS:"
-                  , list = boolDictExcluded "pfs" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "pfs"
-                  }
-                , { class = Just "trait"
-                  , label = "Include rarity:"
-                  , list = boolDictIncluded "rarities" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "rarities"
-                  }
-                , { class = Just "trait"
-                  , label = "Exclude rarity:"
-                  , list = boolDictExcluded "rarities" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "rarities"
-                  }
-                , { class = Nothing
-                  , label = "Include reload:"
-                  , list = boolDictIncluded "reloads" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "reloads"
-                  }
-                , { class = Nothing
-                  , label = "Exclude reload:"
-                  , list = boolDictExcluded "reloads" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "reloads"
-                  }
-                , { class = Nothing
-                  , label = "Include saving throws:"
-                  , list = boolDictIncluded "saving-throws" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "saving-throws"
-                  }
-                , { class = Nothing
-                  , label = "Exclude saving throws:"
-                  , list = boolDictExcluded "saving-throws" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "saving-throws"
-                  }
-                , { class = Just "trait"
-                  , label = "Include schools:"
-                  , list = boolDictIncluded "schools" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "schools"
-                  }
-                , { class = Just "trait"
-                  , label = "Exclude schools:"
-                  , list = boolDictExcluded "schools" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "schools"
-                  }
-                , { class = Just "trait trait-size"
-                  , label = "Include sizes:"
-                  , list = boolDictIncluded "sizes" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "sizes"
-                  }
-                , { class = Just "trait trait-size"
-                  , label = "Exclude sizes:"
-                  , list = boolDictExcluded "sizes" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "sizes"
-                  }
-                , { class = Nothing
-                  , label = "Include skills:"
-                  , list = boolDictIncluded "skills" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "skills"
-                  }
-                , { class = Nothing
-                  , label = "Exclude skills:"
-                  , list = boolDictExcluded "skills" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "skills"
-                  }
-                , { class = Nothing
-                  , label = "Include sources:"
-                  , list = boolDictIncluded "sources" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "sources"
-                  }
-                , { class = Nothing
-                  , label = "Exclude sources:"
-                  , list = boolDictExcluded "sources" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "sources"
-                  }
-                , { class = Nothing
-                  , label = "Include source categories:"
-                  , list = boolDictIncluded "source-categories" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "source-categories"
-                  }
-                , { class = Nothing
-                  , label = "Exclude source categories:"
-                  , list = boolDictExcluded "source-categories" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "source-categories"
-                  }
-                , { class = Nothing
-                  , label = "Include strongest saves:"
-                  , list = boolDictIncluded "strongest-saves" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "strongest-saves"
-                  }
-                , { class = Nothing
-                  , label = "Exclude strongest saves:"
-                  , list = boolDictExcluded "strongest-saves" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "strongest-saves"
-                  }
-                , { class = Nothing
-                  , label =
-                        if searchModel.filterTraditionsOperator then
-                            "Include all traditions:"
+                                        "sizes" ->
+                                            Just "trait trait-size"
 
-                        else
-                            "Include any tradition:"
-                  , list = boolDictIncluded "traditions" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "traditions"
-                  }
-                , { class = Nothing
-                  , label = "Exclude traditions:"
-                  , list = boolDictExcluded "traditions" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "traditions"
-                  }
-                , { class = Just "trait"
-                  , label =
-                        if searchModel.filterTraitsOperator then
-                            "Include all traits:"
+                                        "schools" ->
+                                            Just "trait"
 
-                        else
-                            "Include any trait:"
-                  , list = boolDictIncluded "traits" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "traits"
-                  }
-                , { class = Just "trait"
-                  , label = "Exclude traits:"
-                  , list = boolDictExcluded "traits" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "traits"
-                  }
-                , { class = Nothing
-                  , label =
-                        if searchModel.filterTraitsOperator then
-                            "Include all trait groups:"
+                                        "traits" ->
+                                            Just "trait"
 
-                        else
-                            "Include any trait group:"
-                  , list = boolDictIncluded "trait-groups" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "trait-groups"
-                  }
-                , { class = Nothing
-                  , label = "Exclude trait groups:"
-                  , list = boolDictExcluded "trait-groups" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "trait-groups"
-                  }
-                , { class = Just "filter-type"
-                  , label = "Include types:"
-                  , list = boolDictIncluded "types" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "types"
-                  }
-                , { class = Just "filter-type"
-                  , label = "Exclude types:"
-                  , list = boolDictExcluded "types" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "types"
-                  }
-                , { class = Nothing
-                  , label = "Include weakest saves:"
-                  , list = boolDictIncluded "weakest-saves" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "weakest-saves"
-                  }
-                , { class = Nothing
-                  , label = "Exclude weakest saves:"
-                  , list = boolDictExcluded "weakest-saves" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "weakest-saves"
-                  }
-                , { class = Nothing
-                  , label = "Include weapon categories:"
-                  , list = boolDictIncluded "weapon-categories" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "weapon-categories"
-                  }
-                , { class = Nothing
-                  , label = "Exclude weapon categories:"
-                  , list = boolDictExcluded "weapon-categories" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "weapon-categories"
-                  }
-                , { class = Nothing
-                  , label = "Include weapon groups:"
-                  , list = boolDictIncluded "weapon-groups" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "weapon-groups"
-                  }
-                , { class = Nothing
-                  , label = "Exclude weapon groups:"
-                  , list = boolDictExcluded "weapon-groups" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "weapon-groups"
-                  }
-                , { class = Nothing
-                  , label = "Include weapon types:"
-                  , list = boolDictIncluded "weapon-types" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "weapon-types"
-                  }
-                , { class = Nothing
-                  , label = "Exclude weapon types:"
-                  , list = boolDictExcluded "weapon-types" searchModel.filteredValues
-                  , removeMsg = FilterRemoved "weapon-types"
-                  }
-                , { class = Nothing
-                  , label = "AP creatures:"
-                  , list =
-                        if searchModel.filterApCreatures then
-                            [ "Hidden" ]
+                                        "types" ->
+                                            Just "filter-type"
 
-                        else
-                            []
-                  , removeMsg = \_ -> FilterApCreaturesChanged False
-                  }
-                , { class = Nothing
-                  , label = "Legacy / Remaster:"
-                  , list =
-                        case searchModel.legacyMode of
-                            Just True ->
-                                [ "Legacy" ]
+                                        _ ->
+                                            Nothing
 
-                            Just False ->
-                                [ "Remaster" ]
+                                isAnd : Bool
+                                isAnd =
+                                    Dict.get filter.key searchModel.filterOperators
+                                        |> Maybe.withDefault True
 
-                            Nothing ->
+                                label : String
+                                label =
+                                    filter.key
+                                        |> String.Extra.humanize
+                                        |> String.toLower
+                            in
+                            [ { class = class
+                              , label =
+                                    if filter.useOperator then
+                                        if isAnd then
+                                            "Include all " ++ label ++ ":"
+
+                                        else
+                                            "Include any " ++ label ++ ":"
+
+                                    else
+                                        "Include " ++ label ++ ":"
+                              , list = boolDictIncluded filter.key searchModel.filteredValues
+                              , removeMsg = FilterRemoved filter.key
+                              }
+                            , { class = class
+                              , label = "Exclude " ++ label ++ ":"
+                              , list = boolDictExcluded filter.key searchModel.filteredValues
+                              , removeMsg = FilterRemoved filter.key
+                              }
+                            ]
+                        )
+                        (filterFields searchModel)
+                    )
+                    [ { class = Nothing
+                      , label = "AP creatures:"
+                      , list =
+                            if searchModel.filterApCreatures then
+                                [ "Hidden" ]
+
+                            else
                                 []
-                  , removeMsg = \_ -> LegacyModeChanged Nothing
-                  }
-                , { class = Nothing
-                  , label = "Spoilers:"
-                  , list =
-                        if searchModel.filterSpoilers then
-                            [ "Hidden" ]
+                      , removeMsg = \_ -> FilterApCreaturesChanged False
+                      }
+                    , { class = Nothing
+                      , label = "Legacy / Remaster:"
+                      , list =
+                            case searchModel.legacyMode of
+                                Just True ->
+                                    [ "Legacy" ]
 
-                        else
-                            []
-                  , removeMsg = \_ -> FilterSpoilersChanged False
-                  }
-                ]
+                                Just False ->
+                                    [ "Remaster" ]
+
+                                Nothing ->
+                                    []
+                      , removeMsg = \_ -> LegacyModeChanged Nothing
+                      }
+                    , { class = Nothing
+                      , label = "Spoilers:"
+                      , list =
+                            if searchModel.filterSpoilers then
+                                [ "Hidden" ]
+
+                            else
+                                []
+                      , removeMsg = \_ -> FilterSpoilersChanged False
+                      }
+                    ]
+                )
             )
             (mergeFromToValues searchModel
                 |> List.map
@@ -4830,32 +4688,6 @@ viewSearchResultTableCell viewModel document column =
         [ HAE.attributeIf (column == "name") (HA.class "sticky-left")
         ]
         (case String.split "." column of
-            [ "ability" ] ->
-                document.attributes
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
-
-            [ "ability_boost" ] ->
-                document.attributes
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
-
-            [ "ability_flaw" ] ->
-                document.attributeFlaws
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
-
-            [ "ability_type" ] ->
-                maybeAsText document.abilityType
-
-            [ "ac" ] ->
-                document.ac
-                    |> Maybe.map String.fromInt
-                    |> maybeAsText
-
             [ "actions" ] ->
                 document.actions
                     |> Maybe.withDefault ""
@@ -4867,31 +4699,11 @@ viewSearchResultTableCell viewModel document column =
             [ "advanced_domain_spell" ] ->
                 maybeAsMarkdown document.advancedDomainSpell
 
-            [ "alignment" ] ->
-                maybeAsText document.alignment
-
-            [ "anathema" ] ->
-                maybeAsText document.anathemas
-
             [ "apocryphal_spell" ] ->
                 maybeAsMarkdown document.apocryphalSpell
 
-            [ "archetype" ] ->
-                maybeAsText document.archetype
-
-            [ "area" ] ->
-                maybeAsText document.area
-
-            [ "armor_category" ] ->
-                maybeAsText document.armorCategory
-
             [ "armor_group" ] ->
                 maybeAsMarkdown document.armorGroup
-
-            [ "aspect" ] ->
-                document.aspect
-                    |> Maybe.map toTitleCase
-                    |> maybeAsText
 
             [ "attack_proficiency" ] ->
                 [ Html.div
@@ -4908,87 +4720,20 @@ viewSearchResultTableCell viewModel document column =
                     )
                 ]
 
-            [ "attribute" ] ->
-                document.attributes
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
-
-            [ "attribute_boost" ] ->
-                document.attributes
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
-
-            [ "attribute_flaw" ] ->
-                document.attributeFlaws
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
-
             [ "base_item" ] ->
                 maybeAsMarkdown document.baseItems
 
             [ "bloodline" ] ->
                 maybeAsMarkdown document.bloodlines
 
-            [ "bulk" ] ->
-                maybeAsText document.bulkRaw
-
-            [ "charisma" ] ->
-                document.charisma
-                    |> Maybe.map numberWithSign
-                    |> maybeAsText
-
-            [ "check_penalty" ] ->
-                document.checkPenalty
-                    |> Maybe.map numberWithSign
-                    |> maybeAsText
-
-            [ "creature_ability" ] ->
-                document.creatureAbilities
-                    |> List.sort
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
-
             [ "creature_family" ] ->
                 maybeAsMarkdown document.creatureFamilyMarkdown
-
-            [ "complexity" ] ->
-                maybeAsText document.complexity
-
-            [ "component" ] ->
-                document.components
-                    |> List.map toTitleCase
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
-
-            [ "constitution" ] ->
-                document.constitution
-                    |> Maybe.map numberWithSign
-                    |> maybeAsText
 
             [ "cost" ] ->
                 maybeAsMarkdown document.cost
 
             [ "deity" ] ->
                 maybeAsMarkdown document.deities
-
-            [ "deity_category" ] ->
-                maybeAsText document.deityCategory
-
-            [ "damage" ] ->
-                maybeAsText document.damage
-
-            [ "damage_type" ] ->
-                document.damageTypes
-                    |> List.map toTitleCase
-                    |> List.sort
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
 
             [ "defense" ] ->
                 maybeAsMarkdown document.savingThrow
@@ -5008,89 +4753,17 @@ viewSearchResultTableCell viewModel document column =
                     )
                 ]
 
-            [ "dexterity" ] ->
-                document.dexterity
-                    |> Maybe.map numberWithSign
-                    |> maybeAsText
-
-            [ "dex_cap" ] ->
-                document.dexCap
-                    |> Maybe.map numberWithSign
-                    |> maybeAsText
-
-            [ "divine_font" ] ->
-                document.divineFonts
-                    |> List.map toTitleCase
-                    |> String.join " or "
-                    |> Html.text
-                    |> List.singleton
-
             [ "domain" ] ->
                 maybeAsMarkdown document.domains
 
             [ "domain_spell" ] ->
                 maybeAsMarkdown document.domainSpell
 
-            [ "duration" ] ->
-                maybeAsText document.duration
-
-            [ "edict" ] ->
-                maybeAsText document.edicts
-
-            [ "element" ] ->
-                document.elements
-                    |> List.map toTitleCase
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
-
             [ "favored_weapon" ] ->
                 maybeAsMarkdown document.favoredWeapons
 
             [ "feat" ] ->
                 maybeAsMarkdown document.feats
-
-            [ "follower_alignment" ] ->
-                document.followerAlignments
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
-
-            [ "fortitude" ] ->
-                document.fort
-                    |> Maybe.map numberWithSign
-                    |> maybeAsText
-
-            [ "fortitude_proficiency" ] ->
-                maybeAsText document.fortitudeProficiency
-
-            [ "frequency" ] ->
-                maybeAsText document.frequency
-
-            [ "hands" ] ->
-                maybeAsText document.hands
-
-            [ "hardness" ] ->
-                maybeAsText document.hardness
-
-            [ "hazard_type" ] ->
-                maybeAsText document.hazardType
-
-            [ "heighten" ] ->
-                document.heighten
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
-
-            [ "heighten_level" ] ->
-                document.heightenLevels
-                    |> List.map String.fromInt
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
-
-            [ "hp" ] ->
-                maybeAsText document.hp
 
             [ "icon_image" ] ->
                 case document.iconImage of
@@ -5141,27 +4814,11 @@ viewSearchResultTableCell viewModel document column =
             [ "immunity" ] ->
                 maybeAsMarkdown document.immunities
 
-            [ "intelligence" ] ->
-                document.intelligence
-                    |> Maybe.map numberWithSign
-                    |> maybeAsText
-
-            [ "item_category" ] ->
-                maybeAsText document.itemCategory
-
-            [ "item_subcategory" ] ->
-                maybeAsText document.itemSubcategory
-
             [ "language" ] ->
                 maybeAsMarkdown document.languages
 
             [ "lesson" ] ->
                 maybeAsMarkdown document.lessons
-
-            [ "level" ] ->
-                document.level
-                    |> Maybe.map String.fromInt
-                    |> maybeAsText
 
             [ "mystery" ] ->
                 maybeAsMarkdown document.mysteries
@@ -5178,9 +4835,6 @@ viewSearchResultTableCell viewModel document column =
                     ]
                 ]
 
-            [ "onset" ] ->
-                maybeAsText document.onset
-
             [ "pantheon" ] ->
                 maybeAsMarkdown document.pantheonMarkdown
 
@@ -5189,14 +4843,6 @@ viewSearchResultTableCell viewModel document column =
 
             [ "patron_theme" ] ->
                 maybeAsMarkdown document.patronThemes
-
-            [ "perception" ] ->
-                document.perception
-                    |> Maybe.map numberWithSign
-                    |> maybeAsText
-
-            [ "perception_proficiency" ] ->
-                maybeAsText document.perceptionProficiency
 
             [ "pfs" ] ->
                 document.pfs
@@ -5209,49 +4855,11 @@ viewSearchResultTableCell viewModel document column =
                         ]
                     |> List.singleton
 
-            [ "plane_category" ] ->
-                maybeAsText document.planeCategory
-
             [ "prerequisite" ] ->
                 maybeAsMarkdown document.prerequisites
 
-            [ "price" ] ->
-                maybeAsText document.price
-
             [ "primary_check" ] ->
                 maybeAsMarkdown document.primaryCheck
-
-            [ "range" ] ->
-                maybeAsText document.range
-
-            [ "rank" ] ->
-                document.level
-                    |> Maybe.map toOrdinal
-                    |> maybeAsText
-
-            [ "rarity" ] ->
-                document.rarity
-                    |> Maybe.map toTitleCase
-                    |> maybeAsText
-
-            [ "reflex" ] ->
-                document.ref
-                    |> Maybe.map numberWithSign
-                    |> maybeAsText
-
-            [ "reflex_proficiency" ] ->
-                maybeAsText document.reflexProficiency
-
-            [ "region" ] ->
-                maybeAsText document.region
-
-            [ "release_date" ] ->
-                document.releaseDate
-                    |> Maybe.map (formatDate viewModel)
-                    |> maybeAsText
-
-            [ "reload" ] ->
-                maybeAsText document.reload
 
             [ "requirement" ] ->
                 maybeAsMarkdown document.requirements
@@ -5259,37 +4867,14 @@ viewSearchResultTableCell viewModel document column =
             [ "resistance" ] ->
                 maybeAsMarkdown document.resistances
 
-            [ "resistance", type_ ] ->
-                document.resistanceValues
-                    |> Maybe.andThen (getDamageTypeValue type_)
-                    |> Maybe.map String.fromInt
-                    |> maybeAsText
-
-            [ "sanctification" ] ->
-                maybeAsText document.sanctification
-
             [ "saving_throw" ] ->
                 maybeAsMarkdown document.savingThrow
-
-            [ "school" ] ->
-                document.school
-                    |> Maybe.map toTitleCase
-                    |> maybeAsText
-
-            [ "secondary_casters" ] ->
-                maybeAsText document.secondaryCasters
 
             [ "secondary_check" ] ->
                 maybeAsMarkdown document.secondaryChecks
 
             [ "sense" ] ->
                 maybeAsMarkdown document.senses
-
-            [ "size" ] ->
-                document.sizes
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
 
             [ "skill" ] ->
                 maybeAsMarkdown document.skills
@@ -5312,53 +4897,14 @@ viewSearchResultTableCell viewModel document column =
             [ "source" ] ->
                 maybeAsMarkdown document.sources
 
-            [ "source_category" ] ->
-                maybeAsText document.sourceCategory
-
-            [ "source_group" ] ->
-                maybeAsText document.sourceGroup
-
             [ "speed" ] ->
                 maybeAsMarkdown document.speed
-
-            [ "speed", type_ ] ->
-                document.speedValues
-                    |> Maybe.andThen (getSpeedTypeValue type_)
-                    |> Maybe.map String.fromInt
-                    |> maybeAsText
-
-            [ "speed_penalty" ] ->
-                maybeAsText document.speedPenalty
 
             [ "spell" ] ->
                 maybeAsMarkdown document.spell
 
-            [ "spell_type" ] ->
-                maybeAsText document.spellType
-
-            [ "spoilers" ] ->
-                maybeAsText document.spoilers
-
             [ "stage" ] ->
                 maybeAsMarkdown document.stages
-
-            [ "strength" ] ->
-                document.strength
-                    |> Maybe.map numberWithSign
-                    |> maybeAsText
-
-            [ "strength_req" ] ->
-                document.strength
-                    |> Maybe.map String.fromInt
-                    |> maybeAsText
-
-            [ "strongest_save" ] ->
-                document.strongestSaves
-                    |> List.filter (\s -> not (List.member s [ "fort", "ref" ]))
-                    |> List.map toTitleCase
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
 
             [ "summary" ] ->
                 maybeAsMarkdown document.summary
@@ -5375,9 +4921,6 @@ viewSearchResultTableCell viewModel document column =
             [ "trigger" ] ->
                 maybeAsMarkdown document.trigger
 
-            [ "type" ] ->
-                [ Html.text document.type_ ]
-
             [ "url" ] ->
                 [ Html.a
                     (List.append
@@ -5393,58 +4936,19 @@ viewSearchResultTableCell viewModel document column =
             [ "usage" ] ->
                 maybeAsMarkdown document.usage
 
-            [ "vision" ] ->
-                maybeAsText document.vision
-
-            [ "warden_spell_tier" ] ->
-                maybeAsText document.wardenSpellTier
-
-            [ "weapon_category" ] ->
-                maybeAsText document.weaponCategory
-
             [ "weapon_group" ] ->
                 maybeAsMarkdown document.weaponGroupMarkdown
-
-            [ "weapon_type" ] ->
-                maybeAsText document.weaponType
-
-            [ "weakest_save" ] ->
-                document.weakestSaves
-                    |> List.filter (\s -> not (List.member s [ "fort", "ref" ]))
-                    |> List.map toTitleCase
-                    |> String.join ", "
-                    |> Html.text
-                    |> List.singleton
 
             [ "weakness" ] ->
                 maybeAsMarkdown document.weaknesses
 
-            [ "weakness", type_ ] ->
-                document.weaknessValues
-                    |> Maybe.andThen (getDamageTypeValue type_)
-                    |> Maybe.map String.fromInt
-                    |> maybeAsText
-
-            [ "will" ] ->
-                document.will
-                    |> Maybe.map numberWithSign
-                    |> maybeAsText
-
-            [ "will_proficiency" ] ->
-                maybeAsText document.willProficiency
-
-            [ "wisdom" ] ->
-                document.wisdom
-                    |> Maybe.map numberWithSign
-                    |> maybeAsText
-
             _ ->
-                []
+                [ Html.text (searchResultTableCellToString viewModel document column) ]
         )
 
 
-searchResultTableCellToString : Model -> Document -> String -> String
-searchResultTableCellToString model document column =
+searchResultTableCellToString : ViewModel -> Document -> String -> String
+searchResultTableCellToString viewModel document column =
     case String.split "." column of
         [ "ability" ] ->
             document.attributes
@@ -5464,6 +4968,11 @@ searchResultTableCellToString model document column =
         [ "ac" ] ->
             document.ac
                 |> Maybe.map String.fromInt
+                |> maybeAsString
+
+        [ "ac_scale" ] ->
+            document.acScale
+                |> Maybe.map scaleToString
                 |> maybeAsString
 
         [ "actions" ] ->
@@ -5501,6 +5010,16 @@ searchResultTableCellToString model document column =
                 |> maybeAsString
                 |> toTitleCase
 
+        [ "attack_bonus" ] ->
+            document.attackBonus
+                |> List.map numberWithSign
+                |> String.join ", "
+
+        [ "attack_bonus_scale" ] ->
+            document.attackBonusScale
+                |> List.map scaleToString
+                |> String.join ", "
+
         [ "attack_proficiency" ] ->
             document.attackProficiencies
                 |> String.join "\n"
@@ -5531,6 +5050,11 @@ searchResultTableCellToString model document column =
                 |> Maybe.map numberWithSign
                 |> maybeAsString
 
+        [ "charisma_scale" ] ->
+            document.charismaScale
+                |> Maybe.map scaleToString
+                |> maybeAsString
+
         [ "check_penalty" ] ->
             document.checkPenalty
                 |> Maybe.map numberWithSign
@@ -5555,6 +5079,11 @@ searchResultTableCellToString model document column =
         [ "constitution" ] ->
             document.constitution
                 |> Maybe.map numberWithSign
+                |> maybeAsString
+
+        [ "constitution_scale" ] ->
+            document.constitutionScale
+                |> Maybe.map scaleToString
                 |> maybeAsString
 
         [ "cost" ] ->
@@ -5590,6 +5119,11 @@ searchResultTableCellToString model document column =
         [ "dex_cap" ] ->
             document.dexCap
                 |> Maybe.map numberWithSign
+                |> maybeAsString
+
+        [ "dexterity_scale" ] ->
+            document.dexterityScale
+                |> Maybe.map scaleToString
                 |> maybeAsString
 
         [ "divine_font" ] ->
@@ -5632,6 +5166,11 @@ searchResultTableCellToString model document column =
         [ "fortitude_proficiency" ] ->
             maybeAsString document.fortitudeProficiency
 
+        [ "fortitude_scale" ] ->
+            document.fortitudeScale
+                |> Maybe.map scaleToString
+                |> maybeAsString
+
         [ "frequency" ] ->
             maybeAsString document.frequency
 
@@ -5656,6 +5195,11 @@ searchResultTableCellToString model document column =
         [ "hp" ] ->
             maybeAsString document.hp
 
+        [ "hp_scale" ] ->
+            document.hpScale
+                |> Maybe.map scaleToString
+                |> maybeAsString
+
         [ "icon_image" ] ->
             ""
 
@@ -5668,6 +5212,11 @@ searchResultTableCellToString model document column =
         [ "intelligence" ] ->
             document.intelligence
                 |> Maybe.map numberWithSign
+                |> maybeAsString
+
+        [ "intelligence_scale" ] ->
+            document.intelligenceScale
+                |> Maybe.map scaleToString
                 |> maybeAsString
 
         [ "item_category" ] ->
@@ -5713,6 +5262,11 @@ searchResultTableCellToString model document column =
         [ "perception_proficiency" ] ->
             maybeAsString document.perceptionProficiency
 
+        [ "perception_scale" ] ->
+            document.perceptionScale
+                |> Maybe.map scaleToString
+                |> maybeAsString
+
         [ "pfs" ] ->
             document.pfs
                 |> Maybe.withDefault ""
@@ -5750,12 +5304,17 @@ searchResultTableCellToString model document column =
         [ "reflex_proficiency" ] ->
             maybeAsString document.reflexProficiency
 
+        [ "reflex_scale" ] ->
+            document.reflexScale
+                |> Maybe.map scaleToString
+                |> maybeAsString
+
         [ "region" ] ->
             maybeAsString document.region
 
         [ "release_date" ] ->
             document.releaseDate
-                |> Maybe.map (formatDate model.viewModel)
+                |> Maybe.map (formatDate viewModel)
                 |> maybeAsString
 
         [ "reload" ] ->
@@ -5828,6 +5387,29 @@ searchResultTableCellToString model document column =
         [ "spell" ] ->
             maybeAsStringWithoutMarkdown document.spell
 
+        [ "spell_attack_bonus" ] ->
+            document.spellAttackBonus
+                |> List.map String.fromInt
+                |> String.join ", "
+
+        [ "spell_attack_bonus_scale" ] ->
+            document.spellAttackBonusScale
+                |> List.map scaleToString
+                |> String.join ", "
+
+        [ "spell_dc" ] ->
+            document.spellDc
+                |> List.map String.fromInt
+                |> String.join ", "
+
+        [ "spell_dc_scale" ] ->
+            document.spellDcScale
+                |> List.map scaleToString
+                |> String.join ", "
+
+        [ "spell_type" ] ->
+            maybeAsString document.spellType
+
         [ "spoilers" ] ->
             maybeAsString document.spoilers
 
@@ -5843,6 +5425,21 @@ searchResultTableCellToString model document column =
             document.strength
                 |> Maybe.map String.fromInt
                 |> maybeAsString
+
+        [ "strength_scale" ] ->
+            document.strengthScale
+                |> Maybe.map scaleToString
+                |> maybeAsString
+
+        [ "strike_damage_average" ] ->
+            document.strikeDamageAverage
+                |> List.map String.fromInt
+                |> String.join ", "
+
+        [ "strike_damage_scale" ] ->
+            document.strikeDamageScale
+                |> List.map scaleToString
+                |> String.join ", "
 
         [ "strongest_save" ] ->
             document.strongestSaves
@@ -5912,21 +5509,23 @@ searchResultTableCellToString model document column =
         [ "will_proficiency" ] ->
             maybeAsString document.willProficiency
 
+        [ "will_scale" ] ->
+            document.willScale
+                |> Maybe.map scaleToString
+                |> maybeAsString
+
         [ "wisdom" ] ->
             document.wisdom
                 |> Maybe.map numberWithSign
                 |> maybeAsString
 
+        [ "wisdom_scale" ] ->
+            document.wisdomScale
+                |> Maybe.map scaleToString
+                |> maybeAsString
+
         _ ->
             ""
-
-
-maybeAsText : Maybe String -> List (Html msg)
-maybeAsText maybeString =
-    maybeString
-        |> Maybe.withDefault ""
-        |> Html.text
-        |> List.singleton
 
 
 maybeAsString : Maybe String -> String
@@ -6514,6 +6113,15 @@ groupDocumentsByField keys field documents =
                         document
                         dict
 
+                "ac_scale" ->
+                    insertToListDict
+                        (document.acScale
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
+
                 "actions" ->
                     insertToListDict
                         (document.actions
@@ -6549,6 +6157,18 @@ groupDocumentsByField keys field documents =
                         document
                         dict
 
+                "attack_bonus_scale" ->
+                    if List.isEmpty document.attackBonusScale then
+                        insertToListDict "" document dict
+
+                    else
+                        List.foldl
+                            (\scale ->
+                                insertToListDict (String.fromInt scale) document
+                            )
+                            dict
+                            document.attackBonusScale
+
                 "attribute" ->
                     if List.isEmpty document.attributes then
                         insertToListDict "" document dict
@@ -6565,6 +6185,24 @@ groupDocumentsByField keys field documents =
                     insertToListDict
                         (document.bulk
                             |> Maybe.map String.fromFloat
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
+
+                "charisma_scale" ->
+                    insertToListDict
+                        (document.charismaScale
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
+
+                "constitution_scale" ->
+                    insertToListDict
+                        (document.constitutionScale
+                            |> Maybe.map String.fromInt
                             |> Maybe.withDefault ""
                         )
                         document
@@ -6611,6 +6249,15 @@ groupDocumentsByField keys field documents =
                         document
                         dict
 
+                "dexterity_scale" ->
+                    insertToListDict
+                        (document.dexterityScale
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
+
                 "domain" ->
                     if List.isEmpty document.domainsList then
                         insertToListDict "" document dict
@@ -6644,6 +6291,15 @@ groupDocumentsByField keys field documents =
                             dict
                             document.elements
 
+                "fortitude_scale" ->
+                    insertToListDict
+                        (document.fortitudeScale
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
+
                 "heighten_level" ->
                     if List.isEmpty document.heightenLevels then
                         insertToListDict "" document dict
@@ -6667,6 +6323,34 @@ groupDocumentsByField keys field documents =
                             )
                             dict
                             document.heightenGroups
+
+                "hp" ->
+                    insertToListDict
+                        (document.hp
+                            |> Maybe.andThen getIntFromString
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
+
+                "hp_scale" ->
+                    insertToListDict
+                        (document.hpScale
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
+
+                "intelligence_scale" ->
+                    insertToListDict
+                        (document.intelligenceScale
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
 
                 "item_category" ->
                     insertToListDict
@@ -6707,6 +6391,15 @@ groupDocumentsByField keys field documents =
                             dict
                             document.pantheons
 
+                "perception_scale" ->
+                    insertToListDict
+                        (document.perceptionScale
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
+
                 "pfs" ->
                     insertToListDict
                         (document.pfs
@@ -6737,6 +6430,15 @@ groupDocumentsByField keys field documents =
                 "rarity" ->
                     insertToListDict
                         (document.rarityId
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
+
+                "reflex_scale" ->
+                    insertToListDict
+                        (document.reflexScale
                             |> Maybe.map String.fromInt
                             |> Maybe.withDefault ""
                         )
@@ -6780,6 +6482,51 @@ groupDocumentsByField keys field documents =
                         )
                         dict
                         document.sourceList
+
+                "spell_attack_bonus_scale" ->
+                    if List.isEmpty document.spellAttackBonusScale then
+                        insertToListDict "" document dict
+
+                    else
+                        List.foldl
+                            (\scale ->
+                                insertToListDict (String.fromInt scale) document
+                            )
+                            dict
+                            document.spellAttackBonusScale
+
+                "spell_dc_scale" ->
+                    if List.isEmpty document.spellDcScale then
+                        insertToListDict "" document dict
+
+                    else
+                        List.foldl
+                            (\scale ->
+                                insertToListDict (String.fromInt scale) document
+                            )
+                            dict
+                            document.spellDcScale
+
+                "strength_scale" ->
+                    insertToListDict
+                        (document.strengthScale
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
+
+                "strike_damage_scale" ->
+                    if List.isEmpty document.strikeDamageScale then
+                        insertToListDict "" document dict
+
+                    else
+                        List.foldl
+                            (\scale ->
+                                insertToListDict (String.fromInt scale) document
+                            )
+                            dict
+                            document.strikeDamageScale
 
                 "spell_type" ->
                     insertToListDict
@@ -6849,6 +6596,24 @@ groupDocumentsByField keys field documents =
                         (document.weaponType
                             |> Maybe.withDefault ""
                             |> String.toLower
+                        )
+                        document
+                        dict
+
+                "will_scale" ->
+                    insertToListDict
+                        (document.willScale
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
+                        )
+                        document
+                        dict
+
+                "wisdom_scale" ->
+                    insertToListDict
+                        (document.wisdomScale
+                            |> Maybe.map String.fromInt
+                            |> Maybe.withDefault ""
                         )
                         document
                         dict
@@ -6973,6 +6738,16 @@ compareAlphanum field a b =
 
 viewGroupedTitle : String -> String -> Html msg
 viewGroupedTitle field value =
+    let
+        textFrom : (Int -> String) -> String -> Html msg
+        textFrom fun v =
+            case String.toInt v of
+                Just int ->
+                    Html.text (fun int)
+
+                Nothing ->
+                    Html.text v
+    in
     if value == "" then
         Html.text "N/A"
 
@@ -7000,12 +6775,7 @@ viewGroupedTitle field value =
             Html.text (value ++ " bulk")
 
     else if field == "duration" then
-        case String.toInt value of
-            Just duration ->
-                Html.text (durationToString duration)
-
-            Nothing ->
-                Html.text value
+        textFrom durationToString value
 
     else if field == "heighten_level" then
         Html.text ("Level " ++ value)
@@ -7078,6 +6848,9 @@ viewGroupedTitle field value =
 
             _ ->
                 Html.text value
+
+    else if String.endsWith "_scale" field then
+        textFrom scaleToString value
 
     else
         Html.text (toTitleCase value)
@@ -7247,6 +7020,20 @@ markdownHtmlRenderer viewModel =
                 ]
             )
             |> Markdown.Html.withAttribute "value"
+        , Markdown.Html.tag "details"
+            (\summary children ->
+                [ Html.details
+                    [ HA.class "" ]
+                    (List.append
+                        [ Html.summary
+                            []
+                            [ Html.text summary ]
+                        ]
+                        (List.concat children)
+                    )
+                ]
+            )
+            |> Markdown.Html.withAttribute "summary"
         , Markdown.Html.tag "document"
             (\id _ ->
                 [ Html.div
@@ -8187,7 +7974,7 @@ css args =
         text-decoration: underline;
     }
 
-    h1, h2, h3, h4, h5, h6 {
+    h1, h2, h3, h4, .h4, h5, h6 {
         font-variant: small-caps;
         font-weight: 700;
         margin: 0;
@@ -8222,7 +8009,7 @@ css args =
         line-height: 1;
     }
 
-    h4 {
+    h4, .h4 {
         font-size: 18px;
     }
 

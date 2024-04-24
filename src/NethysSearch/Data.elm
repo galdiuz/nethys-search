@@ -83,12 +83,8 @@ type alias SearchModel =
     , filteredToValues : Dict String String
     , filteredValues : Dict String (Dict String Bool)
     , filterApCreatures : Bool
-    , filterComponentsOperator : Bool
-    , filterDamageTypesOperator : Bool
-    , filterDomainsOperator : Bool
+    , filterOperators : Dict String Bool
     , filterSpoilers : Bool
-    , filterTraditionsOperator : Bool
-    , filterTraitsOperator : Bool
     , fixedQueryString : String
     , groupField1 : String
     , groupField2 : Maybe String
@@ -144,12 +140,8 @@ emptySearchModel { defaultQuery, fixedQueryString, removeFilters } =
     , filteredToValues = Dict.empty
     , filteredValues = Dict.empty
     , filterApCreatures = False
-    , filterComponentsOperator = True
-    , filterDamageTypesOperator = True
-    , filterDomainsOperator = True
+    , filterOperators = Dict.empty
     , filterSpoilers = False
-    , filterTraditionsOperator = True
-    , filterTraitsOperator = True
     , fixedQueryString = fixedQueryString
     , groupField1 = "type"
     , groupField2 = Nothing
@@ -216,6 +208,7 @@ type alias Document =
     , url : String
     , abilityType : Maybe String
     , ac : Maybe Int
+    , acScale : Maybe Int
     , actions : Maybe String
     , activate : Maybe String
     , advancedApocryphalSpell : Maybe String
@@ -228,6 +221,8 @@ type alias Document =
     , armorCategory : Maybe String
     , armorGroup : Maybe String
     , aspect : Maybe String
+    , attackBonus : List Int
+    , attackBonusScale : List Int
     , attackProficiencies : List String
     , attributeFlaws : List String
     , attributes : List String
@@ -237,10 +232,12 @@ type alias Document =
     , bulk : Maybe Float
     , bulkRaw : Maybe String
     , charisma : Maybe Int
+    , charismaScale : Maybe Int
     , checkPenalty : Maybe Int
     , complexity : Maybe String
     , components : List String
     , constitution : Maybe Int
+    , constitutionScale : Maybe Int
     , cost : Maybe String
     , creatureAbilities : List String
     , creatureFamily : Maybe String
@@ -253,6 +250,7 @@ type alias Document =
     , deityCategory : Maybe String
     , dexCap : Maybe Int
     , dexterity : Maybe Int
+    , dexterityScale : Maybe Int
     , divineFonts : List String
     , domains : Maybe String
     , domainsList : List String
@@ -267,6 +265,7 @@ type alias Document =
     , followerAlignments : List String
     , fort : Maybe Int
     , fortitudeProficiency : Maybe String
+    , fortitudeScale : Maybe Int
     , frequency : Maybe String
     , hands : Maybe String
     , hardness : Maybe String
@@ -275,10 +274,12 @@ type alias Document =
     , heightenGroups : List String
     , heightenLevels : List Int
     , hp : Maybe String
+    , hpScale : Maybe Int
     , iconImage : Maybe String
     , images : List String
     , immunities : Maybe String
     , intelligence : Maybe Int
+    , intelligenceScale : Maybe Int
     , itemCategory : Maybe String
     , itemSubcategory : Maybe String
     , languages : Maybe String
@@ -295,6 +296,7 @@ type alias Document =
     , patronThemes : Maybe String
     , perception : Maybe Int
     , perceptionProficiency : Maybe String
+    , perceptionScale : Maybe Int
     , pfs : Maybe String
     , planeCategory : Maybe String
     , prerequisites : Maybe String
@@ -306,6 +308,7 @@ type alias Document =
     , rarityId : Maybe Int
     , ref : Maybe Int
     , reflexProficiency : Maybe String
+    , reflexScale : Maybe Int
     , region : Maybe String
     , releaseDate : Maybe String
     , reload : Maybe String
@@ -334,10 +337,17 @@ type alias Document =
     , speedPenalty : Maybe String
     , spell : Maybe String
     , spellList : Maybe String
+    , spellAttackBonus : List Int
+    , spellAttackBonusScale : List Int
+    , spellDc : List Int
+    , spellDcScale : List Int
     , spellType : Maybe String
     , spoilers : Maybe String
     , stages : Maybe String
     , strength : Maybe Int
+    , strengthScale : Maybe Int
+    , strikeDamageAverage : List Int
+    , strikeDamageScale : List Int
     , strongestSaves : List String
     , summary : Maybe String
     , targets : Maybe String
@@ -358,7 +368,9 @@ type alias Document =
     , weaponType : Maybe String
     , will : Maybe Int
     , willProficiency : Maybe String
+    , willScale : Maybe Int
     , wisdom : Maybe Int
+    , wisdomScale : Maybe Int
     }
 
 
@@ -522,14 +534,10 @@ type Msg
     | FilterToggled String String
     | FilterApCreaturesChanged Bool
     | FilterAttributeChanged String
-    | FilterComponentsOperatorChanged Bool
-    | FilterDamageTypesOperatorChanged Bool
-    | FilterDomainsOperatorChanged Bool
+    | FilterOperatorChanged String Bool
     | FilterResistanceChanged String
     | FilterSpeedChanged String
     | FilterSpoilersChanged Bool
-    | FilterTraditionsOperatorChanged Bool
-    | FilterTraitsOperatorChanged Bool
     | FilterWeaknessChanged String
     | FilteredFromValueChanged String String
     | FilteredToValueChanged String String
@@ -745,12 +753,15 @@ fields =
     , ( "ability_flaw", "Alias for 'attribute_flaw'" )
     , ( "ability_type", "Familiar ability type (Familiar / Master)" )
     , ( "ac", "[n] Armor class of an armor, creature, or shield" )
+    , ( "ac_scale", "AC scale according to creature building rules" )
     , ( "access", "Access requirements" )
     , ( "actions", "Actions or time required to use an action or activity" )
     , ( "activate", "Activation requirements of an item" )
     , ( "advanced_domain_spell", "Advanced domain spell" )
     , ( "advanced_apocryphal_spell", "Advanced apocryphal domain spell" )
     , ( "alignment", "Alignment" )
+    , ( "attack_bonus", "[n] Attack bonus for creatures" )
+    , ( "attack_bonus_scale", "Attack bonus scale according to creature building rules" )
     , ( "ammunition", "Ammunition type used by a weapon" )
     , ( "anathema", "Deity anathemas" )
     , ( "apocryphal_spell", "Apocryphal domain spell" )
@@ -770,12 +781,14 @@ fields =
     , ( "cast", "Alias for 'actions'" )
     , ( "cha", "[n] Alias for 'charisma'" )
     , ( "charisma", "[n] Charisma" )
+    , ( "charisma_scale", "Charisma scale according to creature building rules" )
     , ( "check_penalty", "[n] Armor check penalty" )
     , ( "cleric_spell", "Cleric spells granted by a deity" )
     , ( "complexity", "Hazard complexity" )
     , ( "component", "Spell casting components (Material / Somatic / Verbal)" )
     , ( "con", "[n] Alias for 'constitution'" )
     , ( "constitution", "[n] Constitution" )
+    , ( "constitution_scale", "Constitution scale according to creature building rules" )
     , ( "cost", "Cost to use an action, ritual, or spell" )
     , ( "creature_ability", "Creature abilities" )
     , ( "creature_family", "Creature family" )
@@ -789,6 +802,7 @@ fields =
     , ( "dex", "[n] Alias for 'dexterity'" )
     , ( "dex_cap", "[n] Armor dex cap" )
     , ( "dexterity", "Dexterity" )
+    , ( "dexterity_scale", "Dexterity scale according to creature building rules" )
     , ( "disable", "Hazard disable requirements" )
     , ( "divine_font", "Deity's divine font" )
     , ( "domain_spell", "Domain spell" )
@@ -808,6 +822,7 @@ fields =
     , ( "fortitude", "[n] Alias for 'fortitude_save'" )
     , ( "fortitude_proficiency", "A class's starting fortitude proficiency" )
     , ( "fortitude_save", "[n] Fortitude save" )
+    , ( "fortitude_save_scale", "Fortitude save scale according to creatuer building rules" )
     , ( "frequency", "Frequency of which something can be used" )
     , ( "hands", "Hands required to use item" )
     , ( "hardness", "[n] Hazard or shield hardness" )
@@ -817,9 +832,11 @@ fields =
     , ( "hex_cantrip", "Witch patron theme hex cantrip" )
     , ( "home_plane", "Summoner eidolon home plane" )
     , ( "hp", "[n] Hit points" )
+    , ( "hp_scale", "Hit points scale according creature building rules" )
     , ( "immunity", "Immunities" )
     , ( "int", "[n] Alias for 'intelligence'" )
     , ( "intelligence", "[n] Intelligence" )
+    , ( "intelligence_scale", "Intelligence scale according to creature building rules" )
     , ( "item", "Items carried by a creature" )
     , ( "item_category", "Category of an item" )
     , ( "item_subcategory", "Subcategory of an item" )
@@ -840,6 +857,7 @@ fields =
     , ( "per", "[n] Alias for 'perception'" )
     , ( "perception", "[n] Perception" )
     , ( "perception_proficiency", "A class's starting perception proficiency" )
+    , ( "perception_scale", "Perception scale according to creature building rules" )
     , ( "pfs", "Pathfinder Society status (Standard / Limited / Restricted)" )
     , ( "plane_category", "Plane category" )
     , ( "prerequisite", "Prerequisites" )
@@ -854,6 +872,7 @@ fields =
     , ( "reflex", "[n] Alias for 'reflex_save'" )
     , ( "reflex_proficiency", "A class's starting reflex proficiency" )
     , ( "reflex_save", "[n] Reflex save" )
+    , ( "reflex_save_scale", "Reflex save scale according to creature building rules" )
     , ( "region", "Background region" )
     , ( "release_date", "[n] Release date of source (yyyy-mm-dd)" )
     , ( "reload", "[n] Weapon reload" )
@@ -881,12 +900,19 @@ fields =
     , ( "speed_raw", "Speed exactly as written" )
     , ( "speed_penalty", "Speed penalty of armor or shield" )
     , ( "spell", "Related spells" )
+    , ( "spell_attack_bonus", "Spell attack bonus for creatures" )
+    , ( "spell_attack_bonus_scale", "Spell attack bonus scale according to creature building rules" )
+    , ( "spell_dc", "Spell DC for creatures" )
+    , ( "spell_dc_scale", "Spell DC scale according to creature building rules" )
     , ( "spell_type", "Spell type ( Spell / Cantrip / Focus )" )
     , ( "spoilers", "Adventure path name if there is a spoiler warning on the page" )
     , ( "stage", "Stages of a disease or poison" )
     , ( "stealth", "Hazard stealth" )
     , ( "str", "[n] Alias for 'strength'" )
     , ( "strength", "[n] Creature strength or armor strength requirement" )
+    , ( "strength_scale", "Strength scale according to creature building rules" )
+    , ( "strike_damage_average", "Average strike damage for creatures" )
+    , ( "strike_damage_scale", "Strike damage scale according to creature building rules" )
     , ( "strongest_save", "The strongest save(s) of a creature ( Fortitude / Reflex / Will )" )
     , ( "target", "Spell targets" )
     , ( "text", "All text on a page" )
@@ -909,78 +935,251 @@ fields =
     , ( "will", "[n] Alias for 'will_save'" )
     , ( "will_proficiency", "A class's starting will proficiency" )
     , ( "will_save", "[n] Will save" )
+    , ( "will_save_scale", "Will save scale according to creature building rules" )
     , ( "wis", "[n] Alias for 'wisdom'" )
     , ( "wisdom", "[n] Wisdom" )
+    , ( "wisdom_scale", "Wisdom scale according to creature building rules" )
     ]
 
 
-filterFields : SearchModel -> List ( String, String, Bool )
+filterFields : SearchModel -> List { field : String, key : String, useOperator : Bool }
 filterFields searchModel =
-    [ ( "actions.keyword", "actions", False )
-    , ( "alignment", "alignments", False )
-    , ( "armor_category", "armor-categories", False )
-    , ( "armor_group", "armor-groups", False )
-    , ( "attribute", "attributes", False )
-    , ( "component", "components", searchModel.filterComponentsOperator )
-    , ( "creature_family", "creature-families", False )
-    , ( "damage_type", "damage-types", searchModel.filterDamageTypesOperator )
-    , ( "domain", "domains", searchModel.filterDomainsOperator )
-    , ( "hands.keyword", "hands", False )
-    , ( "item_category", "item-categories", False )
-    , ( "item_subcategory", "item-subcategories", False )
-    , ( "pfs", "pfs", False )
-    , ( "rarity", "rarities", False )
-    , ( "region", "regions", False )
-    , ( "reload_raw.keyword", "reloads", False )
-    , ( "saving_throw", "saving-throws", False )
-    , ( "school", "schools", False )
-    , ( "size", "sizes", False )
-    , ( "skill", "skills", False )
-    , ( "source", "sources", False )
-    , ( "source_category", "source-categories", False )
-    , ( "strongest_save", "strongest-saves", False )
-    , ( "tradition", "traditions", searchModel.filterTraditionsOperator )
-    , ( "trait_group", "trait-groups", searchModel.filterTraitsOperator )
-    , ( "trait", "traits", searchModel.filterTraitsOperator )
-    , ( "type", "types", False )
-    , ( "weakest_save", "weakest-saves", False )
-    , ( "weapon_category", "weapon-categories", False )
-    , ( "weapon_group", "weapon-groups", False )
-    , ( "weapon_type", "weapon-types", False )
+    [ { field = "ac_scale"
+      , key = "ac-scales"
+      , useOperator = False
+      }
+    , { field = "actions.keyword"
+      , key = "actions"
+      , useOperator = False
+      }
+    , { field = "alignment"
+      , key = "alignments"
+      , useOperator = False
+      }
+    , { field = "armor_category"
+      , key = "armor-categories"
+      , useOperator = False
+      }
+    , { field = "armor_group"
+      , key = "armor-groups"
+      , useOperator = False
+      }
+    , { field = "attack_bonus_scale"
+      , key = "attack-bonus-scales"
+      , useOperator = False
+      }
+    , { field = "attribute"
+      , key = "attributes"
+      , useOperator = False
+      }
+    , { field = "charisma_scale"
+      , key = "charisma-scales"
+      , useOperator = False
+      }
+    , { field = "component"
+      , key = "components"
+      , useOperator = True
+      }
+    , { field = "constitution_scale"
+      , key = "constitution-scales"
+      , useOperator = False
+      }
+    , { field = "creature_family"
+      , key = "creature-families"
+      , useOperator = False
+      }
+    , { field = "damage_type"
+      , key = "damage-types"
+      , useOperator = True
+      }
+    , { field = "dexterity_scale"
+      , key = "dexterity-scales"
+      , useOperator = False
+      }
+    , { field = "domain"
+      , key = "domains"
+      , useOperator = True
+      }
+    , { field = "fortitude_save_scale"
+      , key = "fortitude-scales"
+      , useOperator = False
+      }
+    , { field = "hands.keyword"
+      , key = "hands"
+      , useOperator = False
+      }
+    , { field = "hp_scale"
+      , key = "hp-scales"
+      , useOperator = False
+      }
+    , { field = "intelligence_scale"
+      , key = "intelligence-scales"
+      , useOperator = False
+      }
+    , { field = "item_category"
+      , key = "item-categories"
+      , useOperator = False
+      }
+    , { field = "item_subcategory"
+      , key = "item-subcategories"
+      , useOperator = False
+      }
+    , { field = "perception_scale"
+      , key = "perception-scales"
+      , useOperator = False
+      }
+    , { field = "pfs"
+      , key = "pfs"
+      , useOperator = False
+      }
+    , { field = "rarity"
+      , key = "rarities"
+      , useOperator = False
+      }
+    , { field = "reflex_save_scale"
+      , key = "reflex-scales"
+      , useOperator = False
+      }
+    , { field = "region"
+      , key = "regions"
+      , useOperator = False
+      }
+    , { field = "reload_raw.keyword"
+      , key = "reloads"
+      , useOperator = False
+      }
+    , { field = "saving_throw"
+      , key = "saving-throws"
+      , useOperator = False
+      }
+    , { field = "school"
+      , key = "schools"
+      , useOperator = False
+      }
+    , { field = "size"
+      , key = "sizes"
+      , useOperator = False
+      }
+    , { field = "skill"
+      , key = "skills"
+      , useOperator = False
+      }
+    , { field = "source"
+      , key = "sources"
+      , useOperator = False
+      }
+    , { field = "source_category"
+      , key = "source-categories"
+      , useOperator = False
+      }
+    , { field = "spell_attack_bonus_scale"
+      , key = "spell-attack-bonus-scales"
+      , useOperator = False
+      }
+    , { field = "spell_dc_scale"
+      , key = "spell-dc-scales"
+      , useOperator = False
+      }
+    , { field = "strength_scale"
+      , key = "strength-scales"
+      , useOperator = False
+      }
+    , { field = "strike_damage_scale"
+      , key = "strike-damage-scales"
+      , useOperator = False
+      }
+    , { field = "strongest_save"
+      , key = "strongest-saves"
+      , useOperator = False
+      }
+    , { field = "tradition"
+      , key = "traditions"
+      , useOperator = True
+      }
+    , { field = "trait"
+      , key = "traits"
+      , useOperator = True
+      }
+    , { field = "trait_group"
+      , key = "trait-groups"
+      , useOperator = True
+      }
+    , { field = "type"
+      , key = "types"
+      , useOperator = False
+      }
+    , { field = "weakest_save"
+      , key = "weakest-saves"
+      , useOperator = False
+      }
+    , { field = "weapon_category"
+      , key = "weapon-categories"
+      , useOperator = False
+      }
+    , { field = "weapon_group"
+      , key = "weapon-groups"
+      , useOperator = False
+      }
+    , { field = "weapon_type"
+      , key = "weapon-types"
+      , useOperator = False
+      }
+    , { field = "will_save_scale"
+      , key = "will-scales"
+      , useOperator = False
+      }
+    , { field = "wisdom_scale"
+      , key = "wisdom-scales"
+      , useOperator = False
+      }
     ]
 
 
 groupFields : List String
 groupFields =
     [ "ac"
+    , "ac_scale"
     , "actions"
     , "alignment"
     , "armor_category"
     , "armor_group"
+    , "attack_bonus_scale"
     , "attribute"
     , "bulk"
+    , "charisma_scale"
+    , "constitution_scale"
     , "creature_family"
     , "damage_type"
     , "deity"
     , "deity_category"
+    , "dexterity_scale"
     , "domain"
     , "duration"
     , "element"
+    , "fortitude_scale"
+    , "hands"
     , "heighten_group"
+    , "hp_scale"
+    , "intelligence_scale"
     , "item_category"
     , "item_subcategory"
     , "level"
-    , "hands"
     , "pantheon"
+    , "perception_scale"
     , "pfs"
     , "range"
     , "rank"
     , "rarity"
-    , "school"
+    , "reflex_scale"
     , "sanctification"
+    , "school"
     , "size"
     , "source"
+    , "spell_attack_bonus_scale"
+    , "spell_dc_scale"
     , "spell_type"
+    , "strength_scale"
+    , "strike_damage_scale"
     , "tradition"
     , "trait"
     , "type"
@@ -988,6 +1187,8 @@ groupFields =
     , "weapon_category"
     , "weapon_group"
     , "weapon_type"
+    , "will_scale"
+    , "wisdom_scale"
     ]
 
 
@@ -1115,6 +1316,7 @@ sortFields : List ( String, String, Bool )
 sortFields =
     [ ( "ability_type", "ability_type", False )
     , ( "ac", "ac", True )
+    , ( "ac_scale", "ac_scale_number", True )
     , ( "actions", "actions_number", True )
     , ( "alignment", "alignment", False )
     , ( "archetype", "archetype.keyword", False )
@@ -1122,15 +1324,19 @@ sortFields =
     , ( "armor_category", "armor_category", False )
     , ( "armor_group", "armor_group", False )
     , ( "aspect", "aspect", False )
+    , ( "attack_bonus", "attack_bonus", True )
+    , ( "attack_bonus_scale", "attack_bonus_scale_number", True )
     , ( "attribute", "attribute", False )
     , ( "base_item", "base_item.keyword", False )
     , ( "bloodline", "bloodline", False )
     , ( "bulk", "bulk", True )
     , ( "charisma", "charisma", True )
+    , ( "charisma_scale", "charisma_scale_number", True )
     , ( "check_penalty", "check_penalty", True )
     , ( "complexity", "complexity", False )
     , ( "component", "component", False )
     , ( "constitution", "constitution", True )
+    , ( "constitution_scale", "constitution_scale_number", True )
     , ( "cost", "cost.keyword", False )
     , ( "creature_family", "creature_family", False )
     , ( "damage", "damage_die", True )
@@ -1140,19 +1346,23 @@ sortFields =
     , ( "deity_category_order", "deity_category_order", False )
     , ( "dex_cap", "dex_cap", True )
     , ( "dexterity", "dexterity", True )
+    , ( "dexterity_scale", "dexterity_scale_number", True )
     , ( "divine_font", "divine_font", False )
     , ( "domain", "domain", False )
     , ( "duration", "duration", True )
     , ( "favored_weapon", "favored_weapon.keyword", False )
     , ( "fortitude", "fortitude", False )
     , ( "fortitude_proficiency", "fortitude_proficiency", False )
+    , ( "fortitude_scale", "fortitude_save_scale_number", True )
     , ( "frequency", "frequency.keyword", False )
     , ( "hands", "hands.keyword", False )
     , ( "hardness", "hardness", False )
     , ( "hazard_type", "hazard_type", False )
     , ( "heighten", "heighten", False )
     , ( "hp", "hp", True )
+    , ( "hp_scale", "hp_scale_number", True )
     , ( "intelligence", "intelligence", False )
+    , ( "intelligence_scale", "intelligence_scale_number", True )
     , ( "item_category", "item_category", False )
     , ( "item_subcategory", "item_subcategory", False )
     , ( "level", "level", True )
@@ -1161,6 +1371,7 @@ sortFields =
     , ( "onset", "onset", True )
     , ( "patron_theme", "patron_theme", False )
     , ( "perception", "perception", True )
+    , ( "perception_scale", "perception_scale_number", True )
     , ( "perception_proficiency", "perception_proficiency", False )
     , ( "pfs", "pfs", False )
     , ( "plane_category", "plane_category", False )
@@ -1172,6 +1383,7 @@ sortFields =
     , ( "rarity", "rarity_id", True )
     , ( "reflex", "reflex", True )
     , ( "reflex_proficiency", "reflex_proficiency", False )
+    , ( "reflex_scale", "reflex_save_scale_number", True )
     , ( "region", "region", False )
     , ( "release_date", "release_date", False )
     , ( "requirement", "requirement.keyword", False )
@@ -1185,10 +1397,17 @@ sortFields =
     , ( "source_category", "source_category", False )
     , ( "source_group", "source_group", False )
     , ( "speed_penalty", "speed_penalty.keyword", False )
+    , ( "spell_attack_bonus", "spell_attack_bonus", True )
+    , ( "spell_attack_bonus_scale", "spell_attack_bonus_scale_number", True )
+    , ( "spell_dc", "spell_dc", True )
+    , ( "spell_dc_scale", "spell_dc_scale_number", True )
     , ( "spell_type", "spell_type", False )
     , ( "spoilers", "spoilers", False )
     , ( "strength", "strength", True )
+    , ( "strength_scale", "strength_scale_number", True )
     , ( "strength_req", "strength", True )
+    , ( "strike_damage_average", "strike_damage_average", True )
+    , ( "strike_damage_scale", "strike_damage_scale_number", True )
     , ( "strongest_save", "strongest_save", False )
     , ( "target", "target.keyword", False )
     , ( "tradition", "tradition", False )
@@ -1202,7 +1421,9 @@ sortFields =
     , ( "weapon_type", "weapon_type", False )
     , ( "will", "will", True )
     , ( "will_proficiency", "will_proficiency", False )
+    , ( "will_scale", "will_save_scale_number", True )
     , ( "wisdom", "wisdom", True )
+    , ( "wisdom_scale", "wisdom_scale_number", True )
     ]
         |> List.append
             (List.map
@@ -1263,6 +1484,7 @@ tableColumns : List String
 tableColumns =
     [ "ability_type"
     , "ac"
+    , "ac_scale"
     , "actions"
     , "advanced_apocryphal_spell"
     , "advanced_domain_spell"
@@ -1273,6 +1495,8 @@ tableColumns =
     , "armor_category"
     , "armor_group"
     , "aspect"
+    , "attack_bonus"
+    , "attack_bonus_scale"
     , "attack_proficiency"
     , "attribute"
     , "attribute_boost"
@@ -1281,10 +1505,12 @@ tableColumns =
     , "bloodline"
     , "bulk"
     , "charisma"
+    , "charisma_scale"
     , "check_penalty"
     , "complexity"
     , "component"
     , "constitution"
+    , "constitution_scale"
     , "cost"
     , "creature_ability"
     , "creature_family"
@@ -1296,6 +1522,7 @@ tableColumns =
     , "deity_category"
     , "dex_cap"
     , "dexterity"
+    , "dexterity_scale"
     , "divine_font"
     , "domain"
     , "domain_spell"
@@ -1305,6 +1532,7 @@ tableColumns =
     , "feat"
     , "follower_alignment"
     , "fortitude"
+    , "fortitude_scale"
     , "frequency"
     , "hands"
     , "hardness"
@@ -1312,10 +1540,12 @@ tableColumns =
     , "heighten"
     , "heighten_level"
     , "hp"
+    , "hp_scale"
     , "icon_image"
     , "image"
     , "immunity"
     , "intelligence"
+    , "intelligence_scale"
     , "item_category"
     , "item_subcategory"
     , "language"
@@ -1328,6 +1558,7 @@ tableColumns =
     , "patron_theme"
     , "perception"
     , "perception_proficiency"
+    , "perception_scale"
     , "pfs"
     , "plane_category"
     , "prerequisite"
@@ -1337,6 +1568,7 @@ tableColumns =
     , "rank"
     , "rarity"
     , "reflex"
+    , "reflex_scale"
     , "region"
     , "release_date"
     , "requirement"
@@ -1356,11 +1588,18 @@ tableColumns =
     , "speed"
     , "speed_penalty"
     , "spell"
+    , "spell_attack_bonus"
+    , "spell_attack_bonus_scale"
+    , "spell_dc"
+    , "spell_dc_scale"
     , "spell_type"
     , "spoilers"
     , "stage"
     , "strength"
     , "strength_req"
+    , "strength_scale"
+    , "strike_damage_average"
+    , "strike_damage_scale"
     , "strongest_save"
     , "summary"
     , "target"
@@ -1378,7 +1617,9 @@ tableColumns =
     , "weapon_group"
     , "weapon_type"
     , "will"
+    , "will_scale"
     , "wisdom"
+    , "wisdom_scale"
     ]
 
 
@@ -1443,26 +1684,30 @@ updateSearchModelFromParams params model searchModel =
                         Standard
         , filterApCreatures = Dict.get "ap-creatures" params == Just [ "hide" ]
         , filterSpoilers = Dict.get "spoilers" params == Just [ "hide" ]
-        , filterComponentsOperator = Dict.get "components-operator" params /= Just [ "or" ]
-        , filterDamageTypesOperator = Dict.get "damage-types-operator" params /= Just [ "or" ]
-        , filterDomainsOperator = Dict.get "domains-operator" params /= Just [ "or" ]
-        , filterTraditionsOperator = Dict.get "traditions-operator" params /= Just [ "or" ]
-        , filterTraitsOperator = Dict.get "traits-operator" params /= Just [ "or" ]
-        , filteredValues =
+        , filterOperators =
             List.map
                 (\filter ->
-                    ( filter
-                    , getBoolDictFromParams params filter
-                        |> if filter == "attributes" then
+                    ( filter.key
+                    , Dict.get (filter.key ++ "-operator") params /= Just [ "or" ]
+                    )
+                )
+                (filterFields searchModel
+                    |> List.filter .useOperator
+                )
+                |> Dict.fromList
+        , filteredValues =
+            List.map
+                (\{ key } ->
+                    ( key
+                    , getBoolDictFromParams params key
+                        |> if key == "attributes" then
                             Dict.union (getBoolDictFromParams params "abilities")
 
                            else
                             identity
                     )
                 )
-                (filterFields searchModel
-                    |> List.map Tuple3.second
-                )
+                (filterFields searchModel)
                 |> Dict.fromList
         , filteredFromValues =
             Dict.get "values-from" params
@@ -1680,17 +1925,22 @@ currentQueryAsComplex searchModel =
     in
     [ filterFields searchModel
         |> List.filterMap
-            (\( field, filterType, isAnd ) ->
+            (\filter ->
                 let
                     dict : Dict String Bool
                     dict =
-                        Dict.get filterType searchModel.filteredValues
+                        Dict.get filter.key searchModel.filteredValues
                             |> Maybe.withDefault Dict.empty
 
                     ( included, excluded ) =
-                        Dict.get filterType searchModel.filteredValues
+                        Dict.get filter.key searchModel.filteredValues
                             |> Maybe.withDefault Dict.empty
                             |> Dict.partition (\_ v -> v)
+
+                    isAnd : Bool
+                    isAnd =
+                        Dict.get filter.key searchModel.filterOperators
+                            |> Maybe.withDefault True
                 in
                 if Dict.isEmpty dict then
                     Nothing
@@ -1708,7 +1958,7 @@ currentQueryAsComplex searchModel =
                         |> String.join " "
                         |> surroundWithParantheses dict excluded
                         |> String.append ":"
-                        |> String.append field
+                        |> String.append filter.field
                         |> Just
             )
     , List.map
@@ -2079,6 +2329,17 @@ rangeToString range =
 
     else
         String.fromInt range ++ " feet"
+
+
+scaleToString : Int -> String
+scaleToString scale =
+    case scale of
+        5 -> "Extreme"
+        4 -> "High"
+        3 -> "Moderate"
+        2 -> "Low"
+        1 -> "Terrible"
+        _ -> "Undefined"
 
 
 getDamageTypeValue : String -> DamageTypeValues -> Maybe Int
@@ -2751,6 +3012,7 @@ documentDecoder =
     Field.require "url" Decode.string <| \url ->
     Field.attempt "ability_type" Decode.string <| \abilityType ->
     Field.attempt "ac" Decode.int <| \ac ->
+    Field.attempt "ac_scale_number" Decode.int <| \acScale ->
     Field.attempt "actions" Decode.string <| \actions ->
     Field.attempt "activate" Decode.string <| \activate ->
     Field.attempt "advanced_apocryphal_spell_markdown" Decode.string <| \advancedApocryphalSpell ->
@@ -2763,6 +3025,8 @@ documentDecoder =
     Field.attempt "armor_category" Decode.string <| \armorCategory ->
     Field.attempt "armor_group_markdown" Decode.string <| \armorGroup ->
     Field.attempt "aspect" Decode.string <| \aspect ->
+    Field.attempt "attack_bonus" (Decode.list Decode.int) <| \attackBonus ->
+    Field.attempt "attack_bonus_scale_number" (Decode.list Decode.int) <| \attackBonusScale ->
     Field.attempt "attack_proficiency" stringListDecoder <| \attackProficiencies ->
     Field.attempt "attribute_flaw" stringListDecoder <| \attributeFlaws ->
     Field.attempt "attribute" stringListDecoder <| \attributes ->
@@ -2772,10 +3036,12 @@ documentDecoder =
     Field.attempt "bulk" Decode.float <| \bulk ->
     Field.attempt "bulk_raw" Decode.string <| \bulkRaw ->
     Field.attempt "charisma" Decode.int <| \charisma ->
+    Field.attempt "charisma_scale_number" Decode.int <| \charismaScale ->
     Field.attempt "check_penalty" Decode.int <| \checkPenalty ->
     Field.attempt "complexity" Decode.string <| \complexity ->
     Field.attempt "component" stringListDecoder <| \components ->
     Field.attempt "constitution" Decode.int <| \constitution ->
+    Field.attempt "constitution_scale_number" Decode.int <| \constitutionScale ->
     Field.attempt "cost_markdown" Decode.string <| \cost ->
     Field.attempt "creature_ability" stringListDecoder <| \creatureAbilities ->
     Field.attempt "creature_family" Decode.string <| \creatureFamily ->
@@ -2788,6 +3054,7 @@ documentDecoder =
     Field.attempt "deity_category" Decode.string <| \deityCategory ->
     Field.attempt "dex_cap" Decode.int <| \dexCap ->
     Field.attempt "dexterity" Decode.int <| \dexterity ->
+    Field.attempt "dexterity_scale_number" Decode.int <| \dexterityScale ->
     Field.attempt "divine_font" stringListDecoder <| \divineFonts ->
     Field.attempt "domain" stringListDecoder <| \domainsList ->
     Field.attempt "domain_markdown" Decode.string <| \domains ->
@@ -2799,8 +3066,9 @@ documentDecoder =
     Field.attempt "familiar_ability" stringListDecoder <| \familiarAbilities ->
     Field.attempt "favored_weapon_markdown" Decode.string <| \favoredWeapons ->
     Field.attempt "feat_markdown" Decode.string <| \feats ->
-    Field.attempt "fortitude_save" Decode.int <| \fort ->
     Field.attempt "fortitude_proficiency" Decode.string <| \fortitudeProficiency ->
+    Field.attempt "fortitude_save" Decode.int <| \fort ->
+    Field.attempt "fortitude_save_scale_number" Decode.int <| \fortitudeScale ->
     Field.attempt "follower_alignment" stringListDecoder <| \followerAlignments ->
     Field.attempt "frequency" Decode.string <| \frequency ->
     Field.attempt "hands" Decode.string <| \hands ->
@@ -2810,10 +3078,12 @@ documentDecoder =
     Field.attempt "heighten_group" stringListDecoder <| \heightenGroups ->
     Field.attempt "heighten_level" (Decode.list Decode.int) <| \heightenLevels ->
     Field.attempt "hp_raw" Decode.string <| \hp ->
+    Field.attempt "hp_scale_number" Decode.int <| \hpScale ->
     Field.attempt "icon_image" Decode.string <| \iconImage ->
     Field.attempt "image" stringListDecoder <| \images ->
     Field.attempt "immunity_markdown" Decode.string <| \immunities ->
     Field.attempt "intelligence" Decode.int <| \intelligence ->
+    Field.attempt "intelligence_scale_number" Decode.int <| \intelligenceScale ->
     Field.attempt "item_category" Decode.string <| \itemCategory ->
     Field.attempt "item_subcategory" Decode.string <| \itemSubcategory ->
     Field.attempt "language_markdown" Decode.string <| \languages ->
@@ -2830,6 +3100,7 @@ documentDecoder =
     Field.attempt "patron_theme_markdown" Decode.string <| \patronThemes ->
     Field.attempt "perception" Decode.int <| \perception ->
     Field.attempt "perception_proficiency" Decode.string <| \perceptionProficiency ->
+    Field.attempt "perception_scale_number" Decode.int <| \perceptionScale ->
     Field.attempt "pfs" Decode.string <| \pfs ->
     Field.attempt "plane_category" Decode.string <| \planeCategory ->
     Field.attempt "prerequisite_markdown" Decode.string <| \prerequisites ->
@@ -2839,8 +3110,9 @@ documentDecoder =
     Field.attempt "range_raw" Decode.string <| \range ->
     Field.attempt "rarity" Decode.string <| \rarity ->
     Field.attempt "rarity_id" Decode.int <| \rarityId ->
-    Field.attempt "reflex_save" Decode.int <| \ref ->
     Field.attempt "reflex_proficiency" Decode.string <| \reflexProficiency ->
+    Field.attempt "reflex_save" Decode.int <| \ref ->
+    Field.attempt "reflex_save_scale_number" Decode.int <| \reflexScale ->
     Field.attempt "region" Decode.string <| \region->
     Field.attempt "release_date" Decode.string <| \releaseDate ->
     Field.attempt "reload_raw" Decode.string <| \reload ->
@@ -2869,10 +3141,17 @@ documentDecoder =
     Field.attempt "speed_penalty" Decode.string <| \speedPenalty ->
     Field.attempt "spell_markdown" Decode.string <| \spell ->
     Field.attempt "spell_list" Decode.string <| \spellList ->
+    Field.attempt "spell_attack_bonus" (Decode.list Decode.int) <| \spellAttackBonus ->
+    Field.attempt "spell_attack_bonus_scale_number" (Decode.list Decode.int) <| \spellAttackBonusScale ->
+    Field.attempt "spell_dc" (Decode.list Decode.int) <| \spellDc ->
+    Field.attempt "spell_dc_scale_number" (Decode.list Decode.int) <| \spellDcScale ->
     Field.attempt "spell_type" Decode.string <| \spellType ->
     Field.attempt "spoilers" Decode.string <| \spoilers ->
     Field.attempt "stage_markdown" Decode.string <| \stages ->
     Field.attempt "strength" Decode.int <| \strength ->
+    Field.attempt "strength_scale_number" Decode.int <| \strengthScale ->
+    Field.attempt "strike_damage_average" (Decode.list Decode.int) <| \strikeDamageAverage ->
+    Field.attempt "strike_damage_scale_number" (Decode.list Decode.int) <| \strikeDamageScale ->
     Field.attempt "strongest_save" stringListDecoder <| \strongestSaves ->
     Field.attempt "summary_markdown" Decode.string <| \summary ->
     Field.attempt "target_markdown" Decode.string <| \targets ->
@@ -2891,9 +3170,11 @@ documentDecoder =
     Field.attempt "weapon_group" Decode.string <| \weaponGroup ->
     Field.attempt "weapon_group_markdown" Decode.string <| \weaponGroupMarkdown ->
     Field.attempt "weapon_type" Decode.string <| \weaponType ->
-    Field.attempt "will_save" Decode.int <| \will ->
     Field.attempt "will_proficiency" Decode.string <| \willProficiency ->
+    Field.attempt "will_save" Decode.int <| \will ->
+    Field.attempt "will_save_scale_number" Decode.int <| \willScale ->
     Field.attempt "wisdom" Decode.int <| \wisdom ->
+    Field.attempt "wisdom_scale_number" Decode.int <| \wisdomScale ->
     Decode.succeed
         { id = id
         , category = category
@@ -2902,6 +3183,7 @@ documentDecoder =
         , url = url
         , abilityType = abilityType
         , ac = ac
+        , acScale = acScale
         , actions = actions
         , activate = activate
         , advancedApocryphalSpell = advancedApocryphalSpell
@@ -2914,6 +3196,8 @@ documentDecoder =
         , armorCategory = armorCategory
         , armorGroup = armorGroup
         , aspect = aspect
+        , attackBonus = Maybe.withDefault [] attackBonus
+        , attackBonusScale = Maybe.withDefault [] attackBonusScale
         , attackProficiencies = Maybe.withDefault [] attackProficiencies
         , attributeFlaws = Maybe.withDefault [] attributeFlaws
         , attributes = Maybe.withDefault [] attributes
@@ -2923,10 +3207,12 @@ documentDecoder =
         , bulk = bulk
         , bulkRaw = bulkRaw
         , charisma = charisma
+        , charismaScale = charismaScale
         , checkPenalty = checkPenalty
         , complexity = complexity
         , components = Maybe.withDefault [] components
         , constitution = constitution
+        , constitutionScale = constitutionScale
         , cost = cost
         , creatureAbilities = Maybe.withDefault [] creatureAbilities
         , creatureFamily = creatureFamily
@@ -2939,6 +3225,7 @@ documentDecoder =
         , deityCategory = deityCategory
         , dexCap = dexCap
         , dexterity = dexterity
+        , dexterityScale = dexterityScale
         , divineFonts = Maybe.withDefault [] divineFonts
         , domains = domains
         , domainsList = Maybe.withDefault [] domainsList
@@ -2952,6 +3239,7 @@ documentDecoder =
         , feats = feats
         , fort = fort
         , fortitudeProficiency = fortitudeProficiency
+        , fortitudeScale = fortitudeScale
         , followerAlignments = Maybe.withDefault [] followerAlignments
         , frequency = frequency
         , hands = hands
@@ -2961,10 +3249,12 @@ documentDecoder =
         , heightenGroups = Maybe.withDefault [] heightenGroups
         , heightenLevels = Maybe.withDefault [] heightenLevels
         , hp = hp
+        , hpScale = hpScale
         , iconImage = iconImage
         , images = Maybe.withDefault [] images
         , immunities = immunities
         , intelligence = intelligence
+        , intelligenceScale = intelligenceScale
         , itemCategory = itemCategory
         , itemSubcategory = itemSubcategory
         , languages = languages
@@ -2981,6 +3271,7 @@ documentDecoder =
         , patronThemes = patronThemes
         , perception = perception
         , perceptionProficiency = perceptionProficiency
+        , perceptionScale = perceptionScale
         , pfs = pfs
         , planeCategory = planeCategory
         , prerequisites = prerequisites
@@ -2992,6 +3283,7 @@ documentDecoder =
         , rarityId = rarityId
         , ref = ref
         , reflexProficiency = reflexProficiency
+        , reflexScale = reflexScale
         , region = region
         , releaseDate = releaseDate
         , reload = reload
@@ -3020,10 +3312,17 @@ documentDecoder =
         , speedValues = speedValues
         , spell = spell
         , spellList = spellList
+        , spellAttackBonus = Maybe.withDefault [] spellAttackBonus
+        , spellAttackBonusScale = Maybe.withDefault [] spellAttackBonusScale
+        , spellDc = Maybe.withDefault [] spellDc
+        , spellDcScale = Maybe.withDefault [] spellDcScale
         , spellType = spellType
         , spoilers = spoilers
         , stages = stages
         , strength = strength
+        , strengthScale = strengthScale
+        , strikeDamageAverage = Maybe.withDefault [] strikeDamageAverage
+        , strikeDamageScale = Maybe.withDefault [] strikeDamageScale
         , strongestSaves = Maybe.withDefault [] strongestSaves
         , summary = summary
         , targets = targets
@@ -3044,7 +3343,9 @@ documentDecoder =
         , weaponType = weaponType
         , will = will
         , willProficiency = willProficiency
+        , willScale = willScale
         , wisdom = wisdom
+        , wisdomScale = wisdomScale
         }
 
 
