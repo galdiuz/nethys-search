@@ -204,33 +204,6 @@ update msg model =
                 ]
             )
 
-        ColumnResistanceChanged resistance ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | selectedColumnResistance = resistance }
-                )
-                model
-            , Cmd.none
-            )
-
-        ColumnSpeedChanged speed ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | selectedColumnSpeed = speed }
-                )
-                model
-            , Cmd.none
-            )
-
-        ColumnWeaknessChanged weakness ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | selectedColumnWeakness = weakness }
-                )
-                model
-            , Cmd.none
-            )
-
         DateFormatChanged format ->
             ( updateViewModel
                 (\viewModel ->
@@ -462,15 +435,6 @@ update msg model =
                 |> updateUrlWithSearchParams
             )
 
-        FilterAttributeChanged value ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | selectedFilterAttribute = value }
-                )
-                model
-            , Cmd.none
-            )
-
         FilterOperatorChanged filterType value ->
             ( model
             , updateCurrentSearchModel
@@ -481,24 +445,6 @@ update msg model =
                 |> updateUrlWithSearchParams
             )
 
-        FilterResistanceChanged value ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | selectedFilterResistance = value }
-                )
-                model
-            , Cmd.none
-            )
-
-        FilterSpeedChanged value ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | selectedFilterSpeed = value }
-                )
-                model
-            , Cmd.none
-            )
-
         FilterSpoilersChanged value ->
             ( model
             , updateCurrentSearchModel
@@ -507,15 +453,6 @@ update msg model =
                 )
                 model
                 |> updateUrlWithSearchParams
-            )
-
-        FilterWeaknessChanged value ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | selectedFilterWeakness = value }
-                )
-                model
-            , Cmd.none
             )
 
         FilteredFromValueChanged key value ->
@@ -1131,64 +1068,21 @@ update msg model =
             , Task.perform (\_ -> NoOp) (Browser.Dom.setViewport 0 0)
             )
 
-        SearchCreatureFamiliesChanged value ->
+        SearchFilterChanged filterKey value ->
             ( updateCurrentSearchModel
                 (\searchModel ->
-                    { searchModel | searchCreatureFamilies = value }
+                    { searchModel
+                        | searchFilters = Dict.insert filterKey value searchModel.searchFilters
+                    }
                 )
                 model
             , Cmd.none
             )
 
-        SearchItemCategoriesChanged value ->
+        SelectValueChanged key value ->
             ( updateCurrentSearchModel
                 (\searchModel ->
-                    { searchModel | searchItemCategories = value }
-                )
-                model
-            , Cmd.none
-            )
-
-        SearchItemSubcategoriesChanged value ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | searchItemSubcategories = value }
-                )
-                model
-            , Cmd.none
-            )
-
-        SearchSourcesChanged value ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | searchSources = value }
-                )
-                model
-            , Cmd.none
-            )
-
-        SearchTableColumnsChanged value ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | searchTableColumns = value }
-                )
-                model
-            , Cmd.none
-            )
-
-        SearchTraitsChanged value ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | searchTraits = value }
-                )
-                model
-            , Cmd.none
-            )
-
-        SearchTypesChanged value ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | searchTypes = value }
+                    { searchModel | selectValues = Dict.insert key value searchModel.selectValues }
                 )
                 model
             , Cmd.none
@@ -1298,15 +1192,6 @@ update msg model =
                 (if value then "1" else "0")
             )
 
-        SortAttributeChanged value ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | selectedSortAttribute = value }
-                )
-                model
-            , Cmd.none
-            )
-
         SortAdded field dir ->
             ( updateCurrentSearchModel
                 (\searchModel ->
@@ -1364,15 +1249,6 @@ update msg model =
                 |> updateUrlWithSearchParams
             )
 
-        SortResistanceChanged value ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | selectedSortResistance = value }
-                )
-                model
-            , Cmd.none
-            )
-
         SortSetChosen fields ->
             ( updateCurrentSearchModel
                 (\searchModel ->
@@ -1385,15 +1261,6 @@ update msg model =
                 )
                 model
                 |> updateUrlWithSearchParams
-            )
-
-        SortSpeedChanged value ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | selectedSortSpeed = value }
-                )
-                model
-            , Cmd.none
             )
 
         SortToggled field ->
@@ -1431,15 +1298,6 @@ update msg model =
                 )
                 model
                 |> updateUrlWithSearchParams
-            )
-
-        SortWeaknessChanged value ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel | selectedSortWeakness = value }
-                )
-                model
-            , Cmd.none
             )
 
         TableColumnAdded column ->
@@ -3039,7 +2897,7 @@ buildSearchFilterTerms model searchModel groupFilters =
                     isAnd : Bool
                     isAnd =
                         Dict.get filter.key searchModel.filterOperators
-                            |> Maybe.withDefault True
+                            |> Maybe.withDefault False
                 in
                 if List.isEmpty list then
                     []
@@ -3686,12 +3544,18 @@ buildAggregationsBody searchModel =
                     (List.map
                         buildTermsAggregation
                         [ "actions.keyword"
+                        , "alignment"
+                        , "area_type"
                         , "creature_family"
+                        , "deity_category.keyword"
                         , "domain"
+                        , "favored_weapon.keyword"
                         , "item_category"
                         , "hands.keyword"
                         , "region"
                         , "reload_raw.keyword"
+                        , "size"
+                        , "skill"
                         , "source"
                         , "trait"
                         , "type"
@@ -3850,4 +3714,4 @@ buildSourcesAggregationBody =
 
 whatsNewVersion : Int
 whatsNewVersion =
-    1
+    2

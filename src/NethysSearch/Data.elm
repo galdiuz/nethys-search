@@ -96,27 +96,11 @@ type alias SearchModel =
     , queryType : QueryType
     , removeFilters : List String
     , resultDisplay : ResultDisplay
-    , searchCreatureFamilies : String
+    , searchFilters : Dict String String
     , searchGroupResults : List String
-    , searchItemCategories : String
-    , searchItemSubcategories : String
     , searchResultGroupAggs : Maybe GroupAggregations
     , searchResults : List (Result Http.Error SearchResult)
-    , searchSources : String
-    , searchTableColumns : String
-    , searchTraits : String
-    , searchTypes : String
-    , selectedColumnResistance : String
-    , selectedColumnSpeed : String
-    , selectedColumnWeakness : String
-    , selectedFilterAttribute : String
-    , selectedFilterResistance : String
-    , selectedFilterSpeed : String
-    , selectedFilterWeakness : String
-    , selectedSortAttribute : String
-    , selectedSortResistance : String
-    , selectedSortSpeed : String
-    , selectedSortWeakness : String
+    , selectValues : Dict String String
     , showFilters : Bool
     , sort : List ( String, SortDir )
     , sortHasChanged : Bool
@@ -154,26 +138,10 @@ emptySearchModel { defaultQuery, fixedQueryString, removeFilters } =
     , removeFilters = removeFilters
     , resultDisplay = Short
     , searchResultGroupAggs = Nothing
-    , searchCreatureFamilies = ""
+    , searchFilters = Dict.empty
     , searchGroupResults = []
-    , searchItemCategories = ""
-    , searchItemSubcategories = ""
     , searchResults = []
-    , searchSources = ""
-    , searchTableColumns = ""
-    , searchTraits = ""
-    , searchTypes = ""
-    , selectedColumnResistance = "acid"
-    , selectedColumnSpeed = "land"
-    , selectedColumnWeakness = "acid"
-    , selectedFilterAttribute = "strength"
-    , selectedFilterResistance = "acid"
-    , selectedFilterSpeed = "land"
-    , selectedFilterWeakness = "acid"
-    , selectedSortAttribute = "strength"
-    , selectedSortResistance = "acid"
-    , selectedSortSpeed = "land"
-    , selectedSortWeakness = "acid"
+    , selectValues = Dict.empty
     , showFilters = False
     , sort = []
     , sortHasChanged = False
@@ -218,6 +186,7 @@ type alias Document =
     , apocryphalSpell : Maybe String
     , archetype : Maybe String
     , area : Maybe String
+    , areaTypes : List String
     , armorCategory : Maybe String
     , armorGroup : Maybe String
     , aspect : Maybe String
@@ -436,13 +405,19 @@ defaultFlags =
 
 type alias Aggregations =
     { actions : List String
+    , alignments : List String
+    , areaTypes : List String
     , creatureFamilies : List String
+    , deityCategories : List String
     , domains : List String
+    , favoredWeapons : List String
     , hands : List String
     , itemCategories : List String
     , itemSubcategories : List { category : String, name : String }
     , regions : List String
     , reloads : List String
+    , sizes : List String
+    , skills : List String
     , sources : List String
     , traits : List String
     , types : List String
@@ -513,9 +488,6 @@ type alias Source =
 type Msg
     = AlwaysShowFiltersChanged Bool
     | AutoQueryTypeChanged Bool
-    | ColumnResistanceChanged String
-    | ColumnSpeedChanged String
-    | ColumnWeaknessChanged String
     | DateFormatChanged String
     | DebouncePassed Int
     | DeleteColumnConfigurationPressed
@@ -533,12 +505,8 @@ type Msg
     | FilterRemoved String String
     | FilterToggled String String
     | FilterApCreaturesChanged Bool
-    | FilterAttributeChanged String
     | FilterOperatorChanged String Bool
-    | FilterResistanceChanged String
-    | FilterSpeedChanged String
     | FilterSpoilersChanged Bool
-    | FilterWeaknessChanged String
     | FilteredFromValueChanged String String
     | FilteredToValueChanged String String
     | GroupField1Changed String
@@ -578,13 +546,8 @@ type Msg
     | SavedColumnConfigurationNameChanged String
     | SavedColumnConfigurationSelected String
     | ScrollToTopPressed
-    | SearchCreatureFamiliesChanged String
-    | SearchItemCategoriesChanged String
-    | SearchItemSubcategoriesChanged String
-    | SearchSourcesChanged String
-    | SearchTableColumnsChanged String
-    | SearchTraitsChanged String
-    | SearchTypesChanged String
+    | SearchFilterChanged String String
+    | SelectValueChanged String String
     | ShowAdditionalInfoChanged Bool
     | ShowFilters
     | ShowFilterBox String Bool
@@ -594,15 +557,11 @@ type Msg
     | ShowSpoilersChanged Bool
     | ShowSummaryChanged Bool
     | ShowTraitsChanged Bool
-    | SortAttributeChanged String
     | SortAdded String SortDir
     | SortOrderChanged Int Int
     | SortRemoved String
-    | SortResistanceChanged String
     | SortSetChosen (List ( String, SortDir ))
-    | SortSpeedChanged String
     | SortToggled String
-    | SortWeaknessChanged String
     | TableColumnAdded String
     | TableColumnMoved Int Int
     | TableColumnRemoved String
@@ -675,8 +634,8 @@ allAttributes =
     ]
 
 
-alignments : List ( String, String )
-alignments =
+allAlignments : List ( String, String )
+allAlignments =
     [ ( "ce", "Chaotic Evil" )
     , ( "cg", "Chaotic Good" )
     , ( "cn", "Chaotic Neutral" )
@@ -767,6 +726,8 @@ fields =
     , ( "apocryphal_spell", "Apocryphal domain spell" )
     , ( "archetype", "Archetypes associated with a feat" )
     , ( "area", "Area of a spell" )
+    , ( "area_raw", "Area exactly as written" )
+    , ( "area_type", "Area shape, e.g. burst or line" )
     , ( "armor_category", "Armor category" )
     , ( "armor_group", "Armor group" )
     , ( "aspect", "Relic gift aspect type" )
@@ -956,6 +917,10 @@ filterFields searchModel =
       , key = "alignments"
       , useOperator = False
       }
+    , { field = "area_type"
+      , key = "area-types"
+      , useOperator = False
+      }
     , { field = "armor_category"
       , key = "armor-categories"
       , useOperator = False
@@ -996,9 +961,21 @@ filterFields searchModel =
       , key = "dexterity-scales"
       , useOperator = False
       }
+    , { field = "deity_category.keyword"
+      , key = "deity-categories"
+      , useOperator = False
+      }
+    , { field = "divine_font"
+      , key = "divine-fonts"
+      , useOperator = True
+      }
     , { field = "domain"
       , key = "domains"
       , useOperator = True
+      }
+    , { field = "favored_weapon.keyword"
+      , key = "favored-weapons"
+      , useOperator = False
       }
     , { field = "fortitude_save_scale"
       , key = "fortitude-scales"
@@ -1048,6 +1025,10 @@ filterFields searchModel =
       , key = "reloads"
       , useOperator = False
       }
+    , { field = "sanctification"
+      , key = "sanctifications"
+      , useOperator = True
+      }
     , { field = "saving_throw"
       , key = "saving-throws"
       , useOperator = False
@@ -1062,7 +1043,11 @@ filterFields searchModel =
       }
     , { field = "skill"
       , key = "skills"
-      , useOperator = False
+      , useOperator = True
+      }
+    , { field = "skill"
+      , key = "lore-skills"
+      , useOperator = True
       }
     , { field = "source"
       , key = "sources"
@@ -1141,6 +1126,7 @@ groupFields =
     , "ac_scale"
     , "actions"
     , "alignment"
+    , "area_type"
     , "armor_category"
     , "armor_group"
     , "attack_bonus_scale"
@@ -1220,7 +1206,7 @@ predefinedColumnConfigurations =
     [ { columns = [ "hp", "size", "speed", "ability_boost", "ability_flaw", "language", "vision", "rarity", "pfs" ]
       , label = "Ancestries"
       }
-    , { columns = [ "armor_category", "ac", "dex_cap", "check_penalty", "speed_penalty", "strength_req", "bulk", "armor_group", "trait" ]
+    , { columns = [ "armor_category", "ac", "dex_cap", "check_penalty", "speed_penalty", "strength", "bulk", "armor_group", "trait" ]
       , label = "Armor"
       }
     , { columns = [ "pfs", "ability", "skill", "feat", "rarity", "source" ]
@@ -1229,8 +1215,20 @@ predefinedColumnConfigurations =
     , { columns = [ "ability", "hp", "attack_proficiency", "defense_proficiency", "fortitude_proficiency", "reflex_proficiency",  "will_proficiency", "perception_proficiency", "skill_proficiency", "rarity", "pfs" ]
       , label = "Classes"
       }
-    , { columns = [ "level", "hp", "ac", "fortitude", "reflex", "will", "strongest_save", "weakest_save", "perception", "sense", "size", "alignment", "rarity", "speed", "immunity", "resistance", "weakness", "trait", "creature_family", "language" ]
+    , { columns = [ "level", "creature_family", "rarity", "size", "trait", "hp", "ac", "fortitude", "reflex", "will", "speed", "immunity", "resistance", "weakness" ]
       , label = "Creatures"
+      }
+    , { columns =
+        [ "level", "creature_family", "source", "rarity", "size", "trait"
+        , "hp", "hp_scale", "ac", "ac_scale", "fortitude", "fortitude_scale", "reflex", "reflex_scale", "will", "will_scale"
+        , "immunity", "resistance", "weakness", "creature_ability"
+        , "perception", "perception_scale", "sense", "speed"
+        , "attack_bonus", "attack_bonus_scale", "strike_damage_average", "strike_damage_scale"
+        , "spell_attack", "spell_attack_scale", "spell_dc", "spell_dc_scale", "spell", "language"
+        , "strength", "strength_scale", "dexterity", "dexterity_scale", "constitution", "constitution_scale"
+        , "intelligence", "intelligence_scale", "wisdom", "wisdom_scale", "charisma", "charisma_scale", "skill"
+        ]
+      , label = "Creatures (extended)"
       }
     , { columns = [ "pfs", "edict", "anathema", "domain", "divine_font", "sanctification", "ability", "skill", "favored_weapon", "deity_category", "pantheon", "source" ]
       , label = "Deities"
@@ -1273,9 +1271,19 @@ rarities =
 
 saves : List String
 saves =
-    [ "fortitude"
+    [ "ac"
+    , "fortitude"
     , "reflex"
     , "will"
+    ]
+
+
+settlementSizes : List String
+settlementSizes =
+    [ "city"
+    , "metropolis"
+    , "town"
+    , "village"
     ]
 
 
@@ -1320,7 +1328,7 @@ sortFields =
     , ( "actions", "actions_number", True )
     , ( "alignment", "alignment", False )
     , ( "archetype", "archetype.keyword", False )
-    , ( "area", "area.keyword", False )
+    , ( "area", "area", False )
     , ( "armor_category", "armor_category", False )
     , ( "armor_group", "armor_group", False )
     , ( "aspect", "aspect", False )
@@ -1909,7 +1917,7 @@ currentQueryAsComplex searchModel =
     let
         surroundWithQuotes : String -> String
         surroundWithQuotes s =
-            if String.contains " " s then
+            if String.contains " " s || String.contains "+" s then
                 "\"" ++ s ++ "\""
 
             else
@@ -1940,7 +1948,7 @@ currentQueryAsComplex searchModel =
                     isAnd : Bool
                     isAnd =
                         Dict.get filter.key searchModel.filterOperators
-                            |> Maybe.withDefault True
+                            |> Maybe.withDefault False
                 in
                 if Dict.isEmpty dict then
                     Nothing
@@ -2008,7 +2016,7 @@ currentQueryAsComplex searchModel =
 
 queryCouldBeComplex : String -> Bool
 queryCouldBeComplex query =
-    stringContainsChar query ":()\"+-*?"
+    stringContainsChar query ":()\"+-*?/"
         || String.contains " OR " query
         || String.contains " AND " query
         || String.contains " || " query
@@ -2062,6 +2070,12 @@ sortDirFromString str =
 
         _ ->
             Nothing
+
+
+dictGetString : comparable -> Dict comparable String -> String
+dictGetString key dict =
+    Dict.get key dict
+        |> Maybe.withDefault ""
 
 
 nestedDictGet : comparable -> comparable -> Dict comparable (Dict comparable a) -> Maybe a
@@ -2156,11 +2170,16 @@ sortIsRandom searchModel =
     searchModel.sort == [ ( "random", Asc ) ]
 
 
-getAggregation : (Aggregations -> List a) -> SearchModel -> List a
-getAggregation fun searchModel =
+getAggregationMaybe : (Aggregations -> List a) -> SearchModel -> Maybe (List a)
+getAggregationMaybe fun searchModel =
     searchModel.aggregations
         |> Maybe.andThen Result.toMaybe
         |> Maybe.map fun
+
+
+getAggregation : (Aggregations -> List a) -> SearchModel -> List a
+getAggregation fun searchModel =
+    getAggregationMaybe fun searchModel
         |> Maybe.withDefault []
 
 
@@ -2185,6 +2204,11 @@ getIntFromString str =
     str
         |> String.filter Char.isDigit
         |> String.toInt
+
+
+caseInsensitiveContains : String -> String -> Bool
+caseInsensitiveContains needle haystack =
+    String.contains (String.toLower needle) (String.toLower haystack)
 
 
 formatDate : ViewModel -> String -> String
@@ -2878,13 +2902,29 @@ aggregationsDecoder =
         (aggregationBucketDecoder Decode.string)
         <| \actions ->
     Field.requireAt
+        [ "aggregations", "alignment" ]
+        (aggregationBucketDecoder Decode.string)
+        <| \alignments ->
+    Field.requireAt
+        [ "aggregations", "area_type" ]
+        (aggregationBucketDecoder Decode.string)
+        <| \areaTypes ->
+    Field.requireAt
         [ "aggregations", "creature_family" ]
         (aggregationBucketDecoder Decode.string)
         <| \creatureFamilies ->
     Field.requireAt
+        [ "aggregations", "deity_category.keyword" ]
+        (aggregationBucketDecoder Decode.string)
+        <| \deityCategories ->
+    Field.requireAt
         [ "aggregations", "domain" ]
         (aggregationBucketDecoder Decode.string)
         <| \domains ->
+    Field.requireAt
+        [ "aggregations", "favored_weapon.keyword" ]
+        (aggregationBucketDecoder Decode.string)
+        <| \favoredWeapons ->
     Field.requireAt
         [ "aggregations", "hands.keyword" ]
         (aggregationBucketDecoder Decode.string)
@@ -2914,6 +2954,14 @@ aggregationsDecoder =
         (aggregationBucketDecoder Decode.string)
         <| \reloads ->
     Field.requireAt
+        [ "aggregations", "size" ]
+        (aggregationBucketDecoder Decode.string)
+        <| \sizes ->
+    Field.requireAt
+        [ "aggregations", "skill" ]
+        (aggregationBucketDecoder Decode.string)
+        <| \skills ->
+    Field.requireAt
         [ "aggregations", "source" ]
         (aggregationBucketDecoder Decode.string)
         <| \sources ->
@@ -2931,13 +2979,19 @@ aggregationsDecoder =
         <| \weaponGroups ->
     Decode.succeed
         { actions = actions
+        , alignments = alignments
+        , areaTypes = areaTypes
         , creatureFamilies = creatureFamilies
+        , deityCategories = deityCategories
         , domains = domains
+        , favoredWeapons = favoredWeapons
         , hands = hands
         , itemCategories = itemCategories
         , itemSubcategories = itemSubcategories
         , regions = regions
         , reloads = reloads
+        , sizes = sizes
+        , skills = skills
         , sources = sources
         , traits = traits
         , types = types
@@ -3021,7 +3075,8 @@ documentDecoder =
     Field.attempt "anathema" Decode.string <| \anathemas ->
     Field.attempt "apocryphal_spell_markdown" Decode.string <| \apocryphalSpell ->
     Field.attempt "archetype" Decode.string <| \archetype ->
-    Field.attempt "area" Decode.string <| \area ->
+    Field.attempt "area_raw" Decode.string <| \area ->
+    Field.attempt "area_type" stringListDecoder <| \areaTypes ->
     Field.attempt "armor_category" Decode.string <| \armorCategory ->
     Field.attempt "armor_group_markdown" Decode.string <| \armorGroup ->
     Field.attempt "aspect" Decode.string <| \aspect ->
@@ -3193,6 +3248,7 @@ documentDecoder =
         , apocryphalSpell = apocryphalSpell
         , archetype = archetype
         , area = area
+        , areaTypes = Maybe.withDefault [] areaTypes
         , armorCategory = armorCategory
         , armorGroup = armorGroup
         , aspect = aspect

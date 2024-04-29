@@ -11,6 +11,7 @@ import Html exposing (Html)
 import Html.Attributes as HA
 import Html.Attributes.Extra as HAE
 import Html.Events as HE
+import Html.Extra
 import Html.Keyed
 import Html.Lazy
 import Http
@@ -127,7 +128,7 @@ viewFilters model searchModel =
                     , HA.class "align-center"
                     ]
                     (List.append
-                        [ Html.h4
+                        [ Html.h3
                             []
                             [ Html.text "Filters:" ]
                         ]
@@ -154,7 +155,7 @@ viewFilters model searchModel =
                     , HA.class "align-center"
                     ]
                     (List.append
-                        [ Html.h4
+                        [ Html.h3
                             []
                             [ Html.text "Options:" ]
                         ]
@@ -185,140 +186,130 @@ viewFilters model searchModel =
                     [ Html.text "Show filters and options" ]
                 ]
             )
-            (allFilters model ++ allOptions
-                |> List.filterMap
-                    (\filterBox ->
-                        case List.Extra.elemIndex filterBox.id searchModel.visibleFilterBoxes of
-                            Just idx ->
-                                Just ( idx, filterBox )
+            [ Html.Keyed.node "div"
+                [ HA.class "column"
+                , HA.class "gap-small"
+                ]
+                (allFilters model ++ allOptions
+                    |> List.filterMap
+                        (\filterBox ->
+                            case List.Extra.elemIndex filterBox.id searchModel.visibleFilterBoxes of
+                                Just idx ->
+                                    Just ( idx, filterBox )
 
-                            Nothing ->
-                                Nothing
-                    )
-                |> List.sortBy Tuple.first
-                |> List.map Tuple.second
-                |> List.map (viewOptionBox model searchModel)
-            )
+                                Nothing ->
+                                    Nothing
+                        )
+                    |> List.sortBy Tuple.first
+                    |> List.map Tuple.second
+                    |> List.map (\filter -> ( filter.id, viewOptionBox model searchModel filter ))
+                )
+            ]
         )
 
 
 allFilters : Model -> List FilterBox
 allFilters model =
-    [ { id = "numbers"
-      , label = "Numbers"
-      , view = viewFilterNumbers
-      , visibleIf = \_ -> True
-      }
-    , { id = "actions"
-      , label = "Actions / Cast time"
+    [ { id = "actions"
+      , label = "⏳ Actions / Cast time"
       , view = viewFilterActions
       , visibleIf = moreThanOneAggregation .actions
       }
     , { id = "alignments"
-      , label = "Alignments"
+      , label = "😇 Alignments"
       , view = viewFilterAlignments
-      , visibleIf = \_ -> model.showLegacyFilters
+      , visibleIf =
+            \searchModel ->
+                moreThanOneAggregation .alignments searchModel
+                    && model.showLegacyFilters
       }
     , { id = "armor"
-      , label = "Armor"
+      , label = "🛡 Armor"
       , view = viewFilterArmor
       , visibleIf = getAggregation .itemSubcategories >> List.any (.name >> (==) "base armor")
       }
     , { id = "attributes"
-      , label = "Attributes (Boosts)"
+      , label = "💪 Attributes"
       , view = viewFilterAttributes
       , visibleIf = \_ -> True
       }
-    , { id = "components"
-      , label = "Casting components"
-      , view = viewFilterComponents
-      , visibleIf = \_ -> model.showLegacyFilters
-      }
     , { id = "creature"
-      , label = "Creatures"
+      , label = "🐉 Creatures"
       , view = viewFilterCreatures
-      , visibleIf = moreThanOneAggregation .creatureFamilies
+      , visibleIf = getAggregation .types >> List.any ((==) "creature")
+      }
+    , { id = "deities"
+      , label = "🌓 Deities"
+      , view = viewFilterDeities
+      , visibleIf = getAggregation .types >> List.any ((==) "deity")
       }
     , { id = "domains"
-      , label = "Domains"
+      , label = "🎭 Domains"
       , view = viewFilterDomains
       , visibleIf = moreThanOneAggregation .domains
       }
-    , { id = "hands"
-      , label = "Hands"
-      , view = viewFilterHands
-      , visibleIf = moreThanOneAggregation .hands
-      }
-    , { id = "item-categories"
-      , label = "Item categories"
-      , view = viewFilterItemCategories
-      , visibleIf =
-            \searchModel ->
-                (moreThanOneAggregation .itemCategories searchModel)
-                    || (moreThanOneAggregation .itemSubcategories searchModel)
+    , { id = "items"
+      , label = "🎒 Items"
+      , view = viewFilterItems
+      , visibleIf = getAggregation .types >> List.any ((==) "item")
       }
     , { id = "legacy"
-      , label = "Legacy / Remaster"
+      , label = "🏛 Legacy / Remaster"
       , view = viewFilterLegacy
       , visibleIf = \_ -> True
       }
-    , { id = "schools"
-      , label = "Magic schools"
-      , view = viewFilterMagicSchools
-      , visibleIf = \_ -> model.showLegacyFilters
+    , { id = "level"
+      , label = "📊 Level"
+      , view = viewFilterLevel
+      , visibleIf = \_ -> True
       }
     , { id = "pfs"
-      , label = "PFS"
+      , label = "🔵 PFS"
       , view = viewFilterPfs
       , visibleIf = \_ -> True
       }
     , { id = "rarities"
-      , label = "Rarities"
+      , label = "💎 Rarities"
       , view = viewFilterRarities
       , visibleIf = moreThanOneAggregation .traits
       }
     , { id = "regions"
-      , label = "Regions"
+      , label = "🌐 Regions"
       , view = viewFilterRegions
       , visibleIf = moreThanOneAggregation .regions
       }
-    , { id = "saving-throws"
-      , label = "Saving throws"
-      , view = viewFilterSavingThrows
-      , visibleIf = \_ -> True
-      }
     , { id = "sizes"
-      , label = "Sizes"
+      , label = "🐥 Sizes"
       , view = viewFilterSizes
-      , visibleIf = \_ -> True
+      , visibleIf = moreThanOneAggregation .sizes
       }
     , { id = "skills"
-      , label = "Skills"
+      , label = "🏅 Skills"
       , view = viewFilterSkills
-      , visibleIf = \_ -> True
+      , visibleIf = moreThanOneAggregation .skills
       }
     , { id = "sources"
-      , label = "Sources & Spoilers"
+      , label = "📚 Sources / Spoilers"
       , view = viewFilterSources
       , visibleIf = \_ -> True
       }
-    , { id = "traditions"
-      , label = "Traditions / Spell lists"
-      , view = viewFilterTraditions
+    , { id = "spells"
+      , label = "✨  Spells / Rituals"
+      , view = viewFilterSpells
       , visibleIf = \_ -> True
       }
     , { id = "traits"
-      , label = "Traits"
+      , label = "🔖 Traits"
       , view = viewFilterTraits
       , visibleIf = moreThanOneAggregation .traits
       }
     , { id = "types"
-      , label = "Types / Categories"
+      , label = "📋 Types / Categories"
       , view = viewFilterTypes
       , visibleIf = moreThanOneAggregation .types
       }
     , { id = "weapons"
-      , label = "Weapons"
+      , label = "⚔ Weapons"
       , view = viewFilterWeapons
       , visibleIf = moreThanOneAggregation .weaponGroups
       }
@@ -391,7 +382,7 @@ viewOptionBox model searchModel filter =
             ]
         , Html.div
             [ HA.class "column"
-            , HA.class "gap-small"
+            , HA.class "gap-large"
             ]
             (filter.view model searchModel)
         ]
@@ -405,187 +396,208 @@ viewQueryType model searchModel =
             currentQueryAsComplex searchModel
     in
     [ Html.div
-        [ HA.class "row"
-        , HA.class "align-baseline"
-        , HA.class "gap-medium"
-        ]
-        [ viewRadioButton
-            { checked = searchModel.queryType == Standard
-            , enabled = not model.autoQueryType
-            , name = "query-type"
-            , onInput = QueryTypeSelected Standard
-            , text = "Standard"
-            }
-        , viewRadioButton
-            { checked = searchModel.queryType == ElasticsearchQueryString
-            , enabled = not model.autoQueryType
-            , name = "query-type"
-            , onInput = QueryTypeSelected ElasticsearchQueryString
-            , text = "Complex"
-            }
-        , viewCheckbox
-            { checked = model.autoQueryType
-            , onCheck = AutoQueryTypeChanged
-            , text = "Automatically set query type based on query"
-            }
-        ]
-    , Html.div
-        []
-        [ Html.text "The standard query type behaves like most search engines, searching on keywords. It includes results that are similar to what you searched for to help catch misspellings (a.k.a. fuzzy matching). Results matching by name are scored higher than results matching in the description."
-        ]
-    , Html.div
-        []
-        [ Html.text "The complex query type allows you to write queries using Elasticsearch Query String syntax. It doesn't do fuzzy matching by default, and allows searching for phrases by surrounding them with quotes. It also allows searching in specific fields by searching "
-        , Html.span
-            [ HA.class "monospace" ]
-            [ Html.text "field:value" ]
-        , Html.text ". For full documentation on how the query syntax works see "
-        , Html.a
-            [ HA.href "https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#query-string-syntax"
-            , HA.target "_blank"
-            ]
-            [ Html.text "Elasticsearch's documentation" ]
-        , Html.text ". See below for a list of available fields. [n] means the field is numeric and supports range queries."
-        ]
-    , Html.div
-        [ HA.class "scrollbox"
-        , HA.class "column"
-        , HA.class "gap-medium"
+        [ HA.class "column"
+        , HA.class "gap-small"
         ]
         [ Html.div
+            [ HA.class "row"
+            , HA.class "align-baseline"
+            , HA.class "gap-medium"
+            ]
+            [ viewRadioButton
+                { checked = searchModel.queryType == Standard
+                , enabled = not model.autoQueryType
+                , name = "query-type"
+                , onInput = QueryTypeSelected Standard
+                , text = "Standard"
+                }
+            , viewRadioButton
+                { checked = searchModel.queryType == ElasticsearchQueryString
+                , enabled = not model.autoQueryType
+                , name = "query-type"
+                , onInput = QueryTypeSelected ElasticsearchQueryString
+                , text = "Complex"
+                }
+            , viewCheckbox
+                { checked = model.autoQueryType
+                , onCheck = AutoQueryTypeChanged
+                , text = "Automatically set query type based on query"
+                }
+            ]
+        , Html.div
             [ HA.class "column"
-            , HA.class "gap-tiny"
+            , HA.class "gap-small"
             ]
-            (List.append
-                [ Html.div
-                    [ HA.class "row"
-                    , HA.class "gap-medium"
-                    ]
-                    [ Html.div
-                        [ HA.class "bold"
-                        , HA.style "width" "35%"
-                        , HA.style "max-width" "200px"
-                        ]
-                        [ Html.text "Field" ]
-                    , Html.div
-                        [ HA.class "bold"
-                        , HA.style "max-width" "60%"
-                        ]
-                        [ Html.text "Description" ]
-                    ]
-                ]
-                (List.map
-                    (\( field, desc ) ->
-                        Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-medium"
-                            ]
-                            [ Html.div
-                                [ HA.style "width" "35%"
-                                , HA.style "max-width" "200px"
-                                , HA.style "word-break" "break-all"
-                                , HA.class "monospace"
-                                ]
-                                [ Html.text field ]
-                            , Html.div
-                                [ HA.style "max-width" "60%"
-                                ]
-                                [ Html.text desc ]
-                            ]
-                    )
-                    Data.fields
-                )
+            ("""
+            The standard query type behaves like most search engines, searching on keywords. It
+            includes results that are similar to what you searched for to help catch misspellings
+            (a.k.a. fuzzy matching). Results matching by name are scored higher than results
+            matching in the description.
+
+            The complex query type allows you to write queries using Elasticsearch Query String
+            syntax. It doesn't do fuzzy matching by default, and allows searching for phrases by
+            surrounding them with quotes. It also allows searching in specific fields with the
+            syntax `field:value`. For full documentation on how the query syntax works see
+            [Elasticsearch's documentation][1].
+
+            [1]: https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#query-string-syntax
+            """
+                |> String.Extra.unindent
+                |> parseAndViewAsMarkdown model.viewModel
             )
+        ]
+
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Available fields" ]
         , Html.div
-            [ HA.class "column" ]
-            [ Html.text "Valid types for resistance and weakness:"
-            , Html.div
-                []
-                (List.map
-                    (\type_ ->
-                        Html.span
-                            [ HA.class "monospace" ]
-                            [ Html.text type_ ]
+            [ HA.class "scrollbox"
+            , HA.class "column"
+            , HA.class "gap-medium"
+            ]
+            [ Html.div
+                [ HA.class "column"
+                , HA.class "gap-tiny"
+                ]
+                (List.append
+                    [ Html.div
+                        [ HA.class "row"
+                        , HA.class "gap-medium"
+                        ]
+                        [ Html.div
+                            [ HA.class "bold"
+                            , HA.style "width" "35%"
+                            , HA.style "max-width" "200px"
+                            ]
+                            [ Html.text "Field" ]
+                        , Html.div
+                            [ HA.class "bold"
+                            , HA.style "max-width" "60%"
+                            ]
+                            [ Html.text "Description" ]
+                        ]
+                    ]
+                    (List.map
+                        (\( field, desc ) ->
+                            Html.div
+                                [ HA.class "row"
+                                , HA.class "gap-medium"
+                                ]
+                                [ Html.div
+                                    [ HA.style "width" "35%"
+                                    , HA.style "max-width" "200px"
+                                    , HA.style "word-break" "break-all"
+                                    , HA.class "monospace"
+                                    ]
+                                    [ Html.text field ]
+                                , Html.div
+                                    [ HA.style "max-width" "60%"
+                                    ]
+                                    [ Html.text desc ]
+                                ]
+                        )
+                        Data.fields
                     )
-                    Data.allDamageTypes
-                    |> List.intersperse (Html.text ", ")
                 )
+            , Html.div
+                [ HA.class "column" ]
+                [ Html.text "Valid types for resistance and weakness:"
+                , Html.div
+                    []
+                    (List.map
+                        (\type_ ->
+                            Html.span
+                                [ HA.class "monospace" ]
+                                [ Html.text type_ ]
+                        )
+                        Data.allDamageTypes
+                        |> List.intersperse (Html.text ", ")
+                    )
+                ]
+            ]
+        , Html.text "[n] means the field is numeric and supports range queries."
+        ]
+
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Current filters as complex query" ]
+        , Html.div
+            [ HA.class "scrollbox"
+            , HA.class "monospace"
+            ]
+            [ if String.isEmpty currentQuery then
+                Html.span
+                    [ HA.style "color" "var(--color-text-inactive)" ]
+                    [ Html.text "No filters applied"
+                    ]
+
+              else
+                Html.text currentQuery
             ]
         ]
 
-    , Html.h4
-        []
-        [ Html.text "Current filters as complex query" ]
     , Html.div
-        [ HA.class "scrollbox"
-        , HA.class "monospace"
+        [ HA.class "column"
+        , HA.class "gap-small"
         ]
-        [ if String.isEmpty currentQuery then
-            Html.span
-                [ HA.style "color" "var(--color-text-inactive)" ]
-                [ Html.text "No filters applied"
-                ]
+        [ Html.h3
+            []
+            [ Html.text "Example queries" ]
+        , Html.div
+            [ HA.class "column"
+            ]
+            ("""
+            Spells (or cantrips) unique to the arcane tradition:
+            ```
+            tradition:(arcane -divine -occult -primal) type:spell
+            ```
 
-          else
-            Html.text currentQuery
-        ]
+            <br />
 
-    , Html.h4
-        []
-        [ Html.text "Example queries" ]
-    , Html.div
-        []
-        [ Html.div
-            []
-            [ Html.text "Spells (or cantrips) unique to the arcane tradition:" ]
-        , Html.div
-            [ HA.class "monospace" ]
-            [ Html.text "tradition:(arcane -divine -occult -primal) type:spell" ]
-        ]
-    , Html.div
-        []
-        [ Html.div
-            []
-            [ Html.text "Non-consumable items between 500 and 1000 gp (note that price is in copper):" ]
-        , Html.div
-            [ HA.class "monospace" ]
-            [ Html.text "price:[50000 TO 100000] NOT trait:consumable" ]
-        ]
-    , Html.div
-        []
-        [ Html.div
-            []
-            [ Html.text "Spells up to level 5 with a range of at least 100 feet that are granted by any sorcerer bloodline:" ]
-        , Html.div
-            [ HA.class "monospace" ]
-            [ Html.text "type:spell level:<=5 range:>=100 bloodline:*" ]
-        ]
-    , Html.div
-        []
-        [ Html.div
-            []
-            [ Html.text "Rules pages that mention 'mental damage':" ]
-        , Html.div
-            [ HA.class "monospace" ]
-            [ Html.text "\"mental damage\" type:rules" ]
-        ]
-    , Html.div
-        []
-        [ Html.div
-            []
-            [ Html.text "Weapons with finesse and either disarm or trip:" ]
-        , Html.div
-            [ HA.class "monospace" ]
-            [ Html.text "type:weapon trait:finesse trait:(disarm OR trip)" ]
-        ]
-    , Html.div
-        []
-        [ Html.div
-            []
-            [ Html.text "Creatures resistant to fire but not all damage:" ]
-        , Html.div
-            [ HA.class "monospace" ]
-            [ Html.text "resistance.fire:* NOT resistance.all:*" ]
+            Non-consumable items between 500 and 1000 gp (note that price is in copper):
+            ```
+            price:[50000 TO 100000] NOT trait:consumable
+            ```
+
+            <br />
+
+            Spells up to level 5 with a range of at least 100 feet that are granted by any sorcerer bloodline:
+            ```
+            type:spell level:<=5 range:>=100 bloodline:*
+            ```
+
+            <br />
+
+            Rules pages that mention 'mental damage':
+            ```
+            "mental damage" type:rules
+            ```
+
+            <br />
+
+            Weapons in knife group with finesse and either disarm or trip:
+            ```
+            weapon_group:knife trait:finesse trait:(disarm OR trip)
+            ```
+
+            <br />
+
+            Creatures resistant to fire but not all damage:
+            ```
+            resistance.fire:* NOT resistance.all:*
+            ```
+            """
+                |> String.Extra.unindent
+                |> parseAndViewAsMarkdown model.viewModel
+            )
         ]
     ]
 
@@ -593,172 +605,201 @@ viewQueryType model searchModel =
 viewResultPageSize : Model -> SearchModel -> List (Html Msg)
 viewResultPageSize model searchModel =
     [ Html.div
-        [ HA.class "row"
-        , HA.class "gap-medium"
+        [ HA.class "column"
+        , HA.class "gap-small"
         ]
-        (List.map
-            (\size ->
-                viewRadioButton
-                    { checked = model.pageSize == size
-                    , enabled = True
-                    , name = "page-size"
-                    , onInput = PageSizeChanged size
-                    , text = String.fromInt size
-                    }
-            )
-            Data.pageSizes
-        )
-    , Html.text "Number of results to load. Smaller numbers gives faster results."
-    , Html.h3
-        []
-        [ Html.text ("Default amount for " ++ model.pageId) ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-medium"
-        ]
-        (List.append
+        [ Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
+            ]
             (List.map
                 (\size ->
                     viewRadioButton
-                        { checked =
-                            model.pageSizeDefaults
-                                |> Dict.get model.pageId
-                                |> Maybe.withDefault -1
-                                |> (==) size
+                        { checked = model.pageSize == size
                         , enabled = True
-                        , name = "page-size-type"
-                        , onInput = PageSizeDefaultsChanged model.pageId size
+                        , name = "page-size"
+                        , onInput = PageSizeChanged size
                         , text = String.fromInt size
                         }
                 )
                 Data.pageSizes
             )
-            [ viewRadioButton
-                { checked =
-                    model.pageSizeDefaults
-                        |> Dict.get model.pageId
-                        |> Maybe.withDefault 0
-                        |> (==) 0
-                , enabled = True
-                , name = "page-size-type"
-                , onInput = PageSizeDefaultsChanged model.pageId 0
-                , text = "Use global"
-                }
-            ]
-        )
-    , Html.h3
-        []
-        [ Html.text "Global default amount" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-medium"
+        , Html.text "Number of results to load. Smaller numbers gives faster results."
         ]
-        (List.map
-            (\size ->
-                viewRadioButton
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text ("Default amount for " ++ model.pageId) ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
+            ]
+            (List.append
+                (List.map
+                    (\size ->
+                        viewRadioButton
+                            { checked =
+                                model.pageSizeDefaults
+                                    |> Dict.get model.pageId
+                                    |> Maybe.withDefault -1
+                                    |> (==) size
+                            , enabled = True
+                            , name = "page-size-type"
+                            , onInput = PageSizeDefaultsChanged model.pageId size
+                            , text = String.fromInt size
+                            }
+                    )
+                    Data.pageSizes
+                )
+                [ viewRadioButton
                     { checked =
                         model.pageSizeDefaults
-                            |> Dict.get "global"
-                            |> Maybe.withDefault 50
-                            |> (==) size
+                            |> Dict.get model.pageId
+                            |> Maybe.withDefault 0
+                            |> (==) 0
                     , enabled = True
-                    , name = "page-size-global"
-                    , onInput = PageSizeDefaultsChanged "global" size
-                    , text = String.fromInt size
+                    , name = "page-size-type"
+                    , onInput = PageSizeDefaultsChanged model.pageId 0
+                    , text = "Use global"
                     }
+                ]
             )
-            Data.pageSizes
-        )
+        ]
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Global default amount" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
+            ]
+            (List.map
+                (\size ->
+                    viewRadioButton
+                        { checked =
+                            model.pageSizeDefaults
+                                |> Dict.get "global"
+                                |> Maybe.withDefault 50
+                                |> (==) size
+                        , enabled = True
+                        , name = "page-size-global"
+                        , onInput = PageSizeDefaultsChanged "global" size
+                        , text = String.fromInt size
+                        }
+                )
+                Data.pageSizes
+            )
+        ]
     ]
 
 
 viewGeneralSettings : Model -> SearchModel -> List (Html Msg)
 viewGeneralSettings model searchModel =
-    [ viewCheckbox
-        { checked = model.viewModel.openInNewTab
-        , onCheck = OpenInNewTabChanged
-        , text = "Links open in new tab"
-        }
-    , viewCheckbox
-        { checked = model.alwaysShowFilters
-        , onCheck = AlwaysShowFiltersChanged
-        , text = "Always show filters and options"
-        }
-    , viewCheckbox
-        { checked = model.showLegacyFilters
-        , onCheck = ShowLegacyFiltersChanged
-        , text = "Show legacy filters (alignment, casting components, spell schools)"
-        }
-    , Html.h4
-        []
-        [ Html.text "Max width" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-medium"
+    [ Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
         ]
-        (List.append
-            (List.map
-                (\width ->
-                    viewRadioButton
-                        { checked = model.pageWidth == width
-                        , enabled = True
-                        , name = "page-width"
-                        , onInput = PageWidthChanged width
-                        , text = String.fromInt width ++ "px"
-                        }
+        [ viewCheckbox
+            { checked = model.viewModel.openInNewTab
+            , onCheck = OpenInNewTabChanged
+            , text = "Links open in new tab"
+            }
+        , viewCheckbox
+            { checked = model.alwaysShowFilters
+            , onCheck = AlwaysShowFiltersChanged
+            , text = "Always show filters and options"
+            }
+        , viewCheckbox
+            { checked = model.showLegacyFilters
+            , onCheck = ShowLegacyFiltersChanged
+            , text = "Show legacy filters (alignment, casting components, spell schools)"
+            }
+        ]
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Max width" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
+            ]
+            (List.append
+                (List.map
+                    (\width ->
+                        viewRadioButton
+                            { checked = model.pageWidth == width
+                            , enabled = True
+                            , name = "page-width"
+                            , onInput = PageWidthChanged width
+                            , text = String.fromInt width ++ "px"
+                            }
+                    )
+                    Data.allPageWidths
                 )
-                Data.allPageWidths
+                [ viewRadioButton
+                    { checked = model.pageWidth == 0
+                    , enabled = True
+                    , name = "page-width"
+                    , onInput = PageWidthChanged 0
+                    , text = "Unlimited"
+                    }
+                ]
             )
+        , viewCheckbox
+            { checked = not model.limitTableWidth
+            , onCheck = not >> LimitTableWidthChanged
+            , text = "Tables always use full width"
+            }
+        ]
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Date format" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
+            ]
             [ viewRadioButton
-                { checked = model.pageWidth == 0
+                { checked = model.viewModel.dateFormat == "default"
                 , enabled = True
-                , name = "page-width"
-                , onInput = PageWidthChanged 0
-                , text = "Unlimited"
+                , name = "date-format"
+                , onInput = DateFormatChanged "default"
+                , text = "Browser default (" ++ model.viewModel.browserDateFormat ++ ")"
+                }
+            , viewRadioButton
+                { checked = model.viewModel.dateFormat == "yyyy-MM-dd"
+                , enabled = True
+                , name = "date-format"
+                , onInput = DateFormatChanged "yyyy-MM-dd"
+                , text = "yyyy-MM-dd"
+                }
+            , viewRadioButton
+                { checked = model.viewModel.dateFormat == "MM/dd/yyyy"
+                , enabled = True
+                , name = "date-format"
+                , onInput = DateFormatChanged "MM/dd/yyyy"
+                , text = "MM/dd/yyyy"
+                }
+            , viewRadioButton
+                { checked = model.viewModel.dateFormat == "dd/MM/yyyy"
+                , enabled = True
+                , name = "date-format"
+                , onInput = DateFormatChanged "dd/MM/yyyy"
+                , text = "dd/MM/yyyy"
                 }
             ]
-        )
-
-    , viewCheckbox
-        { checked = not model.limitTableWidth
-        , onCheck = not >> LimitTableWidthChanged
-        , text = "Tables always use full width"
-        }
-    , Html.h4
-        []
-        [ Html.text "Date format" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-medium"
-        ]
-        [ viewRadioButton
-            { checked = model.viewModel.dateFormat == "default"
-            , enabled = True
-            , name = "date-format"
-            , onInput = DateFormatChanged "default"
-            , text = "Browser default (" ++ model.viewModel.browserDateFormat ++ ")"
-            }
-        , viewRadioButton
-            { checked = model.viewModel.dateFormat == "yyyy-MM-dd"
-            , enabled = True
-            , name = "date-format"
-            , onInput = DateFormatChanged "yyyy-MM-dd"
-            , text = "yyyy-MM-dd"
-            }
-        , viewRadioButton
-            { checked = model.viewModel.dateFormat == "MM/dd/yyyy"
-            , enabled = True
-            , name = "date-format"
-            , onInput = DateFormatChanged "MM/dd/yyyy"
-            , text = "MM/dd/yyyy"
-            }
-        , viewRadioButton
-            { checked = model.viewModel.dateFormat == "dd/MM/yyyy"
-            , enabled = True
-            , name = "date-format"
-            , onInput = DateFormatChanged "dd/MM/yyyy"
-            , text = "dd/MM/yyyy"
-            }
         ]
     ]
 
@@ -796,48 +837,53 @@ viewDefaultParams model searchModel =
             ]
             [ Html.text "Reset to site defaults" ]
         ]
-    , Html.h3
-        []
-        [ Html.text ("Defaults for " ++ model.pageId) ]
-    , viewActiveFilters False pageDefaultSearchModel
-    , viewActiveSorts False pageDefaultSearchModel
     , Html.div
-        [ HA.class "row"
-        , HA.class "gap-medium"
+        [ HA.class "column"
+        , HA.class "gap-small"
         ]
-        [ Html.div
+        [ Html.h3
             []
-            [ Html.text "Display: "
-            , Html.text
-                (case pageDefaultSearchModel.resultDisplay of
-                    Short ->
-                        "Short"
-
-                    Full ->
-                        "Full"
-
-                    Table ->
-                        "Table"
-
-                    Grouped ->
-                        "Grouped"
-                )
+            [ Html.text ("Defaults for " ++ model.pageId) ]
+        , viewActiveFilters False pageDefaultSearchModel
+        , viewActiveSorts False pageDefaultSearchModel
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
             ]
-        , case pageDefaultSearchModel.resultDisplay of
-            Table ->
-                Html.div
-                    []
-                    [ Html.text "Columns: "
-                    , Html.text
-                        (pageDefaultSearchModel.tableColumns
-                            |> List.map String.Extra.humanize
-                            |> List.map toTitleCase
-                            |> String.join ", "
-                        )
-                    ]
+            [ Html.div
+                []
+                [ Html.text "Display: "
+                , Html.text
+                    (case pageDefaultSearchModel.resultDisplay of
+                        Short ->
+                            "Short"
 
-            _ ->
-                Html.text ""
+                        Full ->
+                            "Full"
+
+                        Table ->
+                            "Table"
+
+                        Grouped ->
+                            "Grouped"
+                    )
+                ]
+            , case pageDefaultSearchModel.resultDisplay of
+                Table ->
+                    Html.div
+                        []
+                        [ Html.text "Columns: "
+                        , Html.text
+                            (pageDefaultSearchModel.tableColumns
+                                |> List.map String.Extra.humanize
+                                |> List.map toTitleCase
+                                |> String.join ", "
+                            )
+                        ]
+
+                _ ->
+                    Html.text ""
+            ]
         ]
     ]
 
@@ -880,7 +926,7 @@ viewResultDisplay model searchModel =
         ]
     , Html.div
         [ HA.class "column"
-        , HA.class "gap-small"
+        , HA.class "gap-large"
         ]
         (case searchModel.resultDisplay of
             Short ->
@@ -900,7 +946,7 @@ viewResultDisplay model searchModel =
 
 viewResultDisplayShort : ViewModel -> List (Html Msg)
 viewResultDisplayShort viewModel =
-    [ Html.h4
+    [ Html.h3
         []
         [ Html.text "Short configuration" ]
     , viewCheckbox
@@ -934,6 +980,11 @@ viewResultDisplayShort viewModel =
         , text = "Show summary"
         }
     ]
+        |> Html.div
+            [ HA.class "column"
+            , HA.class "gap-small"
+            ]
+        |> List.singleton
 
 
 viewResultDisplayFull : Model -> List (Html Msg)
@@ -943,205 +994,200 @@ viewResultDisplayFull model =
 
 viewResultDisplayTable : Model -> SearchModel -> List (Html Msg)
 viewResultDisplayTable model searchModel =
-    [ Html.h4
-        []
-        [ Html.text "Table configuration" ]
-    , Html.div
-        [ HA.class "row"
+    [ Html.div
+        [ HA.class "column"
         , HA.class "gap-small"
         ]
-        [ Html.div
-            [ HA.class "column"
-            , HA.class "gap-tiny"
-            , HA.class "grow"
-            , HA.style "flex-basis" "300px"
+        [ Html.h3
+            []
+            [ Html.text "Table columns" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-small"
             ]
             [ Html.div
-                []
-                [ Html.text "Selected columns" ]
-            , Html.Keyed.node
-                "div"
-                [ HA.class "scrollbox"
-                , HA.class "column"
-                , HA.class "gap-small"
+                [ HA.class "column"
+                , HA.class "gap-tiny"
+                , HA.class "grow"
+                , HA.style "flex-basis" "300px"
                 ]
-                (List.indexedMap
-                    (\index column ->
-                        ( column
-                        , Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-small"
-                            , HA.class "align-center"
-                            ]
-                            [ Html.button
-                                [ HE.onClick (TableColumnRemoved column)
-                                , HA.attribute "aria-label" ("Remove " ++ column ++ " column")
+                [ Html.div
+                    []
+                    [ Html.text "Selected columns" ]
+                , Html.Keyed.node
+                    "div"
+                    [ HA.class "scrollbox"
+                    , HA.class "column"
+                    , HA.class "gap-small"
+                    ]
+                    (List.indexedMap
+                        (\index column ->
+                            ( column
+                            , Html.div
+                                [ HA.class "row"
+                                , HA.class "gap-small"
+                                , HA.class "align-center"
                                 ]
-                                [ FontAwesome.view FontAwesome.Solid.times
+                                [ Html.button
+                                    [ HE.onClick (TableColumnRemoved column)
+                                    , HA.attribute "aria-label" ("Remove " ++ column ++ " column")
+                                    ]
+                                    [ FontAwesome.view FontAwesome.Solid.times
+                                    ]
+                                , Html.button
+                                    [ HA.disabled (index == 0)
+                                    , HE.onClick (TableColumnMoved index (index - 1))
+                                    , HA.attribute "aria-label" ("Move " ++ column ++ " column up")
+                                    ]
+                                    [ FontAwesome.view FontAwesome.Solid.chevronUp
+                                    ]
+                                , Html.button
+                                    [ HA.disabled (index + 1 == List.length searchModel.tableColumns)
+                                    , HE.onClick (TableColumnMoved index (index + 1))
+                                    , HA.attribute "aria-label" ("Move " ++ column ++ " column down")
+                                    ]
+                                    [ FontAwesome.view FontAwesome.Solid.chevronDown
+                                    ]
+                                , Html.text (sortFieldToLabel column)
                                 ]
-                            , Html.button
-                                [ HA.disabled (index == 0)
-                                , HE.onClick (TableColumnMoved index (index - 1))
-                                , HA.attribute "aria-label" ("Move " ++ column ++ " column up")
-                                ]
-                                [ FontAwesome.view FontAwesome.Solid.chevronUp
-                                ]
-                            , Html.button
-                                [ HA.disabled (index + 1 == List.length searchModel.tableColumns)
-                                , HE.onClick (TableColumnMoved index (index + 1))
-                                , HA.attribute "aria-label" ("Move " ++ column ++ " column down")
-                                ]
-                                [ FontAwesome.view FontAwesome.Solid.chevronDown
-                                ]
-                            , Html.text (sortFieldToLabel column)
-                            ]
+                            )
+                        )
+                        searchModel.tableColumns
+                    )
+                ]
+            , Html.div
+                [ HA.class "column"
+                , HA.class "gap-tiny"
+                , HA.class "grow"
+                , HA.style "flex-basis" "300px"
+                ]
+                [ Html.div
+                    []
+                    [ Html.text "Available columns" ]
+                , viewFilterSearch searchModel "table-columns"
+                , Html.div
+                    [ HA.class "scrollbox"
+                    , HA.class "column"
+                    , HA.class "gap-small"
+                    , HA.style "max-height" "170px"
+                    ]
+                    (List.concatMap
+                        (viewResultDisplayTableColumn searchModel)
+
+                        (Data.tableColumns
+                            |> List.filter
+                                (String.replace "_" " "
+                                    >> caseInsensitiveContains
+                                        (dictGetString "table-columns" searchModel.searchFilters)
+                                )
+                            |> List.filter
+                                (\field ->
+                                    if model.showLegacyFilters then
+                                        True
+
+                                    else
+                                        List.member
+                                            field
+                                            [ "alignment"
+                                            , "component"
+                                            , "follower_alignment"
+                                            , "school"
+                                            ]
+                                            |> not
+                                )
                         )
                     )
-                    searchModel.tableColumns
-                )
-            ]
-        , Html.div
-            [ HA.class "column"
-            , HA.class "gap-tiny"
-            , HA.class "grow"
-            , HA.style "flex-basis" "300px"
-            ]
-            [ Html.div
-                []
-                [ Html.text "Available columns" ]
-            , Html.div
-                [ HA.class "row"
-                , HA.class "input-container"
                 ]
-                [ Html.input
-                    [ HA.placeholder "Filter columns"
-                    , HA.value searchModel.searchTableColumns
-                    , HA.type_ "text"
-                    , HE.onInput SearchTableColumnsChanged
-                    ]
-                    []
-                , if String.isEmpty searchModel.searchTableColumns then
-                    Html.text ""
-
-                  else
-                    Html.button
-                        [ HA.class "input-button"
-                        , HA.attribute "aria-label" "Clear search"
-                        , HE.onClick (SearchTableColumnsChanged "")
-                        ]
-                        [ FontAwesome.view FontAwesome.Solid.times ]
-                ]
-            , Html.div
-                [ HA.class "scrollbox"
-                , HA.class "column"
-                , HA.class "gap-small"
-                , HA.style "max-height" "170px"
-                ]
-                (List.concatMap
-                    (viewResultDisplayTableColumn searchModel)
-
-                    (Data.tableColumns
-                        |> List.filter
-                            (String.toLower
-                                >> String.replace "_" " "
-                                >> String.contains (String.toLower searchModel.searchTableColumns)
-                            )
-                        |> List.filter
-                            (\field ->
-                                if model.showLegacyFilters then
-                                    True
-
-                                else
-                                    List.member
-                                        field
-                                        [ "alignment"
-                                        , "component"
-                                        , "follower_alignment"
-                                        , "school"
-                                        ]
-                                        |> not
-                            )
-                    )
-                )
             ]
         ]
-    , Html.h4
-        []
-        [ Html.text "Predefined column sets" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-medium"
-        ]
-        (List.map
-            (\{ columns, label } ->
-                Html.button
-                    [ HE.onClick (TableColumnSetChosen columns)
-                    ]
-                    [ Html.text label ]
-            )
-            Data.predefinedColumnConfigurations
-        )
 
-    , Html.h4
-        []
-        [ Html.text "User-defined column sets" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-small"
-        ]
-        [ Html.div
-            [ HA.class "input-container" ]
-            [ Html.input
-                [ HA.placeholder "Name"
-                , HA.type_ "text"
-                , HA.value model.savedColumnConfigurationName
-                , HA.maxlength 100
-                , HE.onInput SavedColumnConfigurationNameChanged
-                ]
-                []
-            ]
-        , Html.button
-            [ HA.disabled
-                (String.isEmpty model.savedColumnConfigurationName
-                    || Dict.get model.savedColumnConfigurationName model.savedColumnConfigurations
-                        == Just searchModel.tableColumns
-                )
-            , HE.onClick SaveColumnConfigurationPressed ]
-            [ Html.text "Save" ]
-        , Html.button
-            [ HA.disabled
-                (not (Dict.member
-                    model.savedColumnConfigurationName
-                    model.savedColumnConfigurations
-                ))
-            , HE.onClick (DeleteColumnConfigurationPressed)
-            ]
-            [ Html.text "Delete" ]
-        ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-medium"
-        ]
-        (List.map
-            (\name ->
-                Html.button
-                    [ HE.onClick (SavedColumnConfigurationSelected name) ]
-                    [ Html.text name ]
-            )
-            (Dict.keys model.savedColumnConfigurations)
-        )
-
-    , Html.h4
-        []
-        [ Html.text "Export table data" ]
     , Html.div
         [ HA.class "column"
         , HA.class "gap-small"
         ]
-        [ Html.text "Note that only loaded rows are exported. If you want to include all rows make sure to load everything first."
+        [ Html.h3
+            []
+            [ Html.text "Predefined column sets" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-small"
+            ]
+            (List.map
+                (\{ columns, label } ->
+                    Html.button
+                        [ HE.onClick (TableColumnSetChosen columns)
+                        ]
+                        [ Html.text label ]
+                )
+                Data.predefinedColumnConfigurations
+            )
+        ]
+
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "User-defined column sets" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-small"
+            ]
+            [ Html.div
+                [ HA.class "input-container" ]
+                [ Html.input
+                    [ HA.placeholder "Name"
+                    , HA.type_ "text"
+                    , HA.value model.savedColumnConfigurationName
+                    , HA.maxlength 100
+                    , HE.onInput SavedColumnConfigurationNameChanged
+                    ]
+                    []
+                ]
+            , Html.button
+                [ HA.disabled
+                    (String.isEmpty model.savedColumnConfigurationName
+                        || Dict.get model.savedColumnConfigurationName model.savedColumnConfigurations
+                            == Just searchModel.tableColumns
+                    )
+                , HE.onClick SaveColumnConfigurationPressed ]
+                [ Html.text "Save" ]
+            , Html.button
+                [ HA.disabled
+                    (not (Dict.member
+                        model.savedColumnConfigurationName
+                        model.savedColumnConfigurations
+                    ))
+                , HE.onClick (DeleteColumnConfigurationPressed)
+                ]
+                [ Html.text "Delete" ]
+            ]
         , Html.div
             [ HA.class "row"
             , HA.class "gap-medium"
+            ]
+            (List.map
+                (\name ->
+                    Html.button
+                        [ HE.onClick (SavedColumnConfigurationSelected name) ]
+                        [ Html.text name ]
+                )
+                (Dict.keys model.savedColumnConfigurations)
+            )
+        ]
+
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Export table data" ]
+        , Html.text "Note that only loaded rows are exported. If you want to include all rows make sure to load everything first."
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-small"
             ]
             [ Html.button
                 [ HA.style "align-self" "flex-start"
@@ -1185,8 +1231,10 @@ viewResultDisplayTableColumn searchModel column =
             viewResultDisplayTableColumnWithSelect
                 searchModel
                 { column = column
-                , onInput = ColumnResistanceChanged
-                , selected = searchModel.selectedColumnResistance
+                , onInput = SelectValueChanged "resistance"
+                , selected =
+                    Dict.get "resistance" searchModel.selectValues
+                        |> Maybe.withDefault "acid"
                 , types = Data.allDamageTypes
                 }
 
@@ -1194,8 +1242,10 @@ viewResultDisplayTableColumn searchModel column =
             viewResultDisplayTableColumnWithSelect
                 searchModel
                 { column = column
-                , onInput = ColumnSpeedChanged
-                , selected = searchModel.selectedColumnSpeed
+                , onInput = SelectValueChanged "speed"
+                , selected =
+                    Dict.get "speed" searchModel.selectValues
+                        |> Maybe.withDefault "land"
                 , types = Data.speedTypes
                 }
 
@@ -1203,8 +1253,10 @@ viewResultDisplayTableColumn searchModel column =
             viewResultDisplayTableColumnWithSelect
                 searchModel
                 { column = column
-                , onInput = ColumnWeaknessChanged
-                , selected = searchModel.selectedColumnWeakness
+                , onInput = SelectValueChanged "weakness"
+                , selected =
+                    Dict.get "weakness" searchModel.selectValues
+                        |> Maybe.withDefault "acid"
                 , types = Data.allDamageTypes
                 }
 
@@ -1262,193 +1314,258 @@ viewResultDisplayTableColumnWithSelect searchModel { column, onInput, selected, 
 
 viewResultDisplayGrouped : Model -> SearchModel -> List (Html Msg)
 viewResultDisplayGrouped model searchModel =
-    [ Html.h4
-        []
-        [ Html.text "Group by" ]
+    [ Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Group by" ]
+        , viewFilterSearch searchModel "group-by"
+        , Html.div
+            [ HA.class "column"
+            , HA.class "gap-tiny"
+            ]
+            [ Html.div
+                [ HA.class "scrollbox"
+                , HA.class "column"
+                , HA.class "gap-small"
+                ]
+                (List.map
+                    (\field ->
+                        Html.div
+                            [ HA.class "row"
+                            , HA.class "gap-small"
+                            , HA.class "align-center"
+                            ]
+                            [ Html.button
+                                [ HE.onClick (GroupField1Changed field)
+                                , HA.disabled (searchModel.groupField1 == field)
+                                , HAE.attributeIf
+                                    (searchModel.groupField1 == field)
+                                    (HA.class "active")
+                                ]
+                                [ Html.text "1st" ]
+                            , Html.button
+                                [ HE.onClick
+                                    (if searchModel.groupField2 == Just field then
+                                        GroupField2Changed Nothing
+
+                                     else
+                                        GroupField2Changed (Just field)
+                                    )
+                                , HAE.attributeIf
+                                    (searchModel.groupField2 == Just field)
+                                    (HA.class "active")
+                                ]
+                                [ Html.text "2nd" ]
+                            , Html.button
+                                [ HE.onClick
+                                    (if searchModel.groupField3 == Just field then
+                                        GroupField3Changed Nothing
+
+                                     else
+                                        GroupField3Changed (Just field)
+                                    )
+                                , HA.disabled (searchModel.groupField2 == Nothing)
+                                , HAE.attributeIf
+                                    (searchModel.groupField3 == Just field)
+                                    (HA.class "active")
+                                ]
+                                [ Html.text "3rd" ]
+                            , Html.text (toTitleCase (String.Extra.humanize field))
+                            ]
+                    )
+                    (Data.groupFields
+                        |> List.filter
+                            (String.replace "_" " "
+                                >> caseInsensitiveContains
+                                    (dictGetString "group-by" searchModel.searchFilters)
+                            )
+                        |> List.filter
+                            (\field ->
+                                if model.showLegacyFilters then
+                                    True
+
+                                else
+                                    List.member
+                                        field
+                                        [ "alignment"
+                                        , "school"
+                                        ]
+                                        |> not
+                            )
+                    )
+                )
+            ]
+        , Html.div
+            []
+            [ Html.span
+                [ HA.class "bold" ]
+                [ Html.text "First" ]
+            , Html.text ": "
+            , Html.text (toTitleCase (String.Extra.humanize searchModel.groupField1))
+            ]
+        , case searchModel.groupField2 of
+            Just groupField2 ->
+                Html.div
+                    []
+                    [ Html.span
+                        [ HA.class "bold" ]
+                        [ Html.text "Second" ]
+                    , Html.text ": "
+                    , Html.text (toTitleCase (String.Extra.humanize groupField2))
+                    ]
+
+            Nothing ->
+                Html.text ""
+        , case searchModel.groupField3 of
+            Just groupField3 ->
+                Html.div
+                    []
+                    [ Html.span
+                        [ HA.class "bold" ]
+                        [ Html.text "Third" ]
+                    , Html.text ": "
+                    , Html.text (toTitleCase (String.Extra.humanize groupField3))
+                    ]
+
+            Nothing ->
+                Html.text ""
+        ]
+
     , Html.div
         [ HA.class "column"
-        , HA.class "gap-tiny"
+        , HA.class "gap-small"
         ]
-        [ Html.div
-            [ HA.class "scrollbox"
-            , HA.class "column"
-            , HA.class "gap-small"
+        [ Html.h3
+            []
+            [ Html.text "Link layout" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
             ]
-            (List.map
-                (\field ->
-                    Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-small"
-                        , HA.class "align-center"
-                        ]
-                        [ Html.button
-                            [ HE.onClick (GroupField1Changed field)
-                            , HA.disabled (searchModel.groupField1 == field)
-                            , HAE.attributeIf
-                                (searchModel.groupField1 == field)
-                                (HA.class "active")
-                            ]
-                            [ Html.text "1st" ]
-                        , Html.button
-                            [ HE.onClick
-                                (if searchModel.groupField2 == Just field then
-                                    GroupField2Changed Nothing
-
-                                 else
-                                    GroupField2Changed (Just field)
-                                )
-                            , HAE.attributeIf
-                                (searchModel.groupField2 == Just field)
-                                (HA.class "active")
-                            ]
-                            [ Html.text "2nd" ]
-                        , Html.button
-                            [ HE.onClick
-                                (if searchModel.groupField3 == Just field then
-                                    GroupField3Changed Nothing
-
-                                 else
-                                    GroupField3Changed (Just field)
-                                )
-                            , HA.disabled (searchModel.groupField2 == Nothing)
-                            , HAE.attributeIf
-                                (searchModel.groupField3 == Just field)
-                                (HA.class "active")
-                            ]
-                            [ Html.text "3rd" ]
-                        , Html.text (toTitleCase (String.Extra.humanize field))
-                        ]
-                )
-                (Data.groupFields
-                    |> List.filter
-                        (\field ->
-                            if model.showLegacyFilters then
-                                True
-
-                            else
-                                List.member
-                                    field
-                                    [ "alignment"
-                                    , "school"
-                                    ]
-                                    |> not
-                        )
-                )
-            )
+            [ viewRadioButton
+                { checked = searchModel.groupedLinkLayout == Horizontal
+                , enabled = True
+                , name = "grouped-results"
+                , onInput = GroupedLinkLayoutChanged Horizontal
+                , text = "Horizontal"
+                }
+            , viewRadioButton
+                { checked = searchModel.groupedLinkLayout == Vertical
+                , enabled = True
+                , name = "grouped-results"
+                , onInput = GroupedLinkLayoutChanged Vertical
+                , text = "Vertical"
+                }
+            , viewRadioButton
+                { checked = searchModel.groupedLinkLayout == VerticalWithSummary
+                , enabled = True
+                , name = "grouped-results"
+                , onInput = GroupedLinkLayoutChanged VerticalWithSummary
+                , text = "Vertical with summary"
+                }
+            ]
         ]
 
-    , Html.h4
-        []
-        [ Html.text "Link layout" ]
     , Html.div
-        [ HA.class "row"
-        , HA.class "gap-medium"
+        [ HA.class "column"
+        , HA.class "gap-small"
         ]
-        [ viewRadioButton
-            { checked = searchModel.groupedLinkLayout == Horizontal
-            , enabled = True
-            , name = "grouped-results"
-            , onInput = GroupedLinkLayoutChanged Horizontal
-            , text = "Horizontal"
-            }
-        , viewRadioButton
-            { checked = searchModel.groupedLinkLayout == Vertical
-            , enabled = True
-            , name = "grouped-results"
-            , onInput = GroupedLinkLayoutChanged Vertical
-            , text = "Vertical"
-            }
-        , viewRadioButton
-            { checked = searchModel.groupedLinkLayout == VerticalWithSummary
-            , enabled = True
-            , name = "grouped-results"
-            , onInput = GroupedLinkLayoutChanged VerticalWithSummary
-            , text = "Vertical with summary"
-            }
-        ]
-
-    , Html.h4
-        []
-        [ Html.text "Groups with 0 loaded results" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-medium"
-        ]
-        [ viewRadioButton
-            { checked = model.groupedDisplay == Show
-            , enabled = True
-            , name = "grouped-display"
-            , onInput = GroupedDisplayChanged Show
-            , text = "Show"
-            }
-        , viewRadioButton
-            { checked = model.groupedDisplay == Dim
-            , enabled = True
-            , name = "grouped-display"
-            , onInput = GroupedDisplayChanged Dim
-            , text = "Dim"
-            }
-        , viewRadioButton
-            { checked = model.groupedDisplay == Hide
-            , enabled = True
-            , name = "grouped-display"
-            , onInput = GroupedDisplayChanged Hide
-            , text = "Hide"
-            }
+        [ Html.h3
+            []
+            [ Html.text "Groups with 0 loaded results" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
+            ]
+            [ viewRadioButton
+                { checked = model.groupedDisplay == Show
+                , enabled = True
+                , name = "grouped-display"
+                , onInput = GroupedDisplayChanged Show
+                , text = "Show"
+                }
+            , viewRadioButton
+                { checked = model.groupedDisplay == Dim
+                , enabled = True
+                , name = "grouped-display"
+                , onInput = GroupedDisplayChanged Dim
+                , text = "Dim"
+                }
+            , viewRadioButton
+                { checked = model.groupedDisplay == Hide
+                , enabled = True
+                , name = "grouped-display"
+                , onInput = GroupedDisplayChanged Hide
+                , text = "Hide"
+                }
+            ]
         ]
 
-    , Html.h4
-        []
-        [ Html.text "Group sort order" ]
     , Html.div
-        [ HA.class "row"
-        , HA.class "gap-medium"
+        [ HA.class "column"
+        , HA.class "gap-small"
         ]
-        [ viewRadioButton
-            { checked = model.groupedSort == Alphanum
-            , enabled = True
-            , name = "grouped-sort"
-            , onInput = GroupedSortChanged Alphanum
-            , text = "Alphanumeric"
-            }
-        , viewRadioButton
-            { checked = model.groupedSort == CountLoaded
-            , enabled = True
-            , name = "grouped-sort"
-            , onInput = GroupedSortChanged CountLoaded
-            , text = "Count (Loaded)"
-            }
-        , viewRadioButton
-            { checked = model.groupedSort == CountTotal
-            , enabled = True
-            , name = "grouped-sort"
-            , onInput = GroupedSortChanged CountTotal
-            , text = "Count (Total)"
-            }
+        [ Html.h3
+            []
+            [ Html.text "Group sort order" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
+            ]
+            [ viewRadioButton
+                { checked = model.groupedSort == Alphanum
+                , enabled = True
+                , name = "grouped-sort"
+                , onInput = GroupedSortChanged Alphanum
+                , text = "Alphanumeric"
+                }
+            , viewRadioButton
+                { checked = model.groupedSort == CountLoaded
+                , enabled = True
+                , name = "grouped-sort"
+                , onInput = GroupedSortChanged CountLoaded
+                , text = "Count (Loaded)"
+                }
+            , viewRadioButton
+                { checked = model.groupedSort == CountTotal
+                , enabled = True
+                , name = "grouped-sort"
+                , onInput = GroupedSortChanged CountTotal
+                , text = "Count (Total)"
+                }
+            ]
         ]
 
-    , Html.h4
-        []
-        [ Html.text "Badge configuration" ]
     , Html.div
-        [ HA.class "row"
-        , HA.class "gap-medium"
+        [ HA.class "column"
+        , HA.class "gap-small"
         ]
-        [ viewCheckbox
-            { checked = model.viewModel.groupedShowPfs
-            , onCheck = GroupedShowPfsIconChanged
-            , text = "PFS icons"
-            }
-        , viewCheckbox
-            { checked = model.viewModel.groupedShowHeightenable
-            , onCheck = GroupedShowHeightenableChanged
-            , text = "Heightenable"
-            }
-        , viewCheckbox
-            { checked = model.viewModel.groupedShowRarity
-            , onCheck = GroupedShowRarityChanged
-            , text = "Rarity"
-            }
+        [ Html.h3
+            []
+            [ Html.text "Badge configuration" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
+            ]
+            [ viewCheckbox
+                { checked = model.viewModel.groupedShowPfs
+                , onCheck = GroupedShowPfsIconChanged
+                , text = "PFS icons"
+                }
+            , viewCheckbox
+                { checked = model.viewModel.groupedShowHeightenable
+                , onCheck = GroupedShowHeightenableChanged
+                , text = "Heightenable"
+                }
+            , viewCheckbox
+                { checked = model.viewModel.groupedShowRarity
+                , onCheck = GroupedShowRarityChanged
+                , text = "Rarity"
+                }
+            ]
         ]
     ]
 
@@ -1484,6 +1601,7 @@ viewSortResults model searchModel =
                             [ Html.button
                                 [ HE.onClick (SortRemoved field)
                                 , HA.attribute "aria-label" ("Remove " ++ field ++ " sort")
+                                , HA.title "Remove"
                                 ]
                                 [ FontAwesome.view FontAwesome.Solid.times
                                 ]
@@ -1494,6 +1612,7 @@ viewSortResults model searchModel =
                                 Html.button
                                     [ HE.onClick (SortAdded field (if dir == Asc then Desc else Asc))
                                     , HA.attribute "aria-label" ("Toggle " ++ field ++ " sort direction")
+                                    , HA.title "Toggle sort direction"
                                     ]
                                     [ viewSortIcon field (Just dir)
                                     ]
@@ -1505,6 +1624,7 @@ viewSortResults model searchModel =
                                     [ HA.disabled (index == 0)
                                     , HE.onClick (SortOrderChanged index (index - 1))
                                     , HA.attribute "aria-label" ("Move " ++ field ++ " sort up")
+                                    , HA.title "Move up"
                                     ]
                                     [ FontAwesome.view FontAwesome.Solid.chevronUp
                                     ]
@@ -1516,6 +1636,7 @@ viewSortResults model searchModel =
                                     [ HA.disabled (index + 1 == List.length searchModel.sort)
                                     , HE.onClick (SortOrderChanged index (index + 1))
                                     , HA.attribute "aria-label" ("Move " ++ field ++ " sort down")
+                                    , HA.title "Move down"
                                     ]
                                     [ FontAwesome.view FontAwesome.Solid.chevronDown
                                     ]
@@ -1535,6 +1656,7 @@ viewSortResults model searchModel =
             [ Html.div
                 []
                 [ Html.text "Available fields" ]
+            , viewFilterSearch searchModel "sort-fields"
             , Html.div
                 [ HA.class "scrollbox"
                 , HA.class "column"
@@ -1546,6 +1668,11 @@ viewSortResults model searchModel =
                         |> List.map Tuple3.first
                         |> List.filter (not << String.contains ".")
                         |> List.append [ "resistance", "speed", "weakness" ]
+                        |> List.filter
+                            (String.replace "_" " "
+                                >> caseInsensitiveContains
+                                    (dictGetString "sort-fields" searchModel.searchFilters)
+                            )
                         |> List.sort
                     )
                 )
@@ -1582,27 +1709,32 @@ viewSortResults model searchModel =
             Html.text ""
         ]
     , Html.div
-        []
-        [ Html.text "Predefined sort configurations" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-medium"
+        [ HA.class "column"
+        , HA.class "gap-small"
         ]
-        (List.map
-            (\{ fields, label } ->
-                Html.button
-                    [ HE.onClick (SortSetChosen fields)
-                    ]
-                    [ Html.text label ]
-            )
-            [ { fields = [ ( "level", Asc ), ( "name", Asc ) ]
-              , label = "Level + Name"
-              }
-            , { fields = [ ( "type", Asc ), ( "name", Asc ) ]
-              , label = "Type + Name"
-              }
+        [ Html.h3
+            []
+            [ Html.text "Predefined sort configurations" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
             ]
-        )
+            (List.map
+                (\{ fields, label } ->
+                    Html.button
+                        [ HE.onClick (SortSetChosen fields)
+                        ]
+                        [ Html.text label ]
+                )
+                [ { fields = [ ( "level", Asc ), ( "name", Asc ) ]
+                  , label = "Level + Name"
+                  }
+                , { fields = [ ( "type", Asc ), ( "name", Asc ) ]
+                  , label = "Type + Name"
+                  }
+                ]
+            )
+        ]
     ]
 
 
@@ -1613,8 +1745,10 @@ viewSortResultsField searchModel field =
             viewSortResultsFieldWithSelect
                 searchModel
                 { field = field
-                , onInput = SortResistanceChanged
-                , selected = searchModel.selectedSortResistance
+                , onInput = SelectValueChanged "resistance"
+                , selected =
+                    Dict.get "resistance" searchModel.selectValues
+                        |> Maybe.withDefault "acid"
                 , types = Data.allDamageTypes
                 }
 
@@ -1622,8 +1756,10 @@ viewSortResultsField searchModel field =
             viewSortResultsFieldWithSelect
                 searchModel
                 { field = field
-                , onInput = SortSpeedChanged
-                , selected = searchModel.selectedSortSpeed
+                , onInput = SelectValueChanged "speed"
+                , selected =
+                    Dict.get "speed" searchModel.selectValues
+                        |> Maybe.withDefault "land"
                 , types = Data.speedTypes
                 }
 
@@ -1631,8 +1767,10 @@ viewSortResultsField searchModel field =
             viewSortResultsFieldWithSelect
                 searchModel
                 { field = field
-                , onInput = SortWeaknessChanged
-                , selected = searchModel.selectedSortWeakness
+                , onInput = SelectValueChanged "weakness"
+                , selected =
+                    Dict.get "weakness" searchModel.selectValues
+                        |> Maybe.withDefault "acid"
                 , types = Data.allDamageTypes
                 }
 
@@ -1728,11 +1866,82 @@ viewSortButtons searchModel field =
 viewWhatsNew : Model -> SearchModel -> List (Html Msg)
 viewWhatsNew model _ =
     [ Html.div
-        [ HA.class "no-ul-margin"
-        , HA.class "column"
+        [ HA.class "column"
         , HA.class "gap-small"
+        , HA.class "header-margins"
+        , HA.class "no-ul-margin"
         ]
         ("""
+        ### Filter button changes &amp; new filters
+
+        Filter buttons have been reorganized in an effort to reduce the number of buttons.
+
+        <details summary="Show details">
+        - **Armor**: Now has filters related to armors like AC, Dex Cap and Check Penalty.
+        - **Attributes**: Now also has numerical attribute filters.
+        - **Creatures**: New button that has everything creature-related, including new scale
+          filters that match statistics relative to creature building rules.
+        - **Deities**: New button that has everything deity-related.
+        - **Items**: Item categories has been moved here, together with Level, Price, and Bulk
+          filters.
+        - **Legacy / Remaster**: New filter that allows you to temporarily get results from legacy
+          or remaster without using the side-wide setting in Shelyn's Corner.
+        - **Level**: New button. It's universal enough to warrant its own button.
+        - **Skills**: Now also has filters for Lore Skills.
+        - **Sources / Spoilers**: Release Date now lives here.
+        - **Spells / Rituals**: New button that has everything magic-related, including new
+          filters for areas.
+        - **Weapons**: Filters related to weapons have been moved here, like Reload, Hands, and
+          Damage Die. A new Damage Types filter has also been added.
+        </details>
+
+        Filters buttons are now hidden behind a button by default. There's a setting under _General
+        settings_ to disable this and always show them.
+
+        Emojis has been added to the buttons to make them easier to distinguish.
+
+
+        ### Search optimization
+
+        The search has become faster and more efficient. Read more in [this reddit post].
+
+        [this reddit post]:
+        https://www.reddit.com/r/Pathfinder2e/comments/1c33xhv/aons_search_is_going_to_become_even_faster/
+
+
+        ### Field changes
+
+        <details summary="Show details">
+        - `ac_scale` - new
+        - `area` - changed: Now holds numerical area values.
+        - `area_raw` - new: Holds what was previously in `area`.
+        - `area_type` - new
+        - `attack_bonus` - new
+        - `attack_bonus_scale` - new
+        - `charisma_scale` - new
+        - `constitution_scale` - new
+        - `damage_type` - new
+        - `dexterity_scale` - new
+        - `fortitude_save_scale` - new
+        - `hp_scale` - new
+        - `intelligence_scale` - new
+        - `perception_scale` - new
+        - `reflex_save_scale` - new
+        - `sanctification` - new
+        - `sanctification_raw` - new
+        - `spell_attack_bonus` - new
+        - `spell_attack_bonus_scale` - new
+        - `spell_dc` - new
+        - `spell_dc_scale` - new
+        - `strength_scale` - new
+        - `strike_damage_average`- new
+        - `strike_damage_scale` - new
+        - `warden_spell_tier` - new
+        - `will_save_scale` - new
+        - `wisdom_scale` - new
+        </details>
+
+
         ### Previous updates
 
         <details summary="2024-03-13">
@@ -1749,7 +1958,7 @@ viewWhatsNew model _ =
         - Items with no bulk are now treated as 0 bulk.
         - Added domain filter buttons.
         - Added trait group filter buttons.
-        - Added filter under _Sources &amp; Spoilers_ that hides creatures from Adventure Paths.
+        - Added filter under _Sources / Spoilers_ that hides creatures from Adventure Paths.
         - In "Grouped" display "N/A" group headers are no longer displayed if they're the sole group on that level. This reduces clutter when grouping on item category + item subcategory, for example.
         - Added a "skip to results"-link when tabbing from the query input field.
         - New/changed fields:
@@ -1782,495 +1991,90 @@ viewWhatsNew model _ =
     ]
 
 
-viewFilterNumbers : Model -> SearchModel -> List (Html Msg)
-viewFilterNumbers model searchModel =
-    [ Html.button
-        [ HA.style "align-self" "flex-start"
-        , HA.style "justify-self" "flex-start"
-        , HE.onClick RemoveAllRangeValueFiltersPressed
-        ]
-        [ Html.text "Reset all values" ]
+viewFilterActions : Model -> SearchModel -> List (Html Msg)
+viewFilterActions model searchModel =
+    [ viewFilterList
+        searchModel
+        { label = ""
+        , filterKey = "actions"
+        , showOperator = False
+        , showSearch = False
+        , values =
+            getAggregationMaybe .actions searchModel
+                |> Maybe.map (List.sortBy actionsToInt)
+        }
+    ]
+
+
+viewFilterAlignments : Model -> SearchModel -> List (Html Msg)
+viewFilterAlignments model searchModel =
+    [ viewFilterList
+        searchModel
+        { label = ""
+        , filterKey = "alignments"
+        , showOperator = False
+        , showSearch = False
+        , values =
+            Data.allAlignments
+                |> List.map Tuple.first
+                |> List.filter (\size -> List.member size (getAggregation .alignments searchModel))
+                |> Just
+        }
+    ]
+
+
+viewFilterArmor : Model -> SearchModel -> List (Html Msg)
+viewFilterArmor model searchModel =
+    [ viewFilterList
+        searchModel
+        { label = "Armor categories"
+        , filterKey = "armor-categories"
+        , showOperator = False
+        , showSearch = False
+        , values = Just Data.armorCategories
+        }
+    , viewFilterList
+        searchModel
+        { label = "Armor groups"
+        , filterKey = "armor-groups"
+        , showOperator = False
+        , showSearch = False
+        , values = Just Data.armorGroups
+        }
     , Html.div
-        [ HA.class "grid"
-        , HA.class "gap-large"
-        , HA.style "grid-template-columns" "repeat(auto-fill,minmax(250px, 1fr))"
-        , HA.style "row-gap" "var(--gap-medium)"
-        ]
-        (List.concat
-            [ List.map
-                (\{ field, hint, step, suffix } ->
-                    Html.div
-                        [ HA.class "column"
-                        , HA.class "gap-tiny"
-                        ]
-                        [ Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-small"
-                            , HA.class "align-center"
-                            ]
-                            [ Html.h4
-                                []
-                                [ Html.text (sortFieldToLabel field) ]
-                            , Html.text (Maybe.withDefault "" hint)
-                            ]
-                        , Html.div
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            , HA.class "align-baseline"
-                            ]
-                            [ Html.div
-                                [ HA.class "input-container"
-                                , HA.class "row"
-                                , HA.class "align-baseline"
-                                ]
-                                [ Html.input
-                                    [ HA.type_ "number"
-                                    , HA.step step
-                                    , HA.value (Maybe.withDefault "" (Dict.get field searchModel.filteredFromValues))
-                                    , HE.onInput (FilteredFromValueChanged field)
-                                    ]
-                                    []
-                                , case suffix of
-                                    Just s ->
-                                        Html.div
-                                            [ HA.style "padding-right" "2px" ]
-                                            [ Html.text s ]
-
-                                    Nothing ->
-                                        Html.text ""
-                                ]
-                            , Html.text "to"
-                            , Html.div
-                                [ HA.class "input-container"
-                                , HA.class "row"
-                                , HA.class "align-baseline"
-                                ]
-                                [ Html.input
-                                    [ HA.type_ "number"
-                                    , HA.step step
-                                    , HA.value (Maybe.withDefault "" (Dict.get field searchModel.filteredToValues))
-                                    , HE.onInput (FilteredToValueChanged field)
-                                    ]
-                                    []
-                                , case suffix of
-                                    Just s ->
-                                        Html.div
-                                            [ HA.style "padding-right" "2px" ]
-                                            [ Html.text s ]
-
-                                    Nothing ->
-                                        Html.text ""
-                                ]
-                            ]
-                        ]
-                )
-                [ { field = "level"
-                  , hint = Just "/ Rank"
-                  , step = "1"
-                  , suffix = Nothing
-                  }
-                , { field = "price"
-                  , hint = Nothing
-                  , step = "1"
-                  , suffix = Just "cp"
-                  }
-                , { field = "bulk"
-                  , hint = Just "(L bulk is 0,1)"
-                  , step = "0.1"
-                  , suffix = Nothing
-                  }
-                , { field = "range"
-                  , hint = Nothing
-                  , step = "1"
-                  , suffix = Just "ft."
-                  }
-                , { field = "duration"
-                  , hint = Just "(1 round is 6s)"
-                  , step = "1"
-                  , suffix = Just "s"
-                  }
-                , { field = "hp"
-                  , hint = Nothing
-                  , step = "1"
-                  , suffix = Nothing
-                  }
-                , { field = "ac"
-                  , hint = Nothing
-                  , step = "1"
-                  , suffix = Nothing
-                  }
-                , { field = "fortitude_save"
-                  , hint = Nothing
-                  , step = "1"
-                  , suffix = Nothing
-                  }
-                , { field = "reflex_save"
-                  , hint = Nothing
-                  , step = "1"
-                  , suffix = Nothing
-                  }
-                , { field = "will_save"
-                  , hint = Nothing
-                  , step = "1"
-                  , suffix = Nothing
-                  }
-                , { field = "perception"
-                  , hint = Nothing
-                  , step = "1"
-                  , suffix = Nothing
-                  }
-                , { field = "damage_die"
-                  , hint = Nothing
-                  , step = "1"
-                  , suffix = Nothing
-                  }
-                ]
-            , [ Html.div
-                    [ HA.class "column"
-                    , HA.class "gap-tiny"
-                    ]
-                    [ Html.h4
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HA.class "align-center"
-                        ]
-                        [ Html.select
-                            [ HA.class "input-container"
-                            , HA.value searchModel.selectedFilterAttribute
-                            , HE.onInput FilterAttributeChanged
-                            ]
-                            (List.map
-                                (\attribute ->
-                                    Html.option
-                                        [ HA.value attribute ]
-                                        [ Html.text (sortFieldToLabel attribute)
-                                        ]
-                                )
-                                [ "strength"
-                                , "dexterity"
-                                , "constitution"
-                                , "intelligence"
-                                , "wisdom"
-                                , "charisma"
-                                ]
-                            )
-                        ]
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HA.class "align-center"
-                        ]
-                        [ Html.div
-                            [ HA.class "input-container"
-                            , HA.class "row"
-                            , HA.class "align-baseline"
-                            ]
-                            [ Html.input
-                                [ HA.type_ "number"
-                                , HA.step "1"
-                                , HA.value (Maybe.withDefault "" (Dict.get searchModel.selectedFilterAttribute searchModel.filteredFromValues))
-                                , HE.onInput (FilteredFromValueChanged searchModel.selectedFilterAttribute)
-                                ]
-                                []
-                            ]
-                        , Html.text "to"
-                        , Html.div
-                            [ HA.class "input-container"
-                            , HA.class "row"
-                            , HA.class "align-baseline"
-                            ]
-                            [ Html.input
-                                [ HA.type_ "number"
-                                , HA.step "1"
-                                , HA.value (Maybe.withDefault "" (Dict.get searchModel.selectedFilterAttribute searchModel.filteredToValues))
-                                , HE.onInput (FilteredToValueChanged searchModel.selectedFilterAttribute)
-                                ]
-                                []
-                            ]
-                        ]
-                    ]
-                , Html.div
-                    [ HA.class "column"
-                    , HA.class "gap-tiny"
-                    ]
-                    [ Html.h4
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HA.class "align-center"
-                        ]
-                        [ Html.select
-                            [ HA.class "input-container"
-                            , HA.value searchModel.selectedFilterSpeed
-                            , HE.onInput FilterSpeedChanged
-                            ]
-                            (List.map
-                                (\speed ->
-                                    Html.option
-                                        [ HA.value speed ]
-                                        [ Html.text (toTitleCase speed)
-                                        ]
-                                )
-                                Data.speedTypes
-                            )
-                        , Html.text "speed"
-                        ]
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HA.class "align-center"
-                        ]
-                        [ Html.div
-                            [ HA.class "input-container"
-                            , HA.class "row"
-                            , HA.class "align-baseline"
-                            ]
-                            [ Html.input
-                                [ HA.type_ "number"
-                                , HA.step "1"
-                                , HA.value
-                                    (Maybe.withDefault
-                                        ""
-                                        (Dict.get
-                                            ("speed." ++ searchModel.selectedFilterSpeed)
-                                            searchModel.filteredFromValues
-                                        )
-                                    )
-                                , HE.onInput
-                                    (FilteredFromValueChanged
-                                        ("speed." ++ searchModel.selectedFilterSpeed)
-                                    )
-                                ]
-                                []
-                            ]
-                        , Html.text "to"
-                        , Html.div
-                            [ HA.class "input-container"
-                            , HA.class "row"
-                            , HA.class "align-baseline"
-                            ]
-                            [ Html.input
-                                [ HA.type_ "number"
-                                , HA.step "1"
-                                , HA.value
-                                    (Maybe.withDefault
-                                        ""
-                                        (Dict.get
-                                            ("speed." ++ searchModel.selectedFilterSpeed)
-                                            searchModel.filteredToValues
-                                        )
-                                    )
-                                , HE.onInput
-                                    (FilteredToValueChanged
-                                        ("speed." ++ searchModel.selectedFilterSpeed)
-                                    )
-                                ]
-                                []
-                            ]
-                        ]
-                    ]
-              , Html.div
-                    [ HA.class "column"
-                    , HA.class "gap-tiny"
-                    ]
-                    [ Html.h4
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HA.class "align-baseline"
-                        ]
-                        [ Html.select
-                            [ HA.class "input-container"
-                            , HA.value searchModel.selectedFilterResistance
-                            , HE.onInput FilterResistanceChanged
-                            ]
-                            (List.map
-                                (\type_ ->
-                                    Html.option
-                                        [ HA.value type_ ]
-                                        [ Html.text (String.Extra.humanize type_) ]
-                                )
-                                Data.allDamageTypes
-                            )
-                        , Html.text "resistance"
-                        ]
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HA.class "align-center"
-                        ]
-                        [ Html.div
-                            [ HA.class "input-container"
-                            , HA.class "row"
-                            , HA.class "align-baseline"
-                            ]
-                            [ Html.input
-                                [ HA.type_ "number"
-                                , HA.step "1"
-                                , HA.value
-                                    (Maybe.withDefault
-                                        ""
-                                        (Dict.get
-                                            ("resistance." ++ searchModel.selectedFilterResistance)
-                                            searchModel.filteredFromValues
-                                        )
-                                    )
-                                , HE.onInput
-                                    (FilteredFromValueChanged
-                                        ("resistance." ++ searchModel.selectedFilterResistance)
-                                    )
-                                ]
-                                []
-                            ]
-                        , Html.text "to"
-                        , Html.div
-                            [ HA.class "input-container"
-                            , HA.class "row"
-                            , HA.class "align-baseline"
-                            ]
-                            [ Html.input
-                                [ HA.type_ "number"
-                                , HA.step "1"
-                                , HA.value
-                                    (Maybe.withDefault
-                                        ""
-                                        (Dict.get
-                                            ("resistance." ++ searchModel.selectedFilterResistance)
-                                            searchModel.filteredToValues
-                                        )
-                                    )
-                                , HE.onInput
-                                    (FilteredToValueChanged
-                                        ("resistance." ++ searchModel.selectedFilterResistance)
-                                    )
-                                ]
-                                []
-                            ]
-                        ]
-                    ]
-              , Html.div
-                    [ HA.class "column"
-                    , HA.class "gap-tiny"
-                    ]
-                    [ Html.h4
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HA.class "align-baseline"
-                        ]
-                        [ Html.select
-                            [ HA.class "input-container"
-                            , HA.value searchModel.selectedFilterWeakness
-                            , HE.onInput FilterWeaknessChanged
-                            ]
-                            (List.map
-                                (\type_ ->
-                                    Html.option
-                                        [ HA.value type_ ]
-                                        [ Html.text (String.Extra.humanize type_) ]
-                                )
-                                Data.allDamageTypes
-                            )
-                        , Html.text "weakness"
-                        ]
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HA.class "align-center"
-                        ]
-                        [ Html.div
-                            [ HA.class "input-container"
-                            , HA.class "row"
-                            , HA.class "align-baseline"
-                            ]
-                            [ Html.input
-                                [ HA.type_ "number"
-                                , HA.step "1"
-                                , HA.value
-                                    (Maybe.withDefault
-                                        ""
-                                        (Dict.get
-                                            ("weakness." ++ searchModel.selectedFilterWeakness)
-                                            searchModel.filteredFromValues
-                                        )
-                                    )
-                                , HE.onInput
-                                    (FilteredFromValueChanged
-                                        ("weakness." ++ searchModel.selectedFilterWeakness)
-                                    )
-                                ]
-                                []
-                            ]
-                        , Html.text "to"
-                        , Html.div
-                            [ HA.class "input-container"
-                            , HA.class "row"
-                            , HA.class "align-baseline"
-                            ]
-                            [ Html.input
-                                [ HA.type_ "number"
-                                , HA.step "1"
-                                , HA.value
-                                    (Maybe.withDefault
-                                        ""
-                                        (Dict.get
-                                            ("weakness." ++ searchModel.selectedFilterWeakness)
-                                            searchModel.filteredToValues
-                                        )
-                                    )
-                                , HE.onInput
-                                    (FilteredToValueChanged
-                                        ("weakness." ++ searchModel.selectedFilterWeakness)
-                                    )
-                                ]
-                                []
-                            ]
-                        ]
-                    ]
-              ]
-            , [ Html.div
-                    [ HA.class "column"
-                    , HA.class "gap-tiny"
-                    ]
-                    [ Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-small"
-                        , HA.class "align-center"
-                        ]
-                        [ Html.h4
-                            []
-                            [ Html.text "Release date" ]
-                        ]
-                    , Html.div
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HA.class "align-baseline"
-                        ]
-                        [ Html.div
-                            [ HA.class "input-container"
-                            , HA.class "row"
-                            , HA.class "align-baseline"
-                            ]
-                            [ Html.input
-                                [ HA.type_ "date"
-                                , HA.value (Maybe.withDefault "" (Dict.get "release_date" searchModel.filteredFromValues))
-                                , HE.onInput (FilteredFromValueChanged "release_date")
-                                ]
-                                []
-                            ]
-                        , Html.text "to"
-                        , Html.div
-                            [ HA.class "input-container"
-                            , HA.class "row"
-                            , HA.class "align-baseline"
-                            ]
-                            [ Html.input
-                                [ HA.type_ "date"
-                                , HA.value (Maybe.withDefault "" (Dict.get "release_date" searchModel.filteredToValues))
-                                , HE.onInput (FilteredToValueChanged "release_date")
-                                ]
-                                []
-                            ]
-                        ]
-                    ]
-              ]
+        [ HA.class "numbers-grid" ]
+        (List.map
+            (viewFilterNumber searchModel)
+            [ { field = "ac"
+              , hint = Nothing
+              , step = "1"
+              , suffix = Nothing
+              }
+            , { field = "dex_cap"
+              , hint = Nothing
+              , step = "1"
+              , suffix = Nothing
+              }
+            , { field = "check_penalty"
+              , hint = Nothing
+              , step = "1"
+              , suffix = Nothing
+              }
+            , { field = "strength"
+              , hint = Nothing
+              , step = "1"
+              , suffix = Nothing
+              }
+            , { field = "bulk"
+              , hint = Just "(L bulk is 0,1)"
+              , step = "0.1"
+              , suffix = Nothing
+              }
+            , { field = "price"
+              , hint = Nothing
+              , step = "1"
+              , suffix = Just "cp"
+              }
             ]
         )
     ]
@@ -2278,201 +2082,28 @@ viewFilterNumbers model searchModel =
 
 viewFilterAttributes : Model -> SearchModel -> List (Html Msg)
 viewFilterAttributes model searchModel =
-    [ Html.div
-        [ HA.class "row"
-        , HA.class "align-baseline"
-        , HA.class "gap-medium"
-        ]
-        [ Html.button
-            [ HE.onClick (RemoveAllFiltersOfTypePressed "attributes") ]
-            [ Html.text "Reset selection" ]
-        ]
+    [ viewFilterList
+        searchModel
+        { label = ""
+        , filterKey = "attributes"
+        , showOperator = False
+        , showSearch = False
+        , values = Just Data.allAttributes
+        }
     , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
+        [ HA.class "numbers-grid"
         ]
         (List.map
             (\attribute ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HE.onClick (FilterToggled "attributes" attribute)
-                    ]
-                    [ Html.text (toTitleCase attribute)
-                    , viewFilterIcon (nestedDictGet "attributes" attribute searchModel.filteredValues)
-                    ]
+                viewFilterNumber
+                    searchModel
+                    { field = attribute
+                    , hint = Nothing
+                    , step = "1"
+                    , suffix = Nothing
+                    }
             )
             Data.allAttributes
-        )
-    ]
-
-
-viewFilterActions : Model -> SearchModel -> List (Html Msg)
-viewFilterActions model searchModel =
-    [ Html.button
-        [ HA.style "align-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "actions")
-        ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (case searchModel.aggregations of
-            Just (Ok aggregations) ->
-                List.map
-                    (\actions ->
-                        Html.button
-                            [ HA.class "row"
-                            , HA.class "align-center"
-                            , HA.class "gap-tiny"
-                            , HE.onClick (FilterToggled "actions" actions)
-                            ]
-                            [ Html.span
-                                []
-                                (viewTextWithActionIcons actions)
-                            , viewFilterIcon (nestedDictGet "actions" actions searchModel.filteredValues)
-                            ]
-                    )
-                    (List.sortBy actionsToInt aggregations.actions)
-
-            Just (Err _) ->
-                []
-
-            Nothing ->
-                [ viewScrollboxLoader ]
-        )
-    ]
-
-
-viewFilterAlignments : Model -> SearchModel -> List (Html Msg)
-viewFilterAlignments model searchModel =
-    [ Html.div
-        [ HA.class "row"
-        , HA.class "align-baseline"
-        , HA.class "gap-medium"
-        ]
-        [ Html.button
-            [ HE.onClick (RemoveAllFiltersOfTypePressed "alignments") ]
-            [ Html.text "Reset selection" ]
-        ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (List.map
-            (\(alignment, label) ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HA.class "trait"
-                    , HA.class "trait-alignment"
-                    , HE.onClick (FilterToggled "alignments" alignment)
-                    ]
-                    [ Html.text label
-                    , viewFilterIcon (nestedDictGet "alignments" alignment searchModel.filteredValues)
-                    ]
-            )
-            Data.alignments
-        )
-    ]
-
-
-viewFilterArmor : Model -> SearchModel -> List (Html Msg)
-viewFilterArmor model searchModel =
-    [ Html.h4
-        []
-        [ Html.text "Armor categories" ]
-    , Html.button
-        [ HA.style "align-self" "flex-start"
-        , HA.style "justify-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "armor-categories")
-        ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (List.map
-            (\category ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HE.onClick (FilterToggled "armor-categories" category)
-                    ]
-                    [ Html.text (toTitleCase category)
-                    , viewFilterIcon (nestedDictGet "armor-categories" category searchModel.filteredValues)
-                    ]
-            )
-            Data.armorCategories
-        )
-
-    , Html.h4
-        []
-        [ Html.text "Armor groups" ]
-    , Html.button
-        [ HA.style "align-self" "flex-start"
-        , HA.style "justify-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "armor-groups")
-        ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (List.map
-            (\group ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HE.onClick (FilterToggled "armor-groups" group)
-                    ]
-                    [ Html.text (toTitleCase group)
-                    , viewFilterIcon (nestedDictGet "armor-groups" group searchModel.filteredValues)
-                    ]
-            )
-            Data.armorGroups
-        )
-    ]
-
-
-viewFilterComponents : Model -> SearchModel -> List (Html Msg)
-viewFilterComponents model searchModel =
-    [ Html.div
-        [ HA.class "row"
-        , HA.class "align-baseline"
-        , HA.class "gap-medium"
-        ]
-        [ Html.button
-            [ HE.onClick (RemoveAllFiltersOfTypePressed "components") ]
-            [ Html.text "Reset selection" ]
-        ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (List.map
-            (\component ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HE.onClick (FilterToggled "components" component)
-                    ]
-                    [ Html.text (toTitleCase component)
-                    , viewFilterIcon (nestedDictGet "components" component searchModel.filteredValues)
-                    ]
-            )
-            [ "focus"
-            , "material"
-            , "somatic"
-            , "verbal"
-            ]
         )
     ]
 
@@ -2485,472 +2116,322 @@ viewFilterCreatures model searchModel =
             Html.details
                 []
                 [ Html.summary
-                    [ HA.class "h4" ]
+                    [ HA.class "h3" ]
                     [ Html.text label ]
                 , Html.div
                     [ HA.class "column"
-                    , HA.class "gap-small"
+                    , HA.class "gap-medium"
                     , HA.style "margin-top" "var(--gap-small)"
                     , HA.style "margin-left" "var(--gap-large)"
                     ]
                     children
                 ]
 
-        scaleDetails : String -> String -> List String -> Html Msg
-        scaleDetails label filterType values =
+        scaleDetails : String -> List ( String, String, List String ) -> Html Msg
+        scaleDetails detailsLabel scales =
             details
-                label
-                [ Html.button
-                    [ HA.style "align-self" "flex-start"
-                    , HE.onClick (RemoveAllFiltersOfTypePressed filterType)
-                    ]
-                    [ Html.text "Reset selection" ]
-                , Html.div
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HA.class "scrollbox"
-                    ]
+                detailsLabel
+                [ Html.div
+                    [ HA.class "scale-grid" ]
                     (List.map
-                        (\save ->
-                            Html.button
-                                [ HA.class "row"
-                                , HA.class "gap-tiny"
-                                , HA.class "nowrap"
-                                , HA.class "align-center"
-                                , HA.style "text-align" "left"
-                                , HE.onClick (FilterToggled filterType save)
-                                ]
-                                [ Html.text (toTitleCase save)
-                                , viewFilterIcon (nestedDictGet filterType save searchModel.filteredValues)
-                                ]
+                        (\( filterType, label, values ) ->
+                            viewFilterList
+                                searchModel
+                                { label = label
+                                , filterKey = filterType
+                                , showOperator = False
+                                , showSearch = False
+                                , values = Just values
+                                }
                         )
-                        values
+                        scales
                     )
                 ]
     in
     [ details
-        "Creature families"
-        [ Html.button
-            [ HA.style "align-self" "flex-start"
-            , HE.onClick (RemoveAllFiltersOfTypePressed "creature-families")
-            ]
-            [ Html.text "Reset selection" ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "input-container"
-            ]
-            [ Html.input
-                [ HA.placeholder "Search among creature families"
-                , HA.value searchModel.searchCreatureFamilies
-                , HA.type_ "text"
-                , HE.onInput SearchCreatureFamiliesChanged
-                ]
-                []
-            , if String.isEmpty searchModel.searchCreatureFamilies then
-                Html.text ""
-
-              else
-                Html.button
-                    [ HA.class "input-button"
-                    , HA.attribute "aria-label" "Clear search"
-                    , HE.onClick (SearchCreatureFamiliesChanged "")
+        "Statistics"
+        [ Html.div
+            [ HA.class "numbers-grid" ]
+            (List.concat
+                [ List.map
+                    (viewFilterNumber searchModel)
+                    [ { field = "level"
+                      , hint = Nothing
+                      , step = "1"
+                      , suffix = Nothing
+                      }
+                    , { field = "hp"
+                      , hint = Nothing
+                      , step = "1"
+                      , suffix = Nothing
+                      }
+                    , { field = "ac"
+                      , hint = Nothing
+                      , step = "1"
+                      , suffix = Nothing
+                      }
+                    , { field = "fortitude_save"
+                      , hint = Nothing
+                      , step = "1"
+                      , suffix = Nothing
+                      }
+                    , { field = "reflex_save"
+                      , hint = Nothing
+                      , step = "1"
+                      , suffix = Nothing
+                      }
+                    , { field = "will_save"
+                      , hint = Nothing
+                      , step = "1"
+                      , suffix = Nothing
+                      }
+                    , { field = "perception"
+                      , hint = Nothing
+                      , step = "1"
+                      , suffix = Nothing
+                      }
                     ]
-                    [ FontAwesome.view FontAwesome.Solid.times ]
-            ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-tiny"
-            , HA.class "scrollbox"
-            ]
-            (case searchModel.aggregations of
-                Just (Ok aggregations) ->
-                    List.map
-                        (\creatureFamily ->
-                            Html.button
-                                [ HA.class "row"
-                                , HA.class "gap-tiny"
-                                , HA.class "nowrap"
-                                , HA.class "align-center"
-                                , HA.style "text-align" "left"
-                                , HE.onClick (FilterToggled "creature-families" (String.toLower creatureFamily))
-                                ]
-                                [ Html.text (toTitleCase creatureFamily)
-                                , viewFilterIcon (nestedDictGet "creature-families" (String.toLower creatureFamily) searchModel.filteredValues)
-                                ]
-                        )
-                        (aggregations.creatureFamilies
-                            |> List.filter (String.toLower >> String.contains (String.toLower searchModel.searchCreatureFamilies))
-                            |> List.sort
-                        )
-
-                Just (Err _) ->
-                    []
-
-                Nothing ->
-                    [ viewScrollboxLoader ]
+                , List.map
+                    (viewFilterNumberWithSelect searchModel)
+                    [ { field = "speed"
+                      , values = Data.speedTypes
+                      , default = "land"
+                      , hint = Nothing
+                      , step = "1"
+                      , suffix = Nothing
+                      }
+                    , { field = "resistance"
+                      , values = Data.allDamageTypes
+                      , default = "acid"
+                      , hint = Nothing
+                      , step = "1"
+                      , suffix = Nothing
+                      }
+                    , { field = "weakness"
+                      , values = Data.allDamageTypes
+                      , default = "acid"
+                      , hint = Nothing
+                      , step = "1"
+                      , suffix = Nothing
+                      }
+                    ]
+                ]
             )
         ]
 
     , details
+        "Creature families"
+        [ viewFilterList
+            searchModel
+            { label = ""
+            , filterKey = "creature-families"
+            , showOperator = False
+            , showSearch = True
+            , values =
+                getAggregationMaybe .creatureFamilies searchModel
+                    |> Maybe.map List.sort
+            }
+        ]
+
+
+    , scaleDetails
         "Offensive scales"
-        (List.map
-            (\( filterType, label, values ) ->
-                scaleDetails label filterType values
-            )
-            [ ( "attack-bonus-scales", "Attack bonus scale", [ "extreme", "high", "moderate", "low" ] )
-            , ( "strike-damage-scales", "Strike damage scale", [ "extreme", "high", "moderate", "low" ] )
-            , ( "spell-attack-bonus-scales", "Spell attack bonus scale", [ "extreme", "high", "moderate" ] )
-            , ( "spell-dc-scales", "Spell DC scale", [ "extreme", "high", "moderate" ] )
-            ]
-        )
+        [ ( "attack-bonus-scales", "Attack bonus scale", [ "extreme", "high", "moderate", "low" ] )
+        , ( "strike-damage-scales", "Strike damage scale", [ "extreme", "high", "moderate", "low" ] )
+        , ( "spell-attack-bonus-scales", "Spell attack bonus scale", [ "extreme", "high", "moderate" ] )
+        , ( "spell-dc-scales", "Spell DC scale", [ "extreme", "high", "moderate" ] )
+        ]
 
-    , details
+    , scaleDetails
         "Defensive scales"
-        (List.map
-            (\( filterType, label, values ) ->
-                scaleDetails label filterType values
-            )
-            [ ( "hp-scales", "HP scale", [ "high", "moderate", "low" ] )
-            , ( "ac-scales", "AC scale", [ "extreme", "high", "moderate", "low" ] )
-            , ( "fortitude-scales", "Fortitude save scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
-            , ( "reflex-scales", "Reflex save scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
-            , ( "will-scales", "Will save scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
-            , ( "perception-scales", "Perception scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
-            ]
-        )
+        [ ( "hp-scales", "HP scale", [ "high", "moderate", "low" ] )
+        , ( "ac-scales", "AC scale", [ "extreme", "high", "moderate", "low" ] )
+        , ( "fortitude-scales", "Fortitude save scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
+        , ( "reflex-scales", "Reflex save scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
+        , ( "will-scales", "Will save scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
+        , ( "perception-scales", "Perception scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
+        ]
 
-    , details
+    , scaleDetails
         "Attribute scales"
-        (List.map
-            (\( filterType, label, values ) ->
-                scaleDetails label filterType values
-            )
-            [ ( "strength-scales", "Strength scale", [ "extreme", "high", "moderate", "low" ] )
-            , ( "dexterity-scales", "Dexterity scale", [ "extreme", "high", "moderate", "low" ] )
-            , ( "constitution-scales", "Constitution scale", [ "extreme", "high", "moderate", "low" ] )
-            , ( "intelligence-scales", "Intelligence scale", [ "extreme", "high", "moderate", "low" ] )
-            , ( "wisdom-scales", "Wisdom scale", [ "extreme", "high", "moderate", "low" ] )
-            , ( "charisma-scales", "Charisma scale", [ "extreme", "high", "moderate", "low" ] )
-            ]
-        )
+        [ ( "strength-scales", "Strength scale", [ "extreme", "high", "moderate", "low" ] )
+        , ( "dexterity-scales", "Dexterity scale", [ "extreme", "high", "moderate", "low" ] )
+        , ( "constitution-scales", "Constitution scale", [ "extreme", "high", "moderate", "low" ] )
+        , ( "intelligence-scales", "Intelligence scale", [ "extreme", "high", "moderate", "low" ] )
+        , ( "wisdom-scales", "Wisdom scale", [ "extreme", "high", "moderate", "low" ] )
+        , ( "charisma-scales", "Charisma scale", [ "extreme", "high", "moderate", "low" ] )
+        ]
 
     , details
         "Strongest save"
-        [ Html.button
-            [ HA.style "align-self" "flex-start"
-            , HE.onClick (RemoveAllFiltersOfTypePressed "strongest-saves")
-            ]
-            [ Html.text "Reset selection" ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-tiny"
-            , HA.class "scrollbox"
-            ]
-            (List.map
-                (\save ->
-                    Html.button
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HA.class "nowrap"
-                        , HA.class "align-center"
-                        , HA.style "text-align" "left"
-                        , HE.onClick (FilterToggled "strongest-saves" (String.toLower save))
-                        ]
-                        [ Html.text (toTitleCase save)
-                        , viewFilterIcon (nestedDictGet "strongest-saves" (String.toLower save) searchModel.filteredValues)
-                        ]
-                )
-                Data.saves
-            )
+        [ viewFilterList
+            searchModel
+            { label = ""
+            , filterKey = "strongest-saves"
+            , showOperator = False
+            , showSearch = False
+            , values = Just Data.saves
+            }
         ]
 
     , details
         "Weakest save"
-        [ Html.button
-            [ HA.style "align-self" "flex-start"
-            , HE.onClick (RemoveAllFiltersOfTypePressed "weakest-saves")
-            ]
-            [ Html.text "Reset selection" ]
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-tiny"
-            , HA.class "scrollbox"
-            ]
-            (List.map
-                (\save ->
-                    Html.button
-                        [ HA.class "row"
-                        , HA.class "gap-tiny"
-                        , HA.class "nowrap"
-                        , HA.class "align-center"
-                        , HA.style "text-align" "left"
-                        , HE.onClick (FilterToggled "weakest-saves" (String.toLower save))
-                        ]
-                        [ Html.text (toTitleCase save)
-                        , viewFilterIcon (nestedDictGet "weakest-saves" (String.toLower save) searchModel.filteredValues)
-                        ]
-                )
-                Data.saves
-            )
+        [ viewFilterList
+            searchModel
+            { label = ""
+            , filterKey = "weakest-saves"
+            , showOperator = False
+            , showSearch = False
+            , values = Just Data.saves
+            }
         ]
+    ]
+
+
+viewFilterDeities : Model -> SearchModel -> List (Html Msg)
+viewFilterDeities model searchModel =
+    [  viewFilterList
+        searchModel
+        { label = "Deity categories"
+        , filterKey = "deity-categories"
+        , showOperator = False
+        , showSearch = False
+        , values =
+            getAggregationMaybe .deityCategories searchModel
+                |> Maybe.map List.sort
+        }
+
+    , viewFilterList
+        searchModel
+        { label = "Divine font"
+        , filterKey = "divine-fonts"
+        , showOperator = False
+        , showSearch = False
+        , values = Just [ "heal", "harm" ]
+        }
+
+    , viewFilterList
+        searchModel
+        { label = "Sanctification"
+        , filterKey = "sanctifications"
+        , showOperator = False
+        , showSearch = False
+        , values = Just [ "holy", "unholy" ]
+        }
+
+    , viewFilterList
+        searchModel
+        { label = "Favored weapons"
+        , filterKey = "favored-weapons"
+        , showOperator = False
+        , showSearch = True
+        , values =
+            getAggregationMaybe .favoredWeapons searchModel
+                |> Maybe.map List.sort
+        }
     ]
 
 
 viewFilterDomains : Model -> SearchModel -> List (Html Msg)
 viewFilterDomains model searchModel =
+    [ viewFilterList
+        searchModel
+        { label = ""
+        , filterKey = "domains"
+        , showOperator = True
+        , showSearch = True
+        , values =
+            getAggregationMaybe .domains searchModel
+                |> Maybe.map List.sort
+        }
+    ]
+
+
+viewFilterItems : Model -> SearchModel -> List (Html Msg)
+viewFilterItems model searchModel =
+    let
+        searchValue : String
+        searchValue =
+            dictGetString "item-subcategories" searchModel.searchFilters
+    in
     [ Html.div
-        [ HA.class "row"
-        , HA.class "align-baseline"
-        , HA.class "gap-medium"
+        [ HA.class "numbers-grid"
         ]
-        [ Html.button
-            [ HA.style "align-self" "flex-start"
-            , HA.style "justify-self" "flex-start"
-            , HE.onClick (RemoveAllFiltersOfTypePressed "domains")
+        (List.map
+            (viewFilterNumber searchModel)
+            [ { field = "level"
+              , hint = Nothing
+              , step = "1"
+              , suffix = Nothing
+              }
+            , { field = "price"
+              , hint = Nothing
+              , step = "1"
+              , suffix = Just "cp"
+              }
+            , { field = "bulk"
+              , hint = Just "(L bulk is 0,1)"
+              , step = "0.1"
+              , suffix = Nothing
+              }
             ]
-            [ Html.text "Reset selection" ]
-
-            , viewRadioButton
-                { checked =
-                    Dict.get "domains" searchModel.filterOperators
-                        |> Maybe.withDefault True
-                , enabled = True
-                , name = "filter-domains"
-                , onInput = FilterOperatorChanged "domains" True
-                , text = "Include all (AND)"
-                }
-            , viewRadioButton
-                { checked =
-                    Dict.get "domains" searchModel.filterOperators
-                        |> Maybe.withDefault True
-                        |> not
-                , enabled = True
-                , name = "filter-domains"
-                , onInput = FilterOperatorChanged "domains" False
-                , text = "Include any (OR)"
-                }
-        ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (case searchModel.aggregations of
-            Just (Ok { domains })->
-                (List.map
-                    (\domain ->
-                        Html.button
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            , HE.onClick (FilterToggled "domains" domain)
-                            ]
-                            [ Html.text (toTitleCase domain)
-                            , viewFilterIcon (nestedDictGet "domains" domain searchModel.filteredValues)
-                            ]
-                    )
-                    (List.sort domains)
-                )
-
-            Just (Err _) ->
-                []
-
-            Nothing ->
-                [ viewScrollboxLoader ]
         )
-    ]
 
+    , viewFilterList
+        searchModel
+        { label = "Item categories"
+        , filterKey = "item-categories"
+        , showOperator = False
+        , showSearch = True
+        , values =
+            getAggregationMaybe .itemCategories searchModel
+                |> Maybe.map List.sort
+        }
 
-viewFilterHands : Model -> SearchModel -> List (Html Msg)
-viewFilterHands model searchModel =
-    [ Html.button
-        [ HA.style "align-self" "flex-start"
-        , HA.style "justify-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "hands")
-        ]
-        [ Html.text "Reset selection" ]
     , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
+        [ HA.class "column"
+        , HA.class "gap-small"
         ]
-        (case searchModel.aggregations of
-            Just (Ok { hands })->
-                (List.map
-                    (\hand ->
-                        Html.button
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            , HE.onClick (FilterToggled "hands" hand)
-                            ]
-                            [ Html.text hand
-                            , viewFilterIcon (nestedDictGet "hands" hand searchModel.filteredValues)
-                            ]
-                    )
-                    (List.sort hands)
-                )
-
-            Just (Err _) ->
-                []
-
-            Nothing ->
-                [ viewScrollboxLoader ]
-        )
-    ]
-
-
-viewFilterItemCategories : Model -> SearchModel -> List (Html Msg)
-viewFilterItemCategories model searchModel =
-    [ Html.h4
-        []
-        [ Html.text "Item categories" ]
-    , Html.button
-        [ HA.style "align-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "item-categories")
-        ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "input-container"
-        ]
-        [ Html.input
-            [ HA.placeholder "Search among item categories"
-            , HA.value searchModel.searchItemCategories
-            , HA.type_ "text"
-            , HE.onInput SearchItemCategoriesChanged
-            ]
+        [ Html.h3
             []
-        , if String.isEmpty searchModel.searchItemCategories then
-            Html.text ""
-
-          else
-            Html.button
-                [ HA.class "input-button"
-                , HA.attribute "aria-label" "Clear search"
-                , HE.onClick (SearchItemCategoriesChanged "")
-                ]
-                [ FontAwesome.view FontAwesome.Solid.times ]
-        ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (case searchModel.aggregations of
-            Just (Ok aggregations) ->
-                List.map
-                    (\category ->
-                        Html.button
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            , HA.class "nowrap"
-                            , HE.onClick (FilterToggled "item-categories" category)
-                            ]
-                            [ Html.div
-                                []
-                                [ Html.text (toTitleCase category) ]
-                            , viewFilterIcon (nestedDictGet "item-categories" category searchModel.filteredValues)
-                            ]
-                    )
-                    (aggregations.itemCategories
-                        |> List.filter (String.toLower >> String.contains (String.toLower searchModel.searchItemCategories))
-                        |> List.sort
-                    )
-
-            Just (Err _) ->
-                []
-
-            Nothing ->
-                [ viewScrollboxLoader ]
-        )
-    , Html.h4
-        []
-        [ Html.text "Item subcategories" ]
-    , Html.button
-        [ HA.style "align-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "item-subcategories")
-        ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "input-container"
-        ]
-        [ Html.input
-            [ HA.placeholder "Search among item subcategories"
-            , HA.value searchModel.searchItemSubcategories
-            , HA.type_ "text"
-            , HE.onInput SearchItemSubcategoriesChanged
-            ]
-            []
-        , if String.isEmpty searchModel.searchItemSubcategories then
-            Html.text ""
-
-          else
-            Html.button
-                [ HA.class "input-button"
-                , HA.attribute "aria-label" "Clear search"
-                , HE.onClick (SearchItemSubcategoriesChanged "")
-                ]
-                [ FontAwesome.view FontAwesome.Solid.times ]
-        ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (case searchModel.aggregations of
-            Just (Ok aggregations) ->
-                List.map
-                    (\subcategory ->
-                        let
-                            parentIsFiltered : Bool
-                            parentIsFiltered =
-                                (||)
+            [ Html.text "Item subcategories" ]
+        , viewFilterButtons searchModel "item-subcategories" False
+        , viewFilterSearch searchModel "item-subcategories"
+        , viewFilterScrollbox
+            searchModel
+            "item-subcategories"
+            (case searchModel.aggregations of
+                Just (Ok aggregations) ->
+                    aggregations.itemSubcategories
+                        |> List.filter
+                            (\{ category } ->
+                                (&&)
                                     (case boolDictIncluded "item-categories" searchModel.filteredValues of
                                         [] ->
-                                            False
+                                            True
 
                                         categories ->
-                                            not (List.member subcategory.category categories)
+                                            List.member category categories
                                     )
                                     (case boolDictExcluded "item-categories" searchModel.filteredValues of
                                         [] ->
-                                            False
+                                            True
 
                                         categories ->
-                                            List.member subcategory.category categories
+                                            not (List.member category categories)
                                     )
-                        in
-                        if parentIsFiltered then
-                            Html.text ""
-
-                        else
-                            Html.button
-                                [ HA.class "row"
-                                , HA.class "gap-tiny"
-                                , HA.class "nowrap"
-                                , HE.onClick (FilterToggled "item-subcategories" subcategory.name)
-                                ]
-                                [ Html.div
-                                    []
-                                    [ Html.text (toTitleCase subcategory.name) ]
-                                , viewFilterIcon (nestedDictGet "item-subcategories" subcategory.name searchModel.filteredValues)
-                                ]
-                    )
-                    (aggregations.itemSubcategories
-                        |> List.filter
-                            (.name
-                                >> String.toLower
-                                >> String.contains (String.toLower searchModel.searchItemSubcategories)
                             )
-                        |> List.sortBy .name
-                    )
+                        |> List.map .name
+                        |> List.sort
+                        |> Just
 
-            Just (Err _) ->
-                []
+                Just (Err _) ->
+                    Just []
 
-            Nothing ->
-                [ viewScrollboxLoader ]
-        )
+                Nothing ->
+                    Nothing
+            )
+        ]
     ]
 
 
@@ -2985,511 +2466,353 @@ viewFilterLegacy model searchModel =
     ]
 
 
-viewFilterMagicSchools : Model -> SearchModel -> List (Html Msg)
-viewFilterMagicSchools model searchModel =
-    [ Html.button
-        [ HA.style "align-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "schools")
-        ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (List.map
-            (\school ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HA.class "nowrap"
-                    , HA.class "align-center"
-                    , HA.style "text-align" "left"
-                    , HA.class "trait"
-                    , HE.onClick (FilterToggled "schools" school)
-                    ]
-                    [ Html.text (toTitleCase school)
-                    , viewFilterIcon (nestedDictGet "schools" school searchModel.filteredValues)
-                    ]
-            )
-            Data.magicSchools
-        )
+viewFilterLevel : Model -> SearchModel -> List (Html Msg)
+viewFilterLevel model searchModel =
+    [ viewFilterNumber
+        searchModel
+            { field = "level"
+            , hint = Just "/ Rank"
+            , step = "1"
+            , suffix = Nothing
+            }
     ]
 
 
 viewFilterPfs : Model -> SearchModel -> List (Html Msg)
 viewFilterPfs model searchModel =
-    [ Html.div
-        [ HA.class "row"
-        , HA.class "align-baseline"
-        , HA.class "gap-medium"
-        ]
-        [ Html.button
-            [ HE.onClick (RemoveAllFiltersOfTypePressed "pfs") ]
-            [ Html.text "Reset selection" ]
-        ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (List.map
-            (\pfs ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HA.class "align-center"
-                    , HE.onClick (FilterToggled "pfs" pfs)
-                    ]
-                    [ viewPfsIcon 16 pfs
-                    , Html.text (toTitleCase pfs)
-                    , viewFilterIcon (nestedDictGet "pfs" pfs searchModel.filteredValues)
-                    ]
-            )
-            [ "none"
-            , "standard"
-            , "limited"
-            , "restricted"
-            ]
-        )
+    [ viewFilterList
+        searchModel
+        { label = ""
+        , filterKey = "pfs"
+        , showOperator = False
+        , showSearch = False
+        , values =
+            Just
+                [ "none"
+                , "standard"
+                , "limited"
+                , "restricted"
+                ]
+        }
     ]
 
 
 viewFilterRarities : Model -> SearchModel -> List (Html Msg)
 viewFilterRarities model searchModel =
-    [ Html.div
-        [ HA.class "row"
-        , HA.class "align-baseline"
-        , HA.class "gap-medium"
-        ]
-        [ Html.button
-            [ HE.onClick (RemoveAllFiltersOfTypePressed "rarities") ]
-            [ Html.text "Reset selection" ]
-        ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (case searchModel.aggregations of
-            Just (Ok aggregations) ->
-                List.map
-                    (\rarity ->
-                        Html.button
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            , HA.class "trait"
-                            , HA.class ("trait-" ++ rarity)
-                            , HE.onClick (FilterToggled "rarities" rarity)
-                            ]
-                            [ Html.text (toTitleCase rarity)
-                            , viewFilterIcon (nestedDictGet "rarities" rarity searchModel.filteredValues)
-                            ]
-                    )
-                    (aggregations.traits
-                        |> List.filter (\trait -> List.member trait Data.rarities)
-                        |> List.filter ((/=) "common")
-                        |> (::) "common"
-                    )
-
-            Just (Err _) ->
-                []
-
-            Nothing ->
-                [ viewScrollboxLoader ]
-        )
+    [ viewFilterList
+        searchModel
+        { label = ""
+        , filterKey = "rarities"
+        , showOperator = False
+        , showSearch = False
+        , values =
+            getAggregationMaybe .traits searchModel
+                |> Maybe.map (List.filter (\trait -> List.member trait Data.rarities))
+                |> Maybe.map (List.filter ((/=) "common"))
+                |> Maybe.map ((::) "common")
+        }
     ]
 
 
 viewFilterRegions : Model -> SearchModel -> List (Html Msg)
 viewFilterRegions model searchModel =
-    [ Html.button
-        [ HA.style "align-self" "flex-start"
-        , HA.style "justify-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "regions")
-        ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        , HA.class "wrap"
-        ]
-        (case searchModel.aggregations of
-            Just (Ok { regions })->
-                (List.map
-                    (\region ->
-                        Html.button
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            , HE.onClick (FilterToggled "regions" region)
-                            ]
-                            [ Html.text (toTitleCase region)
-                            , viewFilterIcon (nestedDictGet "regions" region searchModel.filteredValues)
-                            ]
-                    )
-                    (List.sort regions)
-                )
-
-            Just (Err _) ->
-                []
-
-            Nothing ->
-                [ viewScrollboxLoader ]
-        )
-    ]
-
-
-viewFilterSavingThrows : Model -> SearchModel -> List (Html Msg)
-viewFilterSavingThrows model searchModel =
-    [ Html.button
-        [ HA.style "align-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "saving-throws")
-        ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (List.map
-            (\save ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HA.class "nowrap"
-                    , HA.class "align-center"
-                    , HA.style "text-align" "left"
-                    , HE.onClick (FilterToggled "saving-throws" save)
-                    ]
-                    [ Html.text (toTitleCase save)
-                    , viewFilterIcon (nestedDictGet "saving-throws" save searchModel.filteredValues)
-                    ]
-            )
-            Data.saves
-        )
+    [ viewFilterList
+        searchModel
+        { label = ""
+        , filterKey = "regions"
+        , showOperator = False
+        , showSearch = False
+        , values =
+            getAggregationMaybe .regions searchModel
+                |> Maybe.map List.sort
+        }
     ]
 
 
 viewFilterSizes : Model -> SearchModel -> List (Html Msg)
 viewFilterSizes model searchModel =
-    [ Html.div
-        [ HA.class "row"
-        , HA.class "align-baseline"
-        , HA.class "gap-medium"
-        ]
-        [ Html.button
-            [ HE.onClick (RemoveAllFiltersOfTypePressed "sizes") ]
-            [ Html.text "Reset selection" ]
-        ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (List.map
-            (\size ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HA.class "trait"
-                    , HA.class "trait-size"
-                    , HE.onClick (FilterToggled "sizes" size)
-                    ]
-                    [ Html.text (toTitleCase size)
-                    , viewFilterIcon (nestedDictGet "sizes" size searchModel.filteredValues)
-                    ]
-            )
+    [ viewFilterList
+        searchModel
+        { label = ""
+        , filterKey = "sizes"
+        , showOperator = False
+        , showSearch = False
+        , values =
             Data.allSizes
-        )
+                |> List.filter (\size -> List.member size (getAggregation .sizes searchModel))
+                |> Just
+        }
     ]
 
 
 viewFilterSkills : Model -> SearchModel -> List (Html Msg)
 viewFilterSkills model searchModel =
-    [ Html.div
-        [ HA.class "row"
-        , HA.class "align-baseline"
-        , HA.class "gap-medium"
-        ]
-        [ Html.button
-            [ HE.onClick (RemoveAllFiltersOfTypePressed "skills") ]
-            [ Html.text "Reset selection" ]
-        ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (List.map
-            (\skill ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HE.onClick (FilterToggled "skills" skill)
-                    ]
-                    [ Html.text (toTitleCase skill)
-                    , viewFilterIcon (nestedDictGet "skills" skill searchModel.filteredValues)
-                    ]
-            )
-            Data.allSkills
-        )
+    [ viewFilterList
+        searchModel
+        { label = ""
+        , filterKey = "skills"
+        , showOperator = True
+        , showSearch = False
+        , values =
+            getAggregationMaybe .skills searchModel
+                |> Maybe.map (List.filter (\skill -> List.member skill Data.allSkills))
+                |> Maybe.map List.sort
+        }
+    , viewFilterList
+        searchModel
+        { label = "Lore skills"
+        , filterKey = "lore-skills"
+        , showOperator = True
+        , showSearch = True
+        , values =
+            getAggregationMaybe .skills searchModel
+                |> Maybe.map (List.filter (String.endsWith "lore"))
+                |> Maybe.map (List.filter ((/=) "lore"))
+                |> Maybe.map List.sort
+        }
     ]
 
 
 viewFilterSources : Model -> SearchModel -> List (Html Msg)
 viewFilterSources model searchModel =
-    [ viewCheckbox
-        { checked = searchModel.filterSpoilers
-        , onCheck = FilterSpoilersChanged
-        , text = "Hide results with spoilers"
-        }
-    , viewCheckbox
-        { checked = searchModel.filterApCreatures
-        , onCheck = FilterApCreaturesChanged
-        , text = "Hide creatures from Adventure Paths"
-        }
-    , Html.h4
-        []
-        [ Html.text "Source categories" ]
-    , Html.button
-        [ HA.style "align-self" "flex-start"
-        , HA.style "justify-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "source-categories")
+    let
+        searchValue : String
+        searchValue =
+            dictGetString "sources" searchModel.searchFilters
+    in
+    [ Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
         ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
+        [ viewCheckbox
+            { checked = searchModel.filterSpoilers
+            , onCheck = FilterSpoilersChanged
+            , text = "Hide results with spoilers"
+            }
+        , viewCheckbox
+            { checked = searchModel.filterApCreatures
+            , onCheck = FilterApCreaturesChanged
+            , text = "Hide creatures from Adventure Paths"
+            }
         ]
-        (List.map
-            (\category ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HE.onClick (FilterToggled "source-categories" category)
-                    ]
-                    [ Html.text (toTitleCase category)
-                    , viewFilterIcon (nestedDictGet "source-categories" category searchModel.filteredValues)
-                    ]
-            )
-            Data.sourceCategories
-        )
-    , Html.h4
-        []
-        [ Html.text "Sources" ]
-    , Html.button
-        [ HA.style "align-self" "flex-start"
-        , HA.style "justify-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "sources")
-        ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "input-container"
-        ]
-        [ Html.input
-            [ HA.placeholder "Search among sources"
-            , HA.value searchModel.searchSources
-            , HA.type_ "text"
-            , HE.onInput SearchSourcesChanged
-            ]
-            []
-        , if String.isEmpty searchModel.searchSources then
-            Html.text ""
 
-          else
-            Html.button
-                [ HA.class "input-button"
-                , HA.attribute "aria-label" "Clear search"
-                , HE.onClick (SearchSourcesChanged "")
-                ]
-                [ FontAwesome.view FontAwesome.Solid.times ]
-        ]
     , Html.div
-        [ HA.class "row"
+        [ HA.class "column"
         , HA.class "gap-tiny"
-        , HA.class "scrollbox"
         ]
-        (case ( model.sourcesAggregation, searchModel.aggregations ) of
-            ( Just (Ok allSources), Just (Ok { sources }) ) ->
-                (List.map
-                    (\source ->
-                        let
-                            parentIsFiltered : Bool
-                            parentIsFiltered =
-                                (||)
+        [ Html.div
+            [ HA.class "row"
+            , HA.class "gap-small"
+            , HA.class "align-center"
+            ]
+            [ Html.h3
+                []
+                [ Html.text "Release date" ]
+            ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "align-baseline"
+            ]
+            [ Html.div
+                [ HA.class "input-container"
+                , HA.class "row"
+                , HA.class "align-baseline"
+                ]
+                [ Html.input
+                    [ HA.type_ "date"
+                    , HA.value (dictGetString "release_date" searchModel.filteredFromValues)
+                    , HE.onInput (FilteredFromValueChanged "release_date")
+                    ]
+                    []
+                ]
+            , Html.text "to"
+            , Html.div
+                [ HA.class "input-container"
+                , HA.class "row"
+                , HA.class "align-baseline"
+                ]
+                [ Html.input
+                    [ HA.type_ "date"
+                    , HA.value (dictGetString "release_date" searchModel.filteredToValues)
+                    , HE.onInput (FilteredToValueChanged "release_date")
+                    ]
+                    []
+                ]
+            ]
+        ]
+
+    , viewFilterList
+        searchModel
+        { label = "Source categories"
+        , filterKey = "source-categories"
+        , showOperator = False
+        , showSearch = False
+        , values = Just Data.sourceCategories
+        }
+
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Sources" ]
+        , viewFilterButtons searchModel "sources" False
+        , viewFilterSearch searchModel "sources"
+        , viewFilterScrollbox
+            searchModel
+            "sources"
+            (case ( model.sourcesAggregation, searchModel.aggregations ) of
+                ( Just (Ok allSources), Just (Ok { sources }) ) ->
+                    allSources
+                        |> List.filter (\source -> List.member (String.toLower source.name) sources)
+                        |> List.filter
+                            (\{ category } ->
+                                (&&)
                                     (case boolDictIncluded "source-categories" searchModel.filteredValues of
                                         [] ->
-                                            False
+                                            True
 
                                         categories ->
-                                            not (List.member source.category categories)
+                                            List.member category categories
                                     )
                                     (case boolDictExcluded "source-categories" searchModel.filteredValues of
                                         [] ->
-                                            False
+                                            True
 
                                         categories ->
-                                            List.member source.category categories
+                                            not (List.member category categories)
                                     )
-                        in
-                        if parentIsFiltered then
-                            Html.text ""
-
-                        else
-                            Html.button
-                                [ HA.class "row"
-                                , HA.class "gap-tiny"
-                                , HA.class "nowrap"
-                                , HA.class "align-center"
-                                , HA.style "text-align" "left"
-                                , HE.onClick (FilterToggled "sources" source.name)
-                                ]
-                                [ Html.div
-                                    []
-                                    [ Html.text source.name ]
-                                , viewFilterIcon (nestedDictGet "sources" source.name searchModel.filteredValues)
-                                ]
-                    )
-                    (allSources
-                        |> List.filter
-                            (.name
-                                >> String.toLower
-                                >> String.contains (String.toLower searchModel.searchSources)
                             )
-                        |> List.filter (\source -> List.member (String.toLower source.name) sources)
-                        |> List.sortBy .name
-                    )
-                )
+                        |> List.map .name
+                        |> List.sort
+                        |> Just
 
-            ( Just (Err _), _ ) ->
-                []
+                ( Just (Err _), _ ) ->
+                    Just []
 
-            ( _, Just (Err _) ) ->
-                []
+                ( _, Just (Err _) ) ->
+                    Just []
 
-            _ ->
-                [ viewScrollboxLoader ]
-        )
+                _ ->
+                    Nothing
+            )
+        ]
     ]
 
 
-viewFilterTraditions : Model -> SearchModel -> List (Html Msg)
-viewFilterTraditions model searchModel =
-    [ Html.div
-        [ HA.class "row"
-        , HA.class "align-baseline"
-        , HA.class "gap-medium"
-        ]
-        [ Html.button
-            [ HE.onClick (RemoveAllFiltersOfTypePressed "traditions") ]
-            [ Html.text "Reset selection" ]
-        , viewRadioButton
-            { checked =
-                Dict.get "traditions" searchModel.filterOperators
-                    |> Maybe.withDefault True
-            , enabled = True
-            , name = "filter-traditions"
-            , onInput = FilterOperatorChanged "traditions" True
-            , text = "Include all (AND)"
+viewFilterSpells : Model -> SearchModel -> List (Html Msg)
+viewFilterSpells model searchModel =
+    [ viewFilterList
+        searchModel
+        { label = "Traditions / Spell lists"
+        , filterKey = "traditions"
+        , showOperator = True
+        , showSearch = False
+        , values = Just Data.traditionsAndSpellLists
+        }
+
+    , if model.showLegacyFilters then
+        viewFilterList
+            searchModel
+            { label = "Magic schools"
+            , filterKey = "schools"
+            , showOperator = False
+            , showSearch = False
+            , values = Just Data.magicSchools
             }
-        , viewRadioButton
-            { checked =
-                Dict.get "traditions" searchModel.filterOperators
-                    |> Maybe.withDefault True
-                    |> not
-            , enabled = True
-            , name = "filter-traditions"
-            , onInput = FilterOperatorChanged "traditions" False
-            , text = "Include any (OR)"
+
+        else
+            Html.text ""
+
+    , if model.showLegacyFilters then
+        viewFilterList
+            searchModel
+            { label = "Casting components"
+            , filterKey = "components"
+            , showOperator = False
+            , showSearch = False
+            , values =
+                Just
+                    [ "focus"
+                    , "material"
+                    , "somatic"
+                    , "verbal"
+                    ]
             }
-        ]
+
+        else
+            Html.text ""
+
+    , viewFilterList
+        searchModel
+        { label = "Defenses / Saving throws"
+        , filterKey = "saving-throws"
+        , showOperator = False
+        , showSearch = False
+        , values = Just Data.saves
+        }
+
+    , viewFilterList
+        searchModel
+        { label = "Area types"
+        , filterKey = "area-types"
+        , showOperator = False
+        , showSearch = False
+        , values =
+            getAggregationMaybe .areaTypes searchModel
+                |> Maybe.map List.sort
+        }
+
     , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
+        [ HA.class "numbers-grid"
         ]
         (List.map
-            (\tradition ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HE.onClick (FilterToggled "traditions" tradition)
-                    ]
-                    [ Html.text (toTitleCase tradition)
-                    , viewFilterIcon (nestedDictGet "traditions" tradition searchModel.filteredValues)
-                    ]
-            )
-            Data.traditionsAndSpellLists
+            (viewFilterNumber searchModel)
+            [ { field = "level"
+              , hint = Just "/ Rank"
+              , step = "1"
+              , suffix = Nothing
+              }
+            , { field = "range"
+              , hint = Nothing
+              , step = "1"
+              , suffix = Just "ft."
+              }
+            , { field = "area"
+              , hint = Nothing
+              , step = "1"
+              , suffix = Just "ft."
+              }
+            , { field = "duration"
+              , hint = Just "(1 round is 6s)"
+              , step = "1"
+              , suffix = Just "s"
+              }
+            ]
         )
     ]
 
 
 viewFilterTraits : Model -> SearchModel -> List (Html Msg)
 viewFilterTraits model searchModel =
+    let
+        searchValue : String
+        searchValue =
+            dictGetString "traits" searchModel.searchFilters
+    in
     [ viewCheckbox
         { checked = model.groupTraits
         , onCheck = GroupTraitsChanged
         , text = "Group traits by category"
         }
-    , Html.div
-        [ HA.class "row"
-        , HA.class "align-baseline"
-        , HA.class "gap-medium"
-        ]
-        [ Html.button
-            [ HE.onClick (RemoveAllFiltersOfTypePressed "traits") ]
-            [ Html.text "Reset selection" ]
-        , viewRadioButton
-            { checked =
-                Dict.get "traits" searchModel.filterOperators
-                    |> Maybe.withDefault True
-            , enabled = True
-            , name = "filter-traits"
-            , onInput = FilterOperatorChanged "traits" True
-            , text = "Include all (AND)"
-            }
-        , viewRadioButton
-            { checked =
-                Dict.get "traits" searchModel.filterOperators
-                    |> Maybe.withDefault True
-                    |> not
-            , enabled = True
-            , name = "filter-traits"
-            , onInput = FilterOperatorChanged "traits" False
-            , text = "Include any (OR)"
-            }
-        ]
-
-    , Html.div
-        [ HA.class "row"
-        , HA.class "input-container"
-        ]
-        [ Html.input
-            [ HA.placeholder "Search among traits"
-            , HA.value searchModel.searchTraits
-            , HA.type_ "text"
-            , HE.onInput SearchTraitsChanged
-            ]
-            []
-        , if String.isEmpty searchModel.searchTraits then
-            Html.text ""
-
-          else
-            Html.button
-                [ HA.class "input-button"
-                , HA.attribute "aria-label" "Clear search"
-                , HE.onClick (SearchTraitsChanged "")
-                ]
-                [ FontAwesome.view FontAwesome.Solid.times ]
-        ]
-
+    , viewFilterButtons searchModel "traits" True
+    , viewFilterSearch searchModel "traits"
     , if model.groupTraits then
         Html.div
             [ HA.class "column"
-            , HA.class "gap-small"
+            , HA.class "gap-large"
             ]
             (case ( model.traitAggregations, searchModel.aggregations ) of
                 ( Just (Ok traitAggregations), Just (Ok aggregations) ) ->
@@ -3504,7 +2827,7 @@ viewFilterTraits model searchModel =
                         uncategorizedTraits =
                             aggregations.traits
                                 |> List.filter (\trait -> not (List.member trait categorizedTraits))
-                                |> List.filter (\trait -> not (List.member trait (List.map Tuple.first Data.alignments)))
+                                |> List.filter (\trait -> not (List.member trait (List.map Tuple.first Data.allAlignments)))
                                 |> List.filter (\trait -> not (List.member trait Data.allSizes))
                     in
                     (List.map
@@ -3518,11 +2841,12 @@ viewFilterTraits model searchModel =
                                     , HA.class "gap-small"
                                     , HA.class "align-center"
                                     ]
-                                    [ Html.h4
+                                    [ Html.h3
                                         []
                                         [ Html.text (toTitleCase group) ]
-                                    , if group /= "uncategorized" then
-                                        Html.button
+                                    , Html.Extra.viewIf
+                                        (group /= "uncategorized")
+                                        (Html.button
                                             [ HA.class "row"
                                             , HA.class "gap-tiny"
                                             , HE.onClick (FilterToggled "trait-groups" group)
@@ -3530,50 +2854,23 @@ viewFilterTraits model searchModel =
                                             [ Html.text "Filter group"
                                             , viewFilterIcon (nestedDictGet "trait-groups" group searchModel.filteredValues)
                                             ]
-
-                                      else
-                                        Html.text ""
+                                        )
                                     , Html.button
                                         [ HE.onClick (TraitGroupDeselectPressed traits)
                                         ]
                                         [ Html.text "Reset group selection" ]
                                     ]
-                                , Html.div
-                                    [ HA.class "row"
-                                    , HA.class "gap-tiny"
-                                    , HA.class "scrollbox"
-                                    ]
-                                    (List.map
-                                        (\trait ->
-                                            Html.button
-                                                [ HA.class "trait"
-                                                , getTraitClass trait
-                                                , HA.class "row"
-                                                , HA.class "align-center"
-                                                , HA.class "gap-tiny"
-                                                , HE.onClick (FilterToggled "traits" trait)
-                                                ]
-                                                [ Html.text (toTitleCase trait)
-                                                , viewFilterIcon (nestedDictGet "traits" trait searchModel.filteredValues)
-                                                ]
-                                        )
-                                        (List.sort traits)
-                                    )
+                                , viewFilterScrollbox searchModel "traits" (Just (List.sort traits))
                                 ]
                         )
                         (traitAggregations
                             |> Dict.filter
                                 (\group traits ->
-                                    not (List.member group [ "half-elf", "half-orc", "aon-special" ])
+                                    not (List.member group [ "half-elf", "half-orc", "aon-special", "settlement" ])
                                 )
                             |> Dict.toList
                             |> (::) ( "uncategorized", uncategorizedTraits )
-                            |> List.map
-                                (Tuple.mapSecond
-                                    (List.filter
-                                        (String.toLower >> String.contains (String.toLower searchModel.searchTraits))
-                                    )
-                                )
+                            |> List.map (Tuple.mapSecond (List.filter (caseInsensitiveContains searchValue)))
                             |> List.map (Tuple.mapSecond (List.filter ((/=) "common")))
                             |> List.map (Tuple.mapSecond (List.filter (\trait -> List.member trait aggregations.traits)))
                             |> List.filter (Tuple.second >> List.isEmpty >> not)
@@ -3589,300 +2886,469 @@ viewFilterTraits model searchModel =
             )
 
       else
-        Html.div
-            [ HA.class "row"
-            , HA.class "gap-tiny"
-            , HA.class "scrollbox"
-            ]
-            (case searchModel.aggregations of
-                Just (Ok aggregations) ->
-                    List.map
-                        (\trait ->
-                            Html.button
-                                [ HA.class "trait"
-                                , getTraitClass trait
-                                , HA.class "row"
-                                , HA.class "align-center"
-                                , HA.class "gap-tiny"
-                                , HE.onClick (FilterToggled "traits" trait)
-                                ]
-                                [ Html.text (toTitleCase trait)
-                                , viewFilterIcon (nestedDictGet "traits" trait searchModel.filteredValues)
-                                ]
-                        )
-                        (aggregations.traits
-                            |> List.filter (\trait -> not (List.member trait (List.map Tuple.first Data.alignments)))
-                            |> List.filter (\trait -> not (List.member trait Data.allSizes))
-                            |> List.filter (String.toLower >> String.contains (String.toLower searchModel.searchTraits))
-                            |> List.sort
-                        )
-
-                Just (Err _) ->
-                    []
-
-                Nothing ->
-                    [ viewScrollboxLoader ]
+        viewFilterScrollbox
+            searchModel
+            "traits"
+            (getAggregationMaybe .traits searchModel
+                |> Maybe.map
+                    (List.filter (\trait -> not (List.member trait (List.map Tuple.first Data.allAlignments)))
+                        >> List.filter (\trait -> not (List.member trait Data.allSizes))
+                        >> List.filter (\trait -> not (List.member trait Data.settlementSizes))
+                        >> List.sort
+                    )
             )
     ]
+        |> Html.div
+            [ HA.class "column"
+            , HA.class "gap-small"
+            ]
+        |> List.singleton
 
 
 viewFilterTypes : Model -> SearchModel -> List (Html Msg)
 viewFilterTypes model searchModel =
-    [ Html.div
-        [ HA.class "row"
-        , HA.class "align-baseline"
-        , HA.class "gap-medium"
-        ]
-        [ Html.button
-            [ HE.onClick (RemoveAllFiltersOfTypePressed "types") ]
-            [ Html.text "Reset selection" ]
-        ]
-
-    , Html.div
-        [ HA.class "row"
-        , HA.class "input-container"
-        ]
-        [ Html.input
-            [ HA.placeholder "Search among types"
-            , HA.type_ "text"
-            , HA.value searchModel.searchTypes
-            , HE.onInput SearchTypesChanged
-            ]
-            []
-        , if String.isEmpty searchModel.searchTypes then
-            Html.text ""
-
-          else
-            Html.button
-                [ HA.class "input-button"
-                , HA.attribute "aria-label" "Clear search"
-                , HE.onClick (SearchTypesChanged "")
-                ]
-                [ FontAwesome.view FontAwesome.Solid.times ]
-        ]
-
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (case searchModel.aggregations of
-            Just (Ok aggregations) ->
-                List.map
-                    (\type_ ->
-                        Html.button
-                            [ HA.class "filter-type"
-                            , HA.class "row"
-                            , HA.class "align-center"
-                            , HA.class "gap-tiny"
-                            , HE.onClick (FilterToggled "types" type_)
-                            ]
-                            [ Html.text (toTitleCase type_)
-                            , viewFilterIcon (nestedDictGet "types" type_ searchModel.filteredValues)
-                            ]
-                    )
-                    (List.filter
-                        (String.toLower >> String.contains (String.toLower searchModel.searchTypes))
-                        (List.sort aggregations.types)
-                    )
-
-            Just (Err _) ->
-                []
-
-            Nothing ->
-                [ viewScrollboxLoader ]
-        )
+    [ viewFilterList
+        searchModel
+        { label = ""
+        , filterKey = "types"
+        , showOperator = False
+        , showSearch = True
+        , values =
+            getAggregationMaybe .types searchModel
+                |> Maybe.map List.sort
+        }
     ]
 
 
 viewFilterWeapons : Model -> SearchModel -> List (Html Msg)
 viewFilterWeapons model searchModel =
-    [ Html.h4
-        []
-        [ Html.text "Weapon categories" ]
-    , Html.button
-        [ HA.style "align-self" "flex-start"
-        , HA.style "justify-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "weapon-categories")
-        ]
-        [ Html.text "Reset selection" ]
+    [ viewFilterList
+        searchModel
+        { label = "Weapon categories"
+        , filterKey = "weapon-categories"
+        , showOperator = False
+        , showSearch = False
+        , values = Just Data.weaponCategories
+        }
+    , viewFilterList
+        searchModel
+        { label = "Weapon groups"
+        , filterKey = "weapon-groups"
+        , showOperator = False
+        , showSearch = False
+        , values =
+            getAggregationMaybe .weaponGroups searchModel
+                |> Maybe.map List.sort
+        }
+    , viewFilterList
+        searchModel
+        { label = "Weapon types"
+        , filterKey = "weapon-types"
+        , showOperator = False
+        , showSearch = False
+        , values = Just Data.weaponTypes
+        }
+    , viewFilterList
+        searchModel
+        { label = "Damage types"
+        , filterKey = "damage-types"
+        , showOperator = True
+        , showSearch = False
+        , values =
+            Just
+                [ "bludgeoning"
+                , "piercing"
+                , "slashing"
+                ]
+        }
+    , viewFilterList
+        searchModel
+        { label = "Reload"
+        , filterKey = "reloads"
+        , showOperator = False
+        , showSearch = False
+        , values =
+            getAggregationMaybe .reloads searchModel
+                |> Maybe.map List.sort
+        }
+    , viewFilterList
+        searchModel
+        { label = "Hands"
+        , filterKey = "hands"
+        , showOperator = False
+        , showSearch = False
+        , values =
+            getAggregationMaybe .hands searchModel
+                |> Maybe.map List.sort
+        }
     , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
+        [ HA.class "numbers-grid"
         ]
         (List.map
-            (\category ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HE.onClick (FilterToggled "weapon-categories" category)
-                    ]
-                    [ Html.text (toTitleCase category)
-                    , viewFilterIcon (nestedDictGet "weapon-categories" category searchModel.filteredValues)
-                    ]
-            )
-            Data.weaponCategories
+            (viewFilterNumber searchModel)
+            [ { field = "bulk"
+              , hint = Just "(L bulk is 0,1)"
+              , step = "0.1"
+              , suffix = Nothing
+              }
+            , { field = "damage_die"
+              , hint = Nothing
+              , step = "1"
+              , suffix = Nothing
+              }
+            , { field = "price"
+              , hint = Nothing
+              , step = "1"
+              , suffix = Just "cp"
+              }
+            , { field = "range"
+              , hint = Nothing
+              , step = "1"
+              , suffix = Just "ft."
+              }
+            ]
         )
+    ]
 
-    , Html.h4
-        []
-        [ Html.text "Weapon groups" ]
-    , Html.button
-        [ HA.style "align-self" "flex-start"
-        , HA.style "justify-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "weapon-groups")
-        ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
+
+viewFilterNumber :
+    SearchModel
+    -> { field : String
+       , hint : Maybe String
+       , step : String
+       , suffix : Maybe String
+       }
+    -> Html Msg
+viewFilterNumber searchModel { field, hint, step, suffix } =
+    Html.div
+        [ HA.class "column"
         , HA.class "gap-tiny"
-        , HA.class "scrollbox"
         ]
-        (case searchModel.aggregations of
-            Just (Ok { weaponGroups })->
+        [ Html.div
+            [ HA.class "row"
+            , HA.class "gap-small"
+            , HA.class "align-center"
+            ]
+            [ Html.h3
+                []
+                [ Html.text (sortFieldToLabel field) ]
+            , Html.text (Maybe.withDefault "" hint)
+            ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "align-baseline"
+            ]
+            [ Html.div
+                [ HA.class "input-container"
+                , HA.class "row"
+                , HA.class "align-baseline"
+                ]
+                [ Html.input
+                    [ HA.type_ "number"
+                    , HA.step step
+                    , HA.value (dictGetString field searchModel.filteredFromValues)
+                    , HE.onInput (FilteredFromValueChanged field)
+                    ]
+                    []
+                , case suffix of
+                    Just s ->
+                        Html.div
+                            [ HA.style "padding-right" "2px" ]
+                            [ Html.text s ]
+
+                    Nothing ->
+                        Html.text ""
+                ]
+            , Html.text "to"
+            , Html.div
+                [ HA.class "input-container"
+                , HA.class "row"
+                , HA.class "align-baseline"
+                ]
+                [ Html.input
+                    [ HA.type_ "number"
+                    , HA.step step
+                    , HA.value (dictGetString field searchModel.filteredToValues)
+                    , HE.onInput (FilteredToValueChanged field)
+                    ]
+                    []
+                , case suffix of
+                    Just s ->
+                        Html.div
+                            [ HA.style "padding-right" "2px" ]
+                            [ Html.text s ]
+
+                    Nothing ->
+                        Html.text ""
+                ]
+            ]
+        ]
+
+
+viewFilterNumberWithSelect :
+    SearchModel
+    -> { field : String
+       , values : List String
+       , default : String
+       , hint : Maybe String
+       , step : String
+       , suffix : Maybe String
+       }
+    -> Html Msg
+viewFilterNumberWithSelect searchModel { field, hint, step, suffix, values, default }=
+    let
+        selected : String
+        selected =
+            Maybe.withDefault default (Dict.get field searchModel.selectValues)
+
+        currentField : String
+        currentField =
+            field ++ "." ++ selected
+    in
+    Html.div
+        [ HA.class "column"
+        , HA.class "gap-tiny"
+        ]
+        [ Html.h3
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "align-center"
+            ]
+            [ Html.select
+                [ HA.class "input-container"
+                , HA.value selected
+                , HE.onInput (SelectValueChanged field)
+                ]
                 (List.map
-                    (\group ->
-                        Html.button
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            , HE.onClick (FilterToggled "weapon-groups" group)
-                            ]
-                            [ Html.text (toTitleCase group)
-                            , viewFilterIcon (nestedDictGet "weapon-groups" group searchModel.filteredValues)
+                    (\value ->
+                        Html.option
+                            [ HA.value value ]
+                            [ Html.text (String.Extra.humanize value)
                             ]
                     )
-                    (List.sort weaponGroups)
+                    values
                 )
-
-            Just (Err _) ->
-                []
-
-            Nothing ->
-                [ viewScrollboxLoader ]
-        )
-
-    , Html.h4
-        []
-        [ Html.text "Weapon types" ]
-    , Html.button
-        [ HA.style "align-self" "flex-start"
-        , HA.style "justify-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "weapon-types")
-        ]
-        [ Html.text "Reset selection" ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (List.map
-            (\type_ ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HE.onClick (FilterToggled "weapon-types" type_)
+            , Html.text field
+            ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "align-center"
+            ]
+            [ Html.div
+                [ HA.class "input-container"
+                , HA.class "row"
+                , HA.class "align-baseline"
+                ]
+                [ Html.input
+                    [ HA.type_ "number"
+                    , HA.step step
+                    , HA.value (dictGetString currentField searchModel.filteredFromValues)
+                    , HE.onInput (FilteredFromValueChanged currentField)
                     ]
-                    [ Html.text (toTitleCase type_)
-                    , viewFilterIcon (nestedDictGet "weapon-types" type_ searchModel.filteredValues)
-                    ]
-            )
-            Data.weaponTypes
-        )
+                    []
+                , case suffix of
+                    Just s ->
+                        Html.div
+                            [ HA.style "padding-right" "2px" ]
+                            [ Html.text s ]
 
-    , Html.h4
-        []
-        [ Html.text "Damage types" ]
-    , Html.div
+                    Nothing ->
+                        Html.text ""
+                ]
+            , Html.text "to"
+            , Html.div
+                [ HA.class "input-container"
+                , HA.class "row"
+                , HA.class "align-baseline"
+                ]
+                [ Html.input
+                    [ HA.type_ "number"
+                    , HA.step step
+                    , HA.value (dictGetString currentField searchModel.filteredToValues)
+                    , HE.onInput (FilteredToValueChanged currentField)
+                    ]
+                    []
+                ]
+            ]
+        ]
+
+
+viewFilterList :
+    SearchModel
+    -> { label : String
+       , filterKey : String
+       , showOperator : Bool
+       , showSearch : Bool
+       , values : Maybe (List String)
+       }
+    -> Html Msg
+viewFilterList searchModel { label, filterKey, showOperator, showSearch, values } =
+    case values of
+        Just [] ->
+            Html.text ""
+
+        _ ->
+            Html.div
+                [ HA.class "column"
+                , HA.class "gap-small"
+                ]
+                [ Html.Extra.viewIf
+                    (label /= "")
+                    (Html.h3
+                        []
+                        [ Html.text label ]
+                    )
+                , viewFilterButtons searchModel filterKey showOperator
+                , Html.Extra.viewIf showSearch (viewFilterSearch searchModel filterKey)
+                , viewFilterScrollbox searchModel filterKey values
+                ]
+
+
+viewFilterButtons : SearchModel -> String -> Bool -> Html Msg
+viewFilterButtons searchModel filterKey showOperator =
+    Html.div
         [ HA.class "row"
-        , HA.class "align-baseline"
+        , HA.class "align-center"
         , HA.class "gap-medium"
         ]
         [ Html.button
             [ HA.style "align-self" "flex-start"
-            , HA.style "justify-self" "flex-start"
-            , HE.onClick (RemoveAllFiltersOfTypePressed "damage-types")
+            , HE.onClick (RemoveAllFiltersOfTypePressed filterKey)
             ]
             [ Html.text "Reset selection" ]
-        , viewRadioButton
-            { checked =
-                Dict.get "damage-types" searchModel.filterOperators
-                    |> Maybe.withDefault True
-            , enabled = True
-            , name = "filter-damageTypes"
-            , onInput = FilterOperatorChanged "damage-types" True
-            , text = "Include all (AND)"
-            }
-        , viewRadioButton
-            { checked =
-                Dict.get "damage-types" searchModel.filterOperators
-                    |> Maybe.withDefault True
-                    |> not
-            , enabled = True
-            , name = "filter-damageTypes"
-            , onInput = FilterOperatorChanged "damage-types" False
-            , text = "Include any (OR)"
-            }
-        ]
-    , Html.div
-        [ HA.class "row"
-        , HA.class "gap-tiny"
-        , HA.class "scrollbox"
-        ]
-        (List.map
-            (\type_ ->
-                Html.button
-                    [ HA.class "row"
-                    , HA.class "gap-tiny"
-                    , HE.onClick (FilterToggled "damage-types" type_)
-                    ]
-                    [ Html.text (toTitleCase type_)
-                    , viewFilterIcon (nestedDictGet "damage-types" type_ searchModel.filteredValues)
-                    ]
+        , Html.Extra.viewIf
+            showOperator
+            (viewRadioButton
+                { checked =
+                    Dict.get filterKey searchModel.filterOperators
+                        |> Maybe.withDefault True
+                , enabled = True
+                , name = "operator-" ++ filterKey
+                , onInput = FilterOperatorChanged filterKey True
+                , text = "Include all (AND)"
+                }
             )
-            [ "bludgeoning"
-            , "piercing"
-            , "slashing"
-            ]
-        )
-
-    , Html.h4
-        []
-        [ Html.text "Reload" ]
-    , Html.button
-        [ HA.style "align-self" "flex-start"
-        , HA.style "justify-self" "flex-start"
-        , HE.onClick (RemoveAllFiltersOfTypePressed "reloads")
+        , Html.Extra.viewIf
+            showOperator
+            (viewRadioButton
+                { checked =
+                    Dict.get filterKey searchModel.filterOperators
+                        |> Maybe.withDefault True
+                        |> not
+                , enabled = True
+                , name = "operator-" ++ filterKey
+                , onInput = FilterOperatorChanged filterKey False
+                , text = "Include any (OR)"
+                }
+            )
         ]
-        [ Html.text "Reset selection" ]
-    , Html.div
+
+
+viewFilterSearch : SearchModel -> String -> Html Msg
+viewFilterSearch searchModel filterKey =
+    let
+        searchValue : String
+        searchValue =
+            dictGetString filterKey searchModel.searchFilters
+    in
+    Html.div
+        [ HA.class "row"
+        , HA.class "input-container"
+        ]
+        [ Html.input
+            [ HA.placeholder "Search"
+            , HA.value searchValue
+            , HA.type_ "text"
+            , HE.onInput (SearchFilterChanged filterKey)
+            ]
+            []
+        , Html.Extra.viewIf
+            (searchValue /= "")
+            (Html.button
+                [ HA.class "input-button"
+                , HA.attribute "aria-label" "Clear search"
+                , HE.onClick (SearchFilterChanged filterKey "")
+                ]
+                [ FontAwesome.view FontAwesome.Solid.times ]
+            )
+        ]
+
+
+viewFilterScrollbox : SearchModel -> String -> Maybe (List String) -> Html Msg
+viewFilterScrollbox searchModel filterKey maybeValues =
+    Html.div
         [ HA.class "row"
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (case searchModel.aggregations of
-            Just (Ok { reloads })->
+        (case maybeValues of
+            Just values ->
                 (List.map
-                    (\reload ->
+                    (\value ->
                         Html.button
                             [ HA.class "row"
                             , HA.class "gap-tiny"
-                            , HE.onClick (FilterToggled "reloads" reload)
+                            , HA.class "align-center"
+                            , HE.onClick (FilterToggled filterKey value)
+                            , case filterKey of
+                                "alignments" ->
+                                    HA.class "trait trait-alignment"
+
+                                "schools" ->
+                                    HA.class "trait"
+
+                                "sizes" ->
+                                    HA.class "trait trait-size"
+
+                                "rarities" ->
+                                    HA.class ("trait trait-" ++ value)
+
+                                "traits" ->
+                                    HA.class "trait"
+
+                                "types" ->
+                                    HA.class "filter-type"
+
+                                _ ->
+                                    HAE.empty
+                            , HAE.attributeIf (filterKey == "traits") (getTraitClass value)
                             ]
-                            [ Html.text reload
-                            , viewFilterIcon (nestedDictGet "reloads" reload searchModel.filteredValues)
+                            [ if filterKey == "pfs" then
+                                viewPfsIcon 16 value
+
+                              else
+                                Html.text ""
+
+                            , case filterKey of
+                                "actions" ->
+                                    Html.span
+                                        []
+                                        (viewTextWithActionIcons value)
+
+                                "alignments" ->
+                                    Dict.fromList Data.allAlignments
+                                        |> Dict.get value
+                                        |> Maybe.withDefault value
+                                        |> toTitleCase
+                                        |> Html.text
+
+                                _ ->
+                                    Html.text (toTitleCase value)
+
+                            , viewFilterIcon (nestedDictGet filterKey value searchModel.filteredValues)
                             ]
                     )
-                    (List.sort reloads)
+                    (List.filter
+                        (caseInsensitiveContains (dictGetString filterKey searchModel.searchFilters))
+                        values
+                    )
                 )
-
-            Just (Err _) ->
-                []
 
             Nothing ->
                 [ viewScrollboxLoader ]
         )
-    ]
 
 
 viewActiveFiltersAndOptions : Model -> SearchModel -> Html Msg
@@ -3896,7 +3362,7 @@ viewActiveFiltersAndOptions model searchModel =
         [ HA.class "column"
         , HA.class "gap-small"
         ]
-        [ Html.h4
+        [ Html.h3
             []
             [ Html.text "Active filters and options:" ]
 
@@ -5698,9 +5164,11 @@ viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1 =
                 |> Maybe.withDefault []
                 |> List.map
                     (\agg ->
-                        ( Maybe.withDefault "" agg.key1
-                            ++ "--"
-                            ++ Maybe.withDefault "" agg.key2
+                        ( String.join
+                            "--"
+                            [ Maybe.withDefault "" agg.key1
+                            , Maybe.withDefault "" agg.key2
+                            ]
                         , agg.count
                         )
                     )
@@ -5802,11 +5270,12 @@ viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2 =
                 |> Maybe.withDefault []
                 |> List.map
                     (\agg ->
-                        ( Maybe.withDefault "" agg.key1
-                            ++ "--"
-                            ++ Maybe.withDefault "" agg.key2
-                            ++ "--"
-                            ++ Maybe.withDefault "" agg.key3
+                        ( String.join
+                            "--"
+                            [ Maybe.withDefault "" agg.key1
+                            , Maybe.withDefault "" agg.key2
+                            , Maybe.withDefault "" agg.key3
+                            ]
                         , agg.count
                         )
                     )
@@ -6138,6 +5607,18 @@ groupDocumentsByField keys field documents =
                         )
                         document
                         dict
+
+                "area_type" ->
+                    if List.isEmpty document.areaTypes then
+                        insertToListDict "" document dict
+
+                    else
+                        List.foldl
+                            (\areaType ->
+                                insertToListDict areaType document
+                            )
+                            dict
+                            document.areaTypes
 
                 "armor_category" ->
                     insertToListDict
@@ -6761,7 +6242,7 @@ viewGroupedTitle field value =
 
     else if field == "alignment" then
         Html.text
-            (Dict.fromList Data.alignments
+            (Dict.fromList Data.allAlignments
                 |> Dict.get value
                 |> Maybe.withDefault value
                 |> toTitleCase
@@ -6930,6 +6411,7 @@ markdownRenderer viewModel =
 
                       else
                         HA.href linkData.destination
+                    , HAE.attributeIf (viewModel.openInNewTab) (HA.target "_blank")
                     , HAE.attributeMaybe HA.title linkData.title
                     ]
                     (linkEventAttributes linkData.destination)
@@ -7023,7 +6505,7 @@ markdownHtmlRenderer viewModel =
         , Markdown.Html.tag "details"
             (\summary children ->
                 [ Html.details
-                    [ HA.class "" ]
+                    []
                     (List.append
                         [ Html.summary
                             []
@@ -7704,10 +7186,16 @@ getTraitClass trait =
         "size" ->
             HA.class "trait-size"
 
+        "city" ->
+            HA.class "trait-size"
+
         "metropolis" ->
             HA.class "trait-size"
 
         "town" ->
+            HA.class "trait-size"
+
+        "village" ->
             HA.class "trait-size"
 
         "no alignment" ->
@@ -7928,7 +7416,7 @@ css args =
         --gap-medium: 12px;
         --gap-large: 20px;
         color: var(--color-text);
-        color-scheme: var(--color-scheme, light);
+        color-scheme: var(--color-scheme, dark);
         font-family: var(--font-1, "Century Gothic", CenturyGothic, AppleGothic, sans-serif);
         font-size: var(--font-normal);
         line-height: normal;
@@ -7974,7 +7462,7 @@ css args =
         text-decoration: underline;
     }
 
-    h1, h2, h3, h4, .h4, h5, h6 {
+    h1, h2, h3, .h3, h4, .h4, h5, h6 {
         font-variant: small-caps;
         font-weight: 700;
         margin: 0;
@@ -7999,7 +7487,7 @@ css args =
         line-height: 1;
     }
 
-    h3 {
+    h3, .h3 {
         font-size: 18px;
     }
 
@@ -8081,6 +7569,12 @@ css args =
 
     .inline div {
         display: inline;
+    }
+
+    pre {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
     }
 
     select {
@@ -8213,6 +7707,20 @@ css args =
         display: grid;
     }
 
+    .numbers-grid {
+        display: grid;
+        column-gap: var(--gap-large);
+        row-gap: var(--gap-small);
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    }
+
+    .scale-grid {
+        display: grid;
+        column-gap: var(--gap-large);
+        row-gap: var(--gap-small);
+        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    }
+
     .column:empty, .row:empty, .grid:empty {
         display: none;
     }
@@ -8278,6 +7786,10 @@ css args =
 
     .grow {
         flex-grow: 1;
+    }
+
+    .header-margins h3:not(:first-child) {
+        margin-top: var(--gap-medium);
     }
 
     .input-container {
