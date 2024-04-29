@@ -23,7 +23,7 @@ import Random
 import Result.Extra
 import Set exposing (Set)
 import String.Extra
-import Task
+import Task exposing (Task)
 import Tuple3
 import Url exposing (Url)
 import Url.Parser
@@ -74,6 +74,7 @@ init flagsValue =
       , documentsToFetch = Set.empty
       , elasticUrl = flags.elasticUrl
       , fixedParams = flags.fixedParams
+      , globalAggregations = Nothing
       , groupTraits = False
       , groupedDisplay = Dim
       , groupedSort = Alphanum
@@ -99,8 +100,6 @@ init flagsValue =
                 , removeFilters = flags.removeFilters
                 }
       , showLegacyFilters = True
-      , sourcesAggregation = Nothing
-      , traitAggregations = Nothing
       , url = url
       , viewModel =
             { browserDateFormat = flags.browserDateFormat
@@ -142,8 +141,7 @@ init flagsValue =
                     |> searchWithCurrentQuery LoadNew
                     |> addCmd updateTitle
                     |> addCmd getAggregations
-                    |> addCmd getSourcesAggregation
-                    |> addCmd getTraitAggregations
+                    |> addCmd getGlobalAggregations
 
 
 subscriptions : Model -> Sub Msg
@@ -388,8 +386,9 @@ update msg model =
                                                     nestedDictFilter
                                                         "sources"
                                                         (\source _ ->
-                                                            model.sourcesAggregation
+                                                            model.globalAggregations
                                                                 |> Maybe.andThen Result.toMaybe
+                                                                |> Maybe.map .sources
                                                                 |> Maybe.withDefault []
                                                                 |> List.filter
                                                                     (\s ->
@@ -404,8 +403,9 @@ update msg model =
                                                     nestedDictFilter
                                                         "sources"
                                                         (\source _ ->
-                                                            model.sourcesAggregation
+                                                            model.globalAggregations
                                                                 |> Maybe.andThen Result.toMaybe
+                                                                |> Maybe.map .sources
                                                                 |> Maybe.andThen (List.Extra.find (.name >> ((==) source)))
                                                                 |> Maybe.map .category
                                                                 |> Maybe.map String.toLower
@@ -549,6 +549,11 @@ update msg model =
             )
                 |> parseAndFetchDocuments alwaysParseMarkdown ids
 
+        GotGlobalAggregationsResult result ->
+            ( { model | globalAggregations = Just result }
+            , Cmd.none
+            )
+
         GotGroupAggregationsResult result ->
             ( updateCurrentSearchModel
                 (\searchModel ->
@@ -613,16 +618,6 @@ update msg model =
                         |> Result.map .documentIds
                         |> Result.withDefault []
                     )
-
-        GotSourcesAggregationResult result ->
-            ( { model | sourcesAggregation = Just result }
-            , Cmd.none
-            )
-
-        GotTraitAggregationsResult result ->
-            ( { model | traitAggregations = Just result }
-            , Cmd.none
-            )
 
         GroupField1Changed field ->
             updateCurrentSearchModel
@@ -1414,8 +1409,7 @@ updateIndex maybeIndex ( model, cmd ) =
                 , cmd
                 )
                     |> addCmd getDocumentIndex
-                    |> addCmd getSourcesAggregation
-                    |> addCmd getTraitAggregations
+                    |> addCmd getGlobalAggregations
                     |> Cmd.Extra.add (saveToLocalStorage "index" index)
 
             else
@@ -3138,8 +3132,9 @@ buildSearchMustNotTerms model searchModel =
                                         else
                                             Nothing
                                     )
-                                    (model.sourcesAggregation
+                                    (model.globalAggregations
                                         |> Maybe.andThen Result.toMaybe
+                                        |> Maybe.map .sources
                                         |> Maybe.withDefault []
                                     )
                                 )
@@ -3649,28 +3644,71 @@ getDocumentIndex model =
         Cmd.none
 
 
-getSourcesAggregation : Model -> Cmd Msg
-getSourcesAggregation model =
+getGlobalAggregations : Model -> Cmd Msg
+getGlobalAggregations model =
     if model.index /= "" && model.dataUrl /= "" then
         Http.get
-            { expect = Http.expectJson GotSourcesAggregationResult sourcesAggregationDecoder
-            , url = model.dataUrl ++ "/" ++ model.index ++ "-source-agg.json"
+            { expect = Http.expectJson GotGlobalAggregationsResult globalAggregationsDecoder
+            , url = model.dataUrl ++ "/" ++ model.index ++ "-aggs.json"
             }
 
     else
-        Cmd.none
+        Task.map2
+            (\sources traits ->
+                { sources = sources
+                , traits =
+                    traits
+                        |> Dict.Extra.groupBy .group
+                        |> Dict.map (\_ v -> List.map .trait v)
+                }
+            )
+            (aggregationsHttpTask
+                model
+                buildSourcesAggregationBody
+                (Decode.at
+                    ["aggregations", "source", "buckets"]
+                    (Decode.list (Decode.field "key" sourceAggregationDecoder))
+                )
+            )
+            (aggregationsHttpTask
+                model
+                buildTraitsAggregationBody
+                (Decode.at
+                    ["aggregations", "trait_group", "buckets"]
+                    (Decode.list (Decode.field "key" traitAggregationDecoder))
+                )
+            )
+            |> Task.attempt GotGlobalAggregationsResult
 
 
-getTraitAggregations : Model -> Cmd Msg
-getTraitAggregations model =
-    if model.index /= "" && model.dataUrl /= "" then
-        Http.get
-            { expect = Http.expectJson GotTraitAggregationsResult traitAggregationsDecoder
-            , url = model.dataUrl ++ "/" ++ model.index ++ "-trait-agg.json"
-            }
+aggregationsHttpTask : Model -> Encode.Value -> Decode.Decoder a -> Task Http.Error a
+aggregationsHttpTask model body decoder =
+    Http.task
+        { method = "POST"
+        , headers = []
+        , url = model.elasticUrl ++ "/_search"
+        , body = Http.jsonBody body
+        , resolver = Http.stringResolver
+            (\response ->
+                case response of
+                    Http.GoodStatus_ _ data ->
+                        Decode.decodeString decoder data
+                            |> Result.mapError (Decode.errorToString >> Http.BadBody)
 
-    else
-        Cmd.none
+                    Http.BadUrl_ a ->
+                        Err (Http.BadUrl a)
+
+                    Http.NetworkError_ ->
+                        Err Http.NetworkError
+
+                    Http.Timeout_ ->
+                        Err Http.Timeout
+
+                    Http.BadStatus_ { statusCode } _ ->
+                        Err (Http.BadStatus statusCode)
+            )
+        , timeout = Just 10000
+        }
 
 
 buildSourcesAggregationBody : Encode.Value
@@ -3709,6 +3747,45 @@ buildSourcesAggregationBody =
                   )
                 ]
           )
+        ]
+
+
+buildTraitsAggregationBody : Encode.Value
+buildTraitsAggregationBody =
+    Encode.object
+        [ ( "aggs"
+          , Encode.object
+                [ buildCompositeAggregation
+                    "trait_group"
+                    False
+                    [ ( "group", "trait_group" )
+                    , ( "trait", "name.keyword" )
+                    ]
+                ]
+          )
+        , ( "query"
+          , Encode.object
+                [ ( "bool"
+                  , Encode.object
+                        [ ( "must"
+                          , Encode.object
+                                [ ( "term"
+                                  , Encode.object [ ( "type", Encode.string "trait" ) ]
+                                  )
+                                ]
+                          )
+                        , ( "must_not"
+                          , Encode.object
+                                [ ( "term"
+                                  , Encode.object [ ( "exclude_from_search", Encode.bool True ) ]
+                                  )
+                                ]
+                          )
+                        ]
+                  )
+                ]
+          )
+        , ( "size", Encode.int 0 )
         ]
 
 

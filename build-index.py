@@ -354,11 +354,12 @@ if __name__ == '__main__':
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
 
-    with open(dir_path + '/' + index_name + '-source-agg.json', 'w') as fp:
-        json.dump(source_agg, fp)
-
-    with open(dir_path + '/' + index_name + '-trait-agg.json', 'w') as fp:
-        json.dump(trait_agg, fp)
+    with open(dir_path + '/' + index_name + '-aggs.json', 'w') as fp:
+        aggs = {
+            "sources": source_agg,
+            "traits": trait_agg,
+        }
+        json.dump(aggs, fp)
 
     docs.sort(key=lambda doc: doc['category'])
     by_cat = {k: list(v) for k, v in itertools.groupby(docs, lambda doc: doc['category'])}

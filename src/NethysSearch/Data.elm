@@ -30,6 +30,7 @@ type alias Model =
     , documentsToFetch : Set String
     , elasticUrl : String
     , fixedParams : Dict String (List String)
+    , globalAggregations : Maybe (Result Http.Error GlobalAggregations)
     , groupTraits : Bool
     , groupedDisplay : GroupedDisplay
     , groupedSort : GroupedSort
@@ -50,8 +51,6 @@ type alias Model =
     , savedColumnConfigurationName : String
     , searchModel : SearchModel
     , showLegacyFilters : Bool
-    , sourcesAggregation : Maybe (Result Http.Error (List Source))
-    , traitAggregations : Maybe (Result Http.Error (Dict String (List String)))
     , url : Url
     , viewModel : ViewModel
     , windowSize : Size
@@ -425,6 +424,12 @@ type alias Aggregations =
     }
 
 
+type alias GlobalAggregations =
+    { sources : List Source
+    , traits : Dict String (List String)
+    }
+
+
 type alias DamageTypeValues =
     { acid : Maybe Int
     , all : Maybe Int
@@ -497,11 +502,10 @@ type Msg
     | GotBodySize Size
     | GotDocumentIndexResult (Result Http.Error (Dict String String))
     | GotDocuments Bool (List String) (Result Http.Error (List (Result String Document)))
+    | GotGlobalAggregationsResult (Result Http.Error GlobalAggregations)
     | GotGroupAggregationsResult (Result Http.Error SearchResult)
     | GotGroupSearchResult (Result Http.Error SearchResult)
     | GotSearchResult (Result Http.Error SearchResult)
-    | GotSourcesAggregationResult (Result Http.Error (List Source))
-    | GotTraitAggregationsResult (Result Http.Error (Dict String (List String)))
     | FilterRemoved String String
     | FilterToggled String String
     | FilterApCreaturesChanged Bool
@@ -3004,34 +3008,37 @@ aggregationBucketDecoder keyDecoder =
     Decode.field "buckets" (Decode.list (Decode.field "key" keyDecoder))
 
 
-traitAggregationsDecoder : Decode.Decoder (Dict String (List String))
-traitAggregationsDecoder =
-    Decode.list
-        (Field.require "group" Decode.string <| \group ->
-         Field.require "trait" Decode.string <| \trait ->
-         Decode.succeed
-            { group = String.toLower group
-            , trait = String.toLower trait
-            }
-        )
-        |> Decode.map
-            (\traitGroups ->
-                traitGroups
-                    |> Dict.Extra.groupBy .group
-                    |> Dict.map (\_ v -> List.map .trait v)
-            )
+globalAggregationsDecoder : Decode.Decoder GlobalAggregations
+globalAggregationsDecoder =
+    Field.require "sources" (Decode.list sourceAggregationDecoder) <| \sources ->
+    Field.require "traits" (Decode.list traitAggregationDecoder) <| \traits ->
+    Decode.succeed
+        { sources = sources
+        , traits =
+            traits
+                |> Dict.Extra.groupBy .group
+                |> Dict.map (\_ v -> List.map .trait v)
+        }
 
 
-sourcesAggregationDecoder : Decode.Decoder (List Source)
-sourcesAggregationDecoder =
-    Decode.list
-        (Field.require "category" Decode.string <| \category ->
-         Field.require "name" Decode.string <| \name ->
-         Decode.succeed
-            { category = category
-            , name = name
-            }
-        )
+sourceAggregationDecoder : Decode.Decoder Source
+sourceAggregationDecoder =
+    Field.require "category" Decode.string <| \category ->
+    Field.require "name" Decode.string <| \name ->
+    Decode.succeed
+       { category = category
+       , name = name
+       }
+
+
+traitAggregationDecoder : Decode.Decoder { group : String, trait : String }
+traitAggregationDecoder =
+    Field.require "group" Decode.string <| \group ->
+    Field.require "trait" Decode.string <| \trait ->
+    Decode.succeed
+       { group = String.toLower group
+       , trait = String.toLower trait
+       }
 
 
 sourcesDecoder : Decode.Decoder (List Document)

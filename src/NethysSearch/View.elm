@@ -2663,9 +2663,9 @@ viewFilterSources model searchModel =
         , viewFilterScrollbox
             searchModel
             "sources"
-            (case ( model.sourcesAggregation, searchModel.aggregations ) of
-                ( Just (Ok allSources), Just (Ok { sources }) ) ->
-                    allSources
+            (case ( model.globalAggregations, searchModel.aggregations ) of
+                ( Just (Ok globalAggregations), Just (Ok { sources }) ) ->
+                    globalAggregations.sources
                         |> List.filter (\source -> List.member (String.toLower source.name) sources)
                         |> List.filter
                             (\{ category } ->
@@ -2814,12 +2814,12 @@ viewFilterTraits model searchModel =
             [ HA.class "column"
             , HA.class "gap-large"
             ]
-            (case ( model.traitAggregations, searchModel.aggregations ) of
-                ( Just (Ok traitAggregations), Just (Ok aggregations) ) ->
+            (case ( model.globalAggregations, searchModel.aggregations ) of
+                ( Just (Ok globalAggregations), Just (Ok aggregations) ) ->
                     let
                         categorizedTraits : List String
                         categorizedTraits =
-                            traitAggregations
+                            globalAggregations.traits
                                 |> Dict.values
                                 |> List.concat
 
@@ -2863,7 +2863,7 @@ viewFilterTraits model searchModel =
                                 , viewFilterScrollbox searchModel "traits" (Just (List.sort traits))
                                 ]
                         )
-                        (traitAggregations
+                        (globalAggregations.traits
                             |> Dict.filter
                                 (\group traits ->
                                     not (List.member group [ "half-elf", "half-orc", "aon-special", "settlement" ])
