@@ -2214,6 +2214,15 @@ viewFilterCreatures model searchModel =
                       , step = "1"
                       , suffix = Nothing
                       }
+                    , { field = "skill_mod"
+                      , values =
+                            Data.allSkills
+                                |> List.Extra.remove "lore"
+                      , default = "acrobatics"
+                      , hint = Nothing
+                      , step = "1"
+                      , suffix = Nothing
+                      }
                     ]
                 ]
             )
@@ -3129,7 +3138,7 @@ viewFilterNumberWithSelect searchModel { field, hint, step, suffix, values, defa
                     )
                     values
                 )
-            , Html.text field
+            , Html.text (String.replace "_" " " field)
             ]
         , Html.div
             [ HA.class "row"
