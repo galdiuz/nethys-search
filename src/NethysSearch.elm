@@ -2646,13 +2646,13 @@ buildSearchBody model searchModel load =
                                               , Encode.object
                                                     [ ( "type"
                                                       , Encode.list Encode.string
-                                                            [ "Ancestry", "Class" ]
+                                                            [ "Ancestry", "Class", "Versatile Heritage" ]
                                                       )
                                                     ]
                                               )
                                             ]
                                         )
-                                      , ( "weight", Encode.float 1.1 )
+                                      , ( "weight", Encode.float 1.2 )
                                       ]
                                     , [ ( "filter"
                                         , Encode.object
