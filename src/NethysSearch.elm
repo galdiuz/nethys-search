@@ -3652,7 +3652,7 @@ getGlobalAggregations model =
             , url = model.dataUrl ++ "/" ++ model.index ++ "-aggs.json"
             }
 
-    else
+    else if model.index /= "" then
         Task.map2
             (\sources traits ->
                 { sources = sources
@@ -3679,6 +3679,9 @@ getGlobalAggregations model =
                 )
             )
             |> Task.attempt GotGlobalAggregationsResult
+
+    else
+        Cmd.none
 
 
 aggregationsHttpTask : Model -> Encode.Value -> Decode.Decoder a -> Task Http.Error a
