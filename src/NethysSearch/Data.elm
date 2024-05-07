@@ -63,6 +63,7 @@ type alias ViewModel =
     , groupedShowHeightenable : Bool
     , groupedShowPfs : Bool
     , groupedShowRarity : Bool
+    , maskedSourceGroups : Set String
     , openInNewTab : Bool
     , resultBaseUrl : String
     , showResultAdditionalInfo : Bool
@@ -486,6 +487,7 @@ type alias Size =
 
 type alias Source =
     { category : String
+    , group : Maybe String
     , name : String
     }
 
@@ -531,6 +533,7 @@ type Msg
     | LoadGroupPressed (List ( String, String ))
     | LoadMorePressed Int
     | LocalStorageValueReceived Decode.Value
+    | MaskSourceGroupToggled String
     | NewRandomSeedPressed
     | NoOp
     | OpenInNewTabChanged Bool
@@ -3024,9 +3027,11 @@ globalAggregationsDecoder =
 sourceAggregationDecoder : Decode.Decoder Source
 sourceAggregationDecoder =
     Field.require "category" Decode.string <| \category ->
+    Field.require "group" (Decode.nullable Decode.string) <| \group ->
     Field.require "name" Decode.string <| \name ->
     Decode.succeed
        { category = category
+       , group = group
        , name = name
        }
 

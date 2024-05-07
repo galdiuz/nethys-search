@@ -881,6 +881,21 @@ viewDefaultParams model searchModel =
                             )
                         ]
 
+                Grouped ->
+                    Html.div
+                        []
+                        [ Html.text "Group by: "
+                        , Maybe.Extra.values
+                            [ Just pageDefaultSearchModel.groupField1
+                            , pageDefaultSearchModel.groupField2
+                            , pageDefaultSearchModel.groupField3
+                            ]
+                            |> List.map String.Extra.humanize
+                            |> List.map toTitleCase
+                            |> String.join ", "
+                            |> Html.text
+                        ]
+
                 _ ->
                     Html.text ""
             ]
@@ -1901,6 +1916,19 @@ viewWhatsNew model _ =
         Emojis has been added to the buttons to make them easier to distinguish.
 
 
+        ### Grouped display updated
+
+        Grouped display now lists number of results not loaded in a more obvious way, and groups can
+        be individually loaded.
+
+
+        ### Mask spoilers
+
+        You can now select a set of source groups for spoiler masking. Results from the selected
+        groups will be masked in search results and hover previews. This option is found under
+        _Sources / Spoilers_.
+
+
         ### Search optimization
 
         The search has become faster and more efficient. Read more in [this reddit post].
@@ -2706,6 +2734,58 @@ viewFilterSources model searchModel =
 
                 _ ->
                     Nothing
+            )
+        ]
+
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Mask Spoilers" ]
+        , Html.text "Masks results and previews from the selected source groups. This is saved between page visits."
+        , viewFilterSearch model.searchModel "mask-spoilers"
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "scrollbox"
+            ]
+            (case model.globalAggregations of
+                Just (Ok globalAggregations) ->
+                    List.map
+                        (\sourceGroup ->
+                            Html.button
+                                [ HA.class "row"
+                                , HA.class "gap-tiny"
+                                , HA.class "align-center"
+                                , HE.onClick (MaskSourceGroupToggled sourceGroup)
+                                ]
+                                [ Html.text (toTitleCase sourceGroup)
+                                , viewFilterIcon
+                                    (if Set.member sourceGroup model.viewModel.maskedSourceGroups then
+                                        Just False
+
+                                     else
+                                         Nothing
+                                    )
+                                ]
+                        )
+                        (globalAggregations.sources
+                            |> List.filterMap .group
+                            |> List.filter
+                                (caseInsensitiveContains
+                                    (dictGetString "mask-spoilers" searchModel.searchFilters)
+                                )
+                            |> List.Extra.unique
+                            |> List.sort
+                        )
+
+                Just (Err _) ->
+                    []
+
+                Nothing ->
+                    [ viewScrollboxLoader ]
             )
         ]
     ]
@@ -3802,10 +3882,17 @@ viewSingleShortResult : ViewModel -> Maybe Document -> Html Msg
 viewSingleShortResult viewModel maybeDocument =
     case maybeDocument of
         Just document ->
-            Html.Lazy.lazy2
-                viewSingleShortResultLoaded
-                viewModel
-                document
+            if documentShouldBeMasked viewModel document then
+                Html.Lazy.lazy2
+                    viewMaskedDocument
+                    viewModel
+                    document
+
+            else
+                Html.Lazy.lazy2
+                    viewSingleShortResultLoaded
+                    viewModel
+                    document
 
         Nothing ->
             Html.article
@@ -3925,6 +4012,99 @@ viewSingleShortResultLoaded viewModel document =
                         [ Html.text ("Not parsed: " ++ document.id) ]
                     ]
             )
+        ]
+
+
+viewMaskedDocument : ViewModel -> Document -> Html Msg
+viewMaskedDocument viewModel document =
+    Html.article
+        [ HA.class "column"
+        , HA.class "gap-small"
+        , HA.class "fade-in"
+        , HA.style "margin-top" "2px"
+        ]
+        [ Html.h1
+            [ HA.class "title" ]
+            [ Html.div
+                [ HA.class "row"
+                , HA.class "gap-small"
+                , HA.class "align-center"
+                , HA.class "nowrap"
+                ]
+                [ if viewModel.showResultPfs then
+                    viewPfsIconWithLink 25 (Maybe.withDefault "" document.pfs)
+
+                  else
+                    Html.text ""
+                , Html.a
+                    (List.append
+                        [ HA.href (getUrl viewModel document)
+                        , HAE.attributeIf viewModel.openInNewTab (HA.target "_blank")
+                        ]
+                        (linkEventAttributes document.url)
+                    )
+                    [ Html.text "<Spoiler>"
+                    ]
+                ]
+            , Html.div
+                [ HA.class "title-type"
+                ]
+                [ case document.type_ of
+                    "Item" ->
+                        case document.itemSubcategory of
+                            Just "Base Armor" ->
+                                Html.text "Armor"
+
+                            Just "Base Shields" ->
+                                Html.text "Shield"
+
+                            Just "Base Weapons" ->
+                                Html.text "Weapon"
+
+                            _ ->
+                                Html.text document.type_
+
+                    "Spell" ->
+                        Html.text (Maybe.withDefault document.type_ document.spellType)
+
+                    _ ->
+                        Html.text document.type_
+                , case document.level of
+                    Just level ->
+                        Html.text (" " ++ String.fromInt level)
+
+                    Nothing ->
+                        Html.text ""
+                ]
+            ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "traits"
+            ]
+            [ case document.rarity of
+                Just "common" ->
+                    Html.text ""
+
+                Just rarity ->
+                    viewTrait Nothing (String.Extra.toTitleCase rarity)
+
+                Nothing ->
+                    Html.text ""
+            ]
+        , Html.div
+            [ HA.class "inline"
+            ]
+            [ Html.span
+                [ HA.class "bold" ]
+                [ Html.text "Source" ]
+            , Html.text " "
+            , Html.span
+                []
+                (document.sources
+                    |> Maybe.withDefault ""
+                    |> parseAndViewAsMarkdown viewModel
+                )
+            ]
         ]
 
 
@@ -4139,11 +4319,49 @@ viewSearchResultTableRow viewModel tableColumns document =
         (List.map
             (\column ->
                 ( document.id ++ column
-                , Html.Lazy.lazy3
-                    viewSearchResultTableCell
-                    viewModel
-                    document
-                    column
+                , if documentShouldBeMasked viewModel document then
+                    if column == "name" then
+                        Html.td
+                            []
+                            [ Html.a
+                                (List.append
+                                    [ HA.href (getUrl viewModel document)
+                                    , HAE.attributeIf viewModel.openInNewTab (HA.target "_blank")
+                                    ]
+                                    (linkEventAttributes (getUrl viewModel document))
+                                )
+                                [ Html.text "<Spoiler>"
+                                ]
+                            ]
+
+                    else if
+                        List.member
+                            column
+                            [ "level"
+                            , "pfs"
+                            , "rank"
+                            , "rarity"
+                            , "source"
+                            , "source_category"
+                            , "source_group"
+                            , "type"
+                            ]
+                    then
+                        Html.Lazy.lazy3
+                            viewSearchResultTableCell
+                            viewModel
+                            document
+                            column
+
+                    else
+                        Html.td [] []
+
+                  else
+                    Html.Lazy.lazy3
+                        viewSearchResultTableCell
+                        viewModel
+                        document
+                        column
                 )
             )
             ("name" :: tableColumns)
@@ -5484,7 +5702,12 @@ viewGroupedLink viewModel document =
             ]
             (linkEventAttributes (getUrl viewModel document))
         )
-        [ Html.text document.name ]
+        [ if documentShouldBeMasked viewModel document then
+            Html.text "<Spoiler>"
+
+          else
+            Html.text document.name
+        ]
 
 
 viewGroupedHeightenableBadge : ViewModel -> Document -> Html msg
@@ -6861,25 +7084,32 @@ viewDocument : Model -> String -> Html Msg
 viewDocument model id =
     case Dict.get id model.documents of
         Just (Ok document) ->
-            case document.markdown of
-                Parsed parsed ->
-                    Html.Lazy.lazy3
-                        viewParsedDocument
-                        model.viewModel
-                        document.id
-                        parsed
+            if documentShouldBeMasked model.viewModel document then
+                Html.Lazy.lazy2
+                    viewMaskedDocument
+                    model.viewModel
+                    document
 
-                ParsedWithUnflattenedChildren parsed ->
-                    Html.Lazy.lazy3
-                        viewParsedDocument
-                        model.viewModel
-                        document.id
-                        parsed
+            else
+                case document.markdown of
+                    Parsed parsed ->
+                        Html.Lazy.lazy3
+                            viewParsedDocument
+                            model.viewModel
+                            document.id
+                            parsed
 
-                NotParsed _ ->
-                    Html.div
-                        [ HA.style "color" "red" ]
-                        [ Html.text ("Not parsed: " ++ document.id) ]
+                    ParsedWithUnflattenedChildren parsed ->
+                        Html.Lazy.lazy3
+                            viewParsedDocument
+                            model.viewModel
+                            document.id
+                            parsed
+
+                    NotParsed _ ->
+                        Html.div
+                            [ HA.style "color" "red" ]
+                            [ Html.text ("Not parsed: " ++ document.id) ]
 
         Just (Err (Http.BadStatus 404)) ->
             Html.div
@@ -7327,6 +7557,21 @@ replaceActionLigatures text ( find, replace ) rem =
 
                 else
                     [ Html.text text ]
+
+
+documentShouldBeMasked : ViewModel -> Document -> Bool
+documentShouldBeMasked viewModel document =
+    List.all
+        identity
+        [ document.sourceGroup
+            |> Maybe.map String.toLower
+            |> Maybe.map (\sourceGroup -> Set.member sourceGroup viewModel.maskedSourceGroups)
+            |> Maybe.withDefault False
+        , List.any
+            (\source -> not (caseInsensitiveContains "player's guide" source))
+            document.sourceList
+        , String.toLower document.type_ /= "source"
+        ]
 
 
 viewCss : Model -> Html msg

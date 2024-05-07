@@ -245,6 +245,14 @@ def fetch_source_agg(url):
                             }
                         },
                         {
+                            'group': {
+                                'terms': {
+                                    'field': 'source_group',
+                                    'missing_bucket': True,
+                                }
+                            }
+                        },
+                        {
                             'name': {
                                 'terms': {
                                     'field': 'name.keyword',

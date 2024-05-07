@@ -10,6 +10,7 @@ import Dict.Extra
 import File.Download
 import Http
 import Json.Decode as Decode
+import Json.Decode.Extra as DecodeExtra
 import Json.Decode.Field as Field
 import Json.Encode as Encode
 import List.Extra
@@ -22,6 +23,7 @@ import Process
 import Random
 import Result.Extra
 import Set exposing (Set)
+import Set.Extra
 import String.Extra
 import Task exposing (Task)
 import Tuple3
@@ -107,6 +109,7 @@ init flagsValue =
             , groupedShowHeightenable = True
             , groupedShowPfs = True
             , groupedShowRarity = True
+            , maskedSourceGroups = Set.empty
             , openInNewTab = False
             , resultBaseUrl =
                 if String.endsWith "/" flags.resultBaseUrl then
@@ -849,6 +852,27 @@ update msg model =
         NewRandomSeedPressed ->
             ( model
             , Random.generate RandomSeedGenerated (Random.int 0 2147483647)
+            )
+
+        MaskSourceGroupToggled sourceGroup ->
+            let
+                newModel =
+                    updateViewModel
+                        (\viewModel ->
+                            { viewModel
+                                | maskedSourceGroups =
+                                    Set.Extra.toggle sourceGroup viewModel.maskedSourceGroups
+                            }
+                        )
+                        model
+            in
+            ( newModel
+            , saveToLocalStorage
+                "masked-source-groups"
+                (newModel.viewModel.maskedSourceGroups
+                    |> Encode.set Encode.string
+                    |> Encode.encode 0
+                )
             )
 
         NoOp ->
@@ -1934,6 +1958,18 @@ updateModelFromLocalStorage ( key, value ) model =
 
                 _ ->
                     model
+
+        "masked-source-groups" ->
+            updateViewModel
+                (\viewModel ->
+                    case Decode.decodeString (DecodeExtra.set Decode.string) value of
+                        Ok set ->
+                            { viewModel | maskedSourceGroups = set }
+
+                        _ ->
+                            viewModel
+                )
+                model
 
         "open-in-new-tab" ->
             updateViewModel
@@ -3721,8 +3757,9 @@ buildSourcesAggregationBody =
           , Encode.object
                 [ buildCompositeAggregation
                     "source"
-                    False
+                    True
                     [ ( "category", "source_category" )
+                    , ( "group", "source_group" )
                     , ( "name", "name.keyword" )
                     ]
                 ]
