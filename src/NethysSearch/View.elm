@@ -2703,7 +2703,7 @@ viewFilterSources model searchModel =
             (case ( model.globalAggregations, searchModel.aggregations ) of
                 ( Just (Ok globalAggregations), Just (Ok { sources }) ) ->
                     globalAggregations.sources
-                        |> List.filter (\source -> List.member (String.toLower source.name) sources)
+                        |> List.filter (\source -> List.member source.name sources)
                         |> List.filter
                             (\{ category } ->
                                 (&&)

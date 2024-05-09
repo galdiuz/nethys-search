@@ -247,7 +247,7 @@ def fetch_source_agg(url):
                         {
                             'group': {
                                 'terms': {
-                                    'field': 'source_group',
+                                    'field': 'source_group.keyword',
                                     'missing_bucket': True,
                                 }
                             }

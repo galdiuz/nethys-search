@@ -956,7 +956,7 @@ filterFields searchModel =
       , key = "constitution-scales"
       , useOperator = False
       }
-    , { field = "creature_family"
+    , { field = "creature_family.keyword"
       , key = "creature-families"
       , useOperator = False
       }
@@ -1000,11 +1000,11 @@ filterFields searchModel =
       , key = "intelligence-scales"
       , useOperator = False
       }
-    , { field = "item_category"
+    , { field = "item_category.keyword"
       , key = "item-categories"
       , useOperator = False
       }
-    , { field = "item_subcategory"
+    , { field = "item_subcategory.keyword"
       , key = "item-subcategories"
       , useOperator = False
       }
@@ -1048,15 +1048,15 @@ filterFields searchModel =
       , key = "sizes"
       , useOperator = False
       }
-    , { field = "skill"
+    , { field = "skill.keyword"
       , key = "skills"
       , useOperator = True
       }
-    , { field = "skill"
+    , { field = "skill.keyword"
       , key = "lore-skills"
       , useOperator = True
       }
-    , { field = "source"
+    , { field = "source.keyword"
       , key = "sources"
       , useOperator = False
       }
@@ -1353,10 +1353,10 @@ sortFields =
     , ( "constitution", "constitution", True )
     , ( "constitution_scale", "constitution_scale_number", True )
     , ( "cost", "cost.keyword", False )
-    , ( "creature_family", "creature_family", False )
+    , ( "creature_family", "creature_family.keyword", False )
     , ( "damage", "damage_die", True )
     , ( "damage_type", "damage_type", False )
-    , ( "deity", "deity", False )
+    , ( "deity", "deity.keyword", False )
     , ( "deity_category", "deity_category.keyword", False )
     , ( "deity_category_order", "deity_category_order", False )
     , ( "dex_cap", "dex_cap", True )
@@ -1378,8 +1378,8 @@ sortFields =
     , ( "hp_scale", "hp_scale_number", True )
     , ( "intelligence", "intelligence", False )
     , ( "intelligence_scale", "intelligence_scale_number", True )
-    , ( "item_category", "item_category", False )
-    , ( "item_subcategory", "item_subcategory", False )
+    , ( "item_category", "item_category.keyword", False )
+    , ( "item_subcategory", "item_subcategory.keyword", False )
     , ( "level", "level", True )
     , ( "mystery", "mystery", False )
     , ( "name", "name.keyword", False )
@@ -1408,9 +1408,9 @@ sortFields =
     , ( "secondary_casters", "secondary_casters", False )
     , ( "secondary_check", "secondary_check.keyword", False )
     , ( "size", "size_id", True )
-    , ( "source", "source", False )
+    , ( "source", "source_raw.keyword", False )
     , ( "source_category", "source_category", False )
-    , ( "source_group", "source_group", False )
+    , ( "source_group", "source_group.keyword", False )
     , ( "speed_penalty", "speed_penalty.keyword", False )
     , ( "spell_attack_bonus", "spell_attack_bonus", True )
     , ( "spell_attack_bonus_scale", "spell_attack_bonus_scale_number", True )
@@ -1973,7 +1973,7 @@ currentQueryAsComplex searchModel =
                         |> String.join " "
                         |> surroundWithParantheses dict excluded
                         |> String.append ":"
-                        |> String.append filter.field
+                        |> String.append (String.replace ".keyword" "" filter.field)
                         |> Just
             )
     , List.map
@@ -2917,7 +2917,7 @@ aggregationsDecoder =
         (aggregationBucketDecoder Decode.string)
         <| \areaTypes ->
     Field.requireAt
-        [ "aggregations", "creature_family" ]
+        [ "aggregations", "creature_family.keyword" ]
         (aggregationBucketDecoder Decode.string)
         <| \creatureFamilies ->
     Field.requireAt
@@ -2937,7 +2937,7 @@ aggregationsDecoder =
         (aggregationBucketDecoder Decode.string)
         <| \hands ->
     Field.requireAt
-        [ "aggregations", "item_category" ]
+        [ "aggregations", "item_category.keyword" ]
         (aggregationBucketDecoder Decode.string)
         <| \itemCategories ->
     Field.requireAt
@@ -2965,11 +2965,11 @@ aggregationsDecoder =
         (aggregationBucketDecoder Decode.string)
         <| \sizes ->
     Field.requireAt
-        [ "aggregations", "skill" ]
+        [ "aggregations", "skill.keyword" ]
         (aggregationBucketDecoder Decode.string)
         <| \skills ->
     Field.requireAt
-        [ "aggregations", "source" ]
+        [ "aggregations", "source.keyword" ]
         (aggregationBucketDecoder Decode.string)
         <| \sources ->
     Field.requireAt

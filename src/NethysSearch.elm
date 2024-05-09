@@ -3577,17 +3577,17 @@ buildAggregationsBody searchModel =
                         [ "actions.keyword"
                         , "alignment"
                         , "area_type"
-                        , "creature_family"
+                        , "creature_family.keyword"
                         , "deity_category.keyword"
                         , "domain"
                         , "favored_weapon.keyword"
-                        , "item_category"
+                        , "item_category.keyword"
                         , "hands.keyword"
                         , "region"
                         , "reload_raw.keyword"
                         , "size"
-                        , "skill"
-                        , "source"
+                        , "skill.keyword"
+                        , "source.keyword"
                         , "trait"
                         , "type"
                         , "weapon_group"
@@ -3596,8 +3596,8 @@ buildAggregationsBody searchModel =
                     [ buildCompositeAggregation
                         "item_subcategory"
                         False
-                        [ ( "category", "item_category" )
-                        , ( "name", "item_subcategory" )
+                        [ ( "category", "item_category.keyword" )
+                        , ( "name", "item_subcategory.keyword" )
                         ]
                     ]
                 )
@@ -3759,7 +3759,7 @@ buildSourcesAggregationBody =
                     "source"
                     True
                     [ ( "category", "source_category" )
-                    , ( "group", "source_group" )
+                    , ( "group", "source_group.keyword" )
                     , ( "name", "name.keyword" )
                     ]
                 ]
