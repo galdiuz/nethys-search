@@ -271,6 +271,8 @@ type alias Document =
     , prerequisites : Maybe String
     , price : Maybe String
     , primaryCheck : Maybe String
+    , primarySourceCategory : Maybe String
+    , primarySourceGroup : Maybe String
     , range : Maybe String
     , rangeValue : Maybe Int
     , rarity : Maybe String
@@ -297,8 +299,8 @@ type alias Document =
     , sizes : List String
     , skills : Maybe String
     , skillProficiencies : List String
-    , sourceCategory : Maybe String
-    , sourceGroup : Maybe String
+    , sourceCategories : List String
+    , sourceGroups : List String
     , sourceList : List String
     , sources : Maybe String
     , speed : Maybe String
@@ -1168,6 +1170,8 @@ groupFields =
     , "school"
     , "size"
     , "source"
+    , "source_category"
+    , "source_group"
     , "spell_attack_bonus_scale"
     , "spell_dc_scale"
     , "spell_type"
@@ -1408,9 +1412,9 @@ sortFields =
     , ( "secondary_casters", "secondary_casters", False )
     , ( "secondary_check", "secondary_check.keyword", False )
     , ( "size", "size_id", True )
-    , ( "source", "source_raw.keyword", False )
-    , ( "source_category", "source_category", False )
-    , ( "source_group", "source_group.keyword", False )
+    , ( "source", "source.keyword", False )
+    , ( "source_category", "primary_source_category", False )
+    , ( "source_group", "primary_source_group.keyword", False )
     , ( "speed_penalty", "speed_penalty.keyword", False )
     , ( "spell_attack_bonus", "spell_attack_bonus", True )
     , ( "spell_attack_bonus_scale", "spell_attack_bonus_scale_number", True )
@@ -1483,8 +1487,8 @@ speedTypes =
     ]
 
 
-sourceCategories : List String
-sourceCategories =
+allSourceCategories : List String
+allSourceCategories =
     [ "adventure paths"
     , "adventures"
     , "blog posts"
@@ -2713,6 +2717,12 @@ mergeInlines block =
             , "date"
             , "sup"
             ]
+
+        inlinesStartWithPunctuation : List Markdown.Block.Inline -> Bool
+        inlinesStartWithPunctuation inlines =
+            Markdown.Block.extractInlineText inlines
+                |> String.left 1
+                |> \c -> List.member c [ ",", ".", "!" ]
     in
     mapHtmlElementChildren
         (List.foldl
@@ -2725,6 +2735,12 @@ mergeInlines block =
                                 ( before, [ Markdown.Block.Paragraph inlines ] ) ->
                                     Markdown.Block.HtmlInline (Markdown.Block.HtmlElement tagName a c)
                                         |> List.singleton
+                                        |> (if tagName == "sup" then
+                                                List.append [ Markdown.Block.Text " " ]
+
+                                            else
+                                                identity
+                                           )
                                         |> List.append inlines
                                         |> Markdown.Block.Paragraph
                                         |> List.singleton
@@ -2749,7 +2765,11 @@ mergeInlines block =
                                                 [ Markdown.Block.Paragraph
                                                     (List.concat
                                                         [ prevInlines
-                                                        , [ Markdown.Block.Text " " ]
+                                                        , if inlinesStartWithPunctuation inlines then
+                                                            []
+
+                                                          else
+                                                            [ Markdown.Block.Text " " ]
                                                         , inlines
                                                         ]
                                                     )
@@ -3173,6 +3193,8 @@ documentDecoder =
     Field.attempt "prerequisite_markdown" Decode.string <| \prerequisites ->
     Field.attempt "price_raw" Decode.string <| \price ->
     Field.attempt "primary_check_markdown" Decode.string <| \primaryCheck ->
+    Field.attempt "primary_source_category" Decode.string <| \primarySourceCategory ->
+    Field.attempt "primary_source_group" Decode.string <| \primarySourceGroup ->
     Field.attempt "range" Decode.int <| \rangeValue ->
     Field.attempt "range_raw" Decode.string <| \range ->
     Field.attempt "rarity" Decode.string <| \rarity ->
@@ -3200,8 +3222,8 @@ documentDecoder =
     Field.attempt "skill_markdown" Decode.string <| \skills ->
     Field.attempt "skill_proficiency" stringListDecoder <| \skillProficiencies ->
     Field.attempt "source" stringListDecoder <| \sourceList ->
-    Field.attempt "source_category" Decode.string <| \sourceCategory ->
-    Field.attempt "source_group" Decode.string <| \sourceGroup ->
+    Field.attempt "source_category" stringListDecoder <| \sourceCategories ->
+    Field.attempt "source_group" stringListDecoder <| \sourceGroups ->
     Field.attempt "source_markdown" Decode.string <| \sources ->
     Field.attempt "speed" speedTypeValuesDecoder <| \speedValues ->
     Field.attempt "speed_markdown" Decode.string <| \speed ->
@@ -3345,6 +3367,8 @@ documentDecoder =
         , prerequisites = prerequisites
         , price = price
         , primaryCheck = primaryCheck
+        , primarySourceCategory = primarySourceCategory
+        , primarySourceGroup = primarySourceGroup
         , range = range
         , rangeValue = rangeValue
         , rarity = rarity
@@ -3371,8 +3395,8 @@ documentDecoder =
         , sizes = Maybe.withDefault [] sizes
         , skills = skills
         , skillProficiencies = Maybe.withDefault [] skillProficiencies
-        , sourceCategory = sourceCategory
-        , sourceGroup = sourceGroup
+        , sourceCategories = Maybe.withDefault [] sourceCategories
+        , sourceGroups = Maybe.withDefault [] sourceGroups
         , sourceList = Maybe.withDefault [] sourceList
         , sources = sources
         , speed = speed

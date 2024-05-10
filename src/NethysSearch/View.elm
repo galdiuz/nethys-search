@@ -2685,7 +2685,7 @@ viewFilterSources model searchModel =
         , filterKey = "source-categories"
         , showOperator = False
         , showSearch = False
-        , values = Just Data.sourceCategories
+        , values = Just Data.allSourceCategories
         }
 
     , Html.div
@@ -5060,10 +5060,12 @@ searchResultTableCellToString viewModel document column =
             maybeAsStringWithoutMarkdown document.sources
 
         [ "source_category" ] ->
-            maybeAsString document.sourceCategory
+            document.sourceCategories
+                |> String.join ", "
 
         [ "source_group" ] ->
-            maybeAsString document.sourceGroup
+            document.sourceGroups
+                |> String.join ", "
 
         [ "speed" ] ->
             maybeAsStringWithoutMarkdown document.speed
@@ -6196,6 +6198,24 @@ groupDocumentsByField keys field documents =
                         dict
                         document.sourceList
 
+                "source_category" ->
+                    insertToListDict
+                        (document.primarySourceCategory
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        document
+                        dict
+
+                "source_group" ->
+                    insertToListDict
+                        (document.primarySourceGroup
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        document
+                        dict
+
                 "spell_attack_bonus_scale" ->
                     if List.isEmpty document.spellAttackBonusScale then
                         insertToListDict "" document dict
@@ -6765,6 +6785,10 @@ markdownHtmlRenderer viewModel =
         , Markdown.Html.tag "filter-button"
             (\_ ->
                 []
+            )
+        , Markdown.Html.tag "inline"
+            (\children ->
+                List.concat children
             )
         , Markdown.Html.tag "li"
             (\children ->
@@ -7563,10 +7587,9 @@ documentShouldBeMasked : ViewModel -> Document -> Bool
 documentShouldBeMasked viewModel document =
     List.all
         identity
-        [ document.sourceGroup
-            |> Maybe.map String.toLower
-            |> Maybe.map (\sourceGroup -> Set.member sourceGroup viewModel.maskedSourceGroups)
-            |> Maybe.withDefault False
+        [ document.sourceGroups
+            |> List.map String.toLower
+            |> List.any (\sourceGroup -> Set.member sourceGroup viewModel.maskedSourceGroups)
         , List.any
             (\source -> not (caseInsensitiveContains "player's guide" source))
             document.sourceList

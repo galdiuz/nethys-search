@@ -130,6 +130,8 @@ def fetch_docs(url):
                     'prerequisite_markdown',
                     'price_raw',
                     'primary_check_markdown',
+                    'primary_source_category',
+                    'primary_source_group',
                     'range',
                     'range_raw',
                     'rarity',
