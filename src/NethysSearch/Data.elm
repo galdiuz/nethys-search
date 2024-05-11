@@ -2027,7 +2027,7 @@ currentQueryAsComplex searchModel =
 
 queryCouldBeComplex : String -> Bool
 queryCouldBeComplex query =
-    stringContainsChar query ":()\"+-*?/"
+    stringContainsChar query ":()\"+-*?/~"
         || String.contains " OR " query
         || String.contains " AND " query
         || String.contains " || " query

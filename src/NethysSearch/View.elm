@@ -438,9 +438,14 @@ viewQueryType model searchModel =
             syntax. It doesn't do fuzzy matching by default, and allows searching for phrases by
             surrounding them with quotes. It also allows searching in specific fields with the
             syntax `field:value`. For full documentation on how the query syntax works see
-            [Elasticsearch's documentation][1].
+            [Elasticsearch's documentation][1]. In addition there's two syntax extensions:
+
+            - Starting a query with a `~` followed by number specifies [`minimum_should_match`][2].
+            - `++` starts a new query. This is useful in conjuction with the above
+            `minimum_should_max` syntax.
 
             [1]: https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#query-string-syntax
+            [2]: https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-query-string-query.html#query-string-min-should-match
             """
                 |> String.Extra.unindent
                 |> parseAndViewAsMarkdown model.viewModel
@@ -583,9 +588,9 @@ viewQueryType model searchModel =
 
             <br />
 
-            Weapons in knife group with finesse and either disarm or trip:
+            Weapons with finesse and at least two of agile, disarm, and trip:
             ```
-            weapon_group:knife trait:finesse trait:(disarm OR trip)
+            trait:finesse ++ ~2 trait:agile OR trait:disarm OR trait:trip
             ```
 
             <br />
@@ -1927,6 +1932,13 @@ viewWhatsNew model _ =
         You can now select a set of source groups for spoiler masking. Results from the selected
         groups will be masked in search results and hover previews. This option is found under
         _Sources / Spoilers_.
+
+
+        ### Complex query syntax extension
+
+        The complex query syntax has been extended with syntax for specifying the minimum number of
+        terms that should match. This allows queries like "at least 2 of these 4 things". Read more
+        under _Query type_.
 
 
         ### Search optimization

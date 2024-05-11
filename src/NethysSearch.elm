@@ -21,6 +21,7 @@ import NethysSearch.Data as Data exposing (..)
 import NethysSearch.View as View
 import Process
 import Random
+import Regex
 import Result.Extra
 import Set exposing (Set)
 import Set.Extra
@@ -2799,6 +2800,16 @@ buildSearchQuery model searchModel groupFilters =
         mustNots : List (List ( String, Encode.Value ))
         mustNots =
             buildSearchMustNotTerms model searchModel
+
+        queries : List String
+        queries =
+            case searchModel.queryType of
+                Standard ->
+                    [ searchModel.query ]
+
+                ElasticsearchQueryString ->
+                    String.split "++" searchModel.query
+                        |> List.map String.trim
     in
     ( "query"
     , Encode.object
@@ -2816,7 +2827,7 @@ buildSearchQuery model searchModel groupFilters =
                                     buildStandardQueryBody searchModel.query
 
                                 ElasticsearchQueryString ->
-                                    [ buildElasticsearchQueryStringQueryBody searchModel.query ]
+                                    List.map buildElasticsearchQueryStringQueryBody queries
                             )
                         )
 
@@ -2842,7 +2853,7 @@ buildSearchQuery model searchModel groupFilters =
                     Nothing
 
                   else
-                    Just ( "minimum_should_match", Encode.int 1 )
+                    Just ( "minimum_should_match", Encode.int (List.length queries) )
                 ]
           )
         ]
@@ -3303,11 +3314,32 @@ buildStandardQueryBody queryString =
 
 buildElasticsearchQueryStringQueryBody : String -> List ( String, Encode.Value )
 buildElasticsearchQueryStringQueryBody queryString =
+    let
+        regex : Regex.Regex
+        regex =
+            Regex.fromString "^~(\\d+) "
+                |> Maybe.withDefault Regex.never
+
+        -- ( String, Int ) =
+        ( cleanedQueryString, minShouldMatch ) =
+            case Regex.find regex queryString of
+                match :: _ ->
+                    ( String.replace match.match "" queryString
+                    , List.head match.submatches
+                        |> Maybe.Extra.join
+                        |> Maybe.andThen String.toInt
+                        |> Maybe.withDefault 1
+                    )
+
+                _ ->
+                    ( queryString, 1 )
+    in
     [ ( "query_string"
       , Encode.object
-            [ ( "query", Encode.string queryString )
+            [ ( "query", Encode.string cleanedQueryString )
             , ( "default_operator", Encode.string "AND" )
             , ( "fields", Encode.list Encode.string searchFields )
+            , ( "minimum_should_match", Encode.int minShouldMatch )
             ]
       )
     ]
