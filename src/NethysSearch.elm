@@ -1610,9 +1610,14 @@ fetchDocumentsFromElasticsearch alwaysParseMarkdown ids ( model, cmd ) =
                         (Decode.field
                             "docs"
                             (Decode.list
-                                (Decode.field
-                                    "_source"
-                                    (Decode.map Ok documentDecoder)
+                                (Decode.oneOf
+                                    [ Decode.field
+                                        "_source"
+                                        (Decode.map Ok documentDecoder)
+                                    , Decode.field
+                                        "_id"
+                                        (Decode.map Err Decode.string)
+                                    ]
                                 )
                             )
                         )
