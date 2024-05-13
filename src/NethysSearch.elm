@@ -523,9 +523,9 @@ update msg model =
               }
             , Cmd.none
             )
-                |> fetchDocuments False (Set.toList model.documentsToFetch)
+                |> fetchDocuments False (getLegacyMode model) (Set.toList model.documentsToFetch)
 
-        GotDocuments alwaysParseMarkdown ids result ->
+        GotDocuments alwaysParseMarkdown legacyMode ids result ->
             ( { model
                 | documentIndex =
                     List.foldl
@@ -551,7 +551,7 @@ update msg model =
               }
             , Cmd.none
             )
-                |> parseAndFetchDocuments alwaysParseMarkdown ids
+                |> parseAndFetchDocuments alwaysParseMarkdown legacyMode ids
 
         GotGlobalAggregationsResult result ->
             ( { model | globalAggregations = Just result }
@@ -590,6 +590,7 @@ update msg model =
             )
                 |> parseAndFetchDocuments
                     False
+                    (getLegacyMode model)
                     (result
                         |> Result.map .documentIds
                         |> Result.withDefault []
@@ -618,6 +619,7 @@ update msg model =
                 |> updateIndex (Result.toMaybe result |> Maybe.andThen .index)
                 |> parseAndFetchDocuments
                     False
+                    (getLegacyMode model)
                     (result
                         |> Result.map .documentIds
                         |> Result.withDefault []
@@ -768,13 +770,28 @@ update msg model =
                 documentId =
                     Maybe.andThen urlToDocumentId parsedUrl
 
+                noRedirect : Bool
+                noRedirect =
+                    parsedUrl
+                        |> Maybe.andThen .query
+                        |> Maybe.map (String.contains "NoRedirect=1")
+                        |> Maybe.withDefault False
+
+                legacyMode : LegacyMode
+                legacyMode =
+                    if noRedirect then
+                        NoRedirect
+
+                     else
+                        getLegacyMode model
+
                 documentsWithParsedMarkdown : Dict String (Result Http.Error Document)
                 documentsWithParsedMarkdown =
                     parseMarkdownAndCollectIdsToFetch
                         (Maybe.Extra.toList documentId)
                         []
                         model.documents
-                        (Maybe.withDefault model.legacyMode model.searchModel.legacyMode)
+                        legacyMode
                         |> Tuple.first
             in
             ( { model
@@ -787,11 +804,7 @@ update msg model =
                                     { documentId = id
                                     , fragment = Maybe.andThen .fragment parsedUrl
                                     , elementPosition = position
-                                    , noRedirect =
-                                        parsedUrl
-                                            |> Maybe.andThen .query
-                                            |> Maybe.map (String.contains "NoRedirect=1")
-                                            |> Maybe.withDefault False
+                                    , noRedirect = noRedirect
                                     }
                                 )
 
@@ -801,18 +814,18 @@ update msg model =
             , case ( model.linkPreviewsEnabled, documentId ) of
                 ( True, Just id ) ->
                     Process.sleep 150
-                        |> Task.perform (\_ -> LinkEnteredDebouncePassed id)
+                        |> Task.perform (\_ -> LinkEnteredDebouncePassed id legacyMode)
 
                 _ ->
                     Cmd.none
             )
 
-        LinkEnteredDebouncePassed documentId ->
+        LinkEnteredDebouncePassed documentId legacyMode ->
             if Maybe.map .documentId model.previewLink == Just documentId then
                 ( model
                 , Cmd.none
                 )
-                    |> parseAndFetchDocuments True [ documentId ]
+                    |> parseAndFetchDocuments True legacyMode [ documentId ]
 
             else
                 ( model
@@ -1390,6 +1403,7 @@ update msg model =
                 |> addCmd updateTitle
                 |> parseAndFetchDocuments
                     False
+                    (getLegacyMode model)
                     (model.searchModel.searchResults
                         |> List.concatMap (Result.map .documentIds >> Result.withDefault [])
                     )
@@ -1444,13 +1458,9 @@ updateIndex maybeIndex ( model, cmd ) =
             ( model, cmd )
 
 
-parseAndFetchDocuments : Bool -> List String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-parseAndFetchDocuments alwaysParseMarkdown ids ( model, cmd ) =
+parseAndFetchDocuments : Bool -> LegacyMode -> List String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+parseAndFetchDocuments alwaysParseMarkdown legacyMode ids ( model, cmd ) =
     let
-        legacyMode : Bool
-        legacyMode =
-            Maybe.withDefault model.legacyMode model.searchModel.legacyMode
-
         ( parsedDocuments, idsToFetch ) =
             if model.searchModel.resultDisplay == Full || alwaysParseMarkdown then
                 parseMarkdownAndCollectIdsToFetch
@@ -1509,20 +1519,20 @@ parseAndFetchDocuments alwaysParseMarkdown ids ( model, cmd ) =
                 Cmd.Extra.add (navigation_loadUrl url)
 
             Nothing ->
-                fetchDocuments alwaysParseMarkdown idsToFetch
+                fetchDocuments alwaysParseMarkdown legacyMode idsToFetch
 
 
-fetchDocuments : Bool -> List String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-fetchDocuments alwaysParseMarkdown ids ( model, cmd ) =
+fetchDocuments : Bool -> LegacyMode -> List String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+fetchDocuments alwaysParseMarkdown legacyMode ids ( model, cmd ) =
     if model.dataUrl /= "" then
-        fetchDocumentsFromJson alwaysParseMarkdown ids ( model, cmd )
+        fetchDocumentsFromJson alwaysParseMarkdown legacyMode ids ( model, cmd )
 
     else
-        fetchDocumentsFromElasticsearch alwaysParseMarkdown ids ( model, cmd )
+        fetchDocumentsFromElasticsearch alwaysParseMarkdown legacyMode ids ( model, cmd )
 
 
-fetchDocumentsFromJson : Bool -> List String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-fetchDocumentsFromJson alwaysParseMarkdown ids ( model, cmd ) =
+fetchDocumentsFromJson : Bool -> LegacyMode -> List String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+fetchDocumentsFromJson alwaysParseMarkdown legacyMode ids ( model, cmd ) =
     let
         idsToFetch : List String
         idsToFetch =
@@ -1546,7 +1556,7 @@ fetchDocumentsFromJson alwaysParseMarkdown ids ( model, cmd ) =
     in
     ( { model
         | documentsToFetch =
-            if True then
+            if Dict.isEmpty model.documentIndex then
                 Set.union model.documentsToFetch (Set.fromList idsToFetch)
 
             else
@@ -1558,7 +1568,7 @@ fetchDocumentsFromJson alwaysParseMarkdown ids ( model, cmd ) =
                 Http.get
                     { expect =
                         Http.expectJson
-                            (GotDocuments alwaysParseMarkdown fileIds)
+                            (GotDocuments alwaysParseMarkdown legacyMode fileIds)
                             (Decode.list
                                 (Decode.oneOf
                                     [ Decode.map Ok documentDecoder
@@ -1574,8 +1584,8 @@ fetchDocumentsFromJson alwaysParseMarkdown ids ( model, cmd ) =
     )
 
 
-fetchDocumentsFromElasticsearch : Bool -> List String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
-fetchDocumentsFromElasticsearch alwaysParseMarkdown ids ( model, cmd ) =
+fetchDocumentsFromElasticsearch : Bool -> LegacyMode -> List String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
+fetchDocumentsFromElasticsearch alwaysParseMarkdown legacyMode ids ( model, cmd ) =
     let
         idsToFetch : List String
         idsToFetch =
@@ -1606,7 +1616,7 @@ fetchDocumentsFromElasticsearch alwaysParseMarkdown ids ( model, cmd ) =
                         )
                 , expect =
                     Http.expectJson
-                        (GotDocuments alwaysParseMarkdown idsToFetch)
+                        (GotDocuments alwaysParseMarkdown legacyMode idsToFetch)
                         (Decode.field
                             "docs"
                             (Decode.list
@@ -1672,7 +1682,7 @@ parseMarkdownAndCollectIdsToFetch :
     List String
     -> List String
     -> Dict String (Result Http.Error Document)
-    -> Bool
+    -> LegacyMode
     -> ( Dict String (Result Http.Error Document), List String )
 parseMarkdownAndCollectIdsToFetch idsToCheck idsToFetch documents legacyMode =
     case idsToCheck of
@@ -1683,19 +1693,25 @@ parseMarkdownAndCollectIdsToFetch idsToCheck idsToFetch documents legacyMode =
                     case Dict.get id documents of
                         Just (Ok doc) ->
                             case ( legacyMode, doc.legacyId, doc.remasterId ) of
-                                ( True, Just legacyId, _ ) ->
+                                ( LegacyMode, Just "0", _ ) ->
+                                    id
+
+                                ( LegacyMode, Just legacyId, _ ) ->
                                     legacyId
 
-                                ( True, Nothing, _ ) ->
+                                ( LegacyMode, Nothing, _ ) ->
                                     id
 
-                                ( False, _, Just "0" ) ->
+                                ( RemasterMode, _, Just "0" ) ->
                                     id
 
-                                ( False, _, Just remasterId ) ->
+                                ( RemasterMode, _, Just remasterId ) ->
                                     remasterId
 
-                                ( False, _, _ ) ->
+                                ( RemasterMode, _, _ ) ->
+                                    id
+
+                                ( NoRedirect, _, _ ) ->
                                     id
 
                         _ ->
@@ -1781,7 +1797,7 @@ findDocumentIdsInBlock block list =
             list
 
 
-flattenDocuments : Bool -> Dict String (Result Http.Error Document) -> Dict String (Result Http.Error Document)
+flattenDocuments : LegacyMode -> Dict String (Result Http.Error Document) -> Dict String (Result Http.Error Document)
 flattenDocuments legacyMode documents =
     Dict.map
         (\id documentResult ->

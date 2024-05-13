@@ -505,7 +505,7 @@ type Msg
     | GotAggregationsResult (Result Http.Error Aggregations)
     | GotBodySize Size
     | GotDocumentIndexResult (Result Http.Error (Dict String String))
-    | GotDocuments Bool (List String) (Result Http.Error (List (Result String Document)))
+    | GotDocuments Bool LegacyMode (List String) (Result Http.Error (List (Result String Document)))
     | GotGlobalAggregationsResult (Result Http.Error GlobalAggregations)
     | GotGroupAggregationsResult (Result Http.Error SearchResult)
     | GotGroupSearchResult (Result Http.Error SearchResult)
@@ -530,7 +530,7 @@ type Msg
     | LegacyModeChanged (Maybe Bool)
     | LimitTableWidthChanged Bool
     | LinkEntered String Position
-    | LinkEnteredDebouncePassed String
+    | LinkEnteredDebouncePassed String LegacyMode
     | LinkLeft
     | LoadGroupPressed (List ( String, String ))
     | LoadMorePressed Int
@@ -589,6 +589,21 @@ type Markdown
 
 type alias ParsedMarkdownResult =
     Result (List String) (List MB.Block)
+
+
+type LegacyMode
+    = LegacyMode
+    | RemasterMode
+    | NoRedirect
+
+
+getLegacyMode : Model -> LegacyMode
+getLegacyMode model =
+    if Maybe.withDefault model.legacyMode model.searchModel.legacyMode then
+        LegacyMode
+
+    else
+        RemasterMode
 
 
 type QueryType
@@ -2488,7 +2503,7 @@ getSpeedTypeValue type_ values =
 
 
 flattenMarkdown :
-    Bool
+    LegacyMode
     -> Dict String (Result Http.Error Document)
     -> Int
     -> Maybe String
@@ -2510,7 +2525,7 @@ flattenMarkdown legacyMode documents parentLevel overrideTitleRight blocks =
 
 
 flattenMarkdownBlock :
-    Bool
+    LegacyMode
     -> Dict String (Result Http.Error Document)
     -> Int
     -> Maybe String
@@ -2585,20 +2600,27 @@ flattenMarkdownBlock legacyMode documents parentLevel overrideTitleRight block =
                     case Dict.get documentId documents of
                         Just (Ok doc) ->
                             case ( legacyMode, doc.legacyId, doc.remasterId ) of
-                                ( True, Just legacyId, _ ) ->
+                                ( LegacyMode, Just "0", _ ) ->
+                                    documentId
+
+                                ( LegacyMode, Just legacyId, _ ) ->
                                     legacyId
 
-                                ( True, Nothing, _ ) ->
+                                ( LegacyMode, Nothing, _ ) ->
                                     documentId
 
-                                ( False, _, Just "0" ) ->
+                                ( RemasterMode, _, Just "0" ) ->
                                     documentId
 
-                                ( False, _, Just remasterId ) ->
+                                ( RemasterMode, _, Just remasterId ) ->
                                     remasterId
 
-                                ( False, _, _ ) ->
+                                ( RemasterMode, _, _ ) ->
                                     documentId
+
+                                ( NoRedirect, _, _ ) ->
+                                    documentId
+
                         _ ->
                             documentId
 
