@@ -6610,6 +6610,7 @@ parseAndViewAsMarkdown viewModel string =
         string
             |> Markdown.Parser.parse
             |> Result.map (List.map (Markdown.Block.walk mergeInlines))
+            |> Result.map (List.map (Markdown.Block.walk paragraphToInline))
             |> Result.mapError (List.map Markdown.Parser.deadEndToString)
             |> viewMarkdown viewModel ""
 
@@ -6684,6 +6685,7 @@ markdownRenderer viewModel =
             ]
     , orderedList = \startingIndex -> List.concat >> defaultRenderer.orderedList startingIndex >> List.singleton
     , paragraph = List.concat >> defaultRenderer.paragraph >> List.singleton
+    , inlines = List.concat
     , strikethrough = List.concat >> defaultRenderer.strikethrough >> List.singleton
     , strong = List.concat >> defaultRenderer.strong >> List.singleton
     , table = List.concat >> defaultRenderer.table >> List.singleton
@@ -6797,10 +6799,6 @@ markdownHtmlRenderer viewModel =
         , Markdown.Html.tag "filter-button"
             (\_ ->
                 []
-            )
-        , Markdown.Html.tag "inline"
-            (\children ->
-                List.concat children
             )
         , Markdown.Html.tag "li"
             (\children ->
@@ -7846,10 +7844,6 @@ css args =
 
     p {
         margin: 0;
-    }
-
-    sup > p {
-        display: inline-block;
     }
 
     .inline p {

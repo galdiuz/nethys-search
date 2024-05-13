@@ -9,7 +9,7 @@ import Json.Decode as Decode
 import Json.Decode.Field as Field
 import Json.Encode as Encode
 import List.Extra
-import Markdown.Block
+import Markdown.Block as MB
 import Markdown.Parser
 import Markdown.Renderer
 import Maybe.Extra
@@ -588,7 +588,7 @@ type Markdown
 
 
 type alias ParsedMarkdownResult =
-    Result (List String) (List Markdown.Block.Block)
+    Result (List String) (List MB.Block)
 
 
 type QueryType
@@ -2492,8 +2492,8 @@ flattenMarkdown :
     -> Dict String (Result Http.Error Document)
     -> Int
     -> Maybe String
-    -> List Markdown.Block.Block
-    -> ( Bool, List Markdown.Block.Block )
+    -> List MB.Block
+    -> ( Bool, List MB.Block )
 flattenMarkdown legacyMode documents parentLevel overrideTitleRight blocks =
     List.foldr
         (\block ( previousBlocksHaveChildren, flattenedBlocks ) ->
@@ -2514,11 +2514,11 @@ flattenMarkdownBlock :
     -> Dict String (Result Http.Error Document)
     -> Int
     -> Maybe String
-    -> Markdown.Block.Block
-    -> ( Bool, Markdown.Block.Block )
+    -> MB.Block
+    -> ( Bool, MB.Block )
 flattenMarkdownBlock legacyMode documents parentLevel overrideTitleRight block =
     case block of
-        Markdown.Block.HtmlBlock (Markdown.Block.HtmlElement "title" attributes children) ->
+        MB.HtmlBlock (MB.HtmlElement "title" attributes children) ->
             let
                 originalTitleLevel : Int
                 originalTitleLevel =
@@ -2541,7 +2541,7 @@ flattenMarkdownBlock legacyMode documents parentLevel overrideTitleRight block =
                         getValueFromAttribute "right" attributes
             in
             ( False
-            , Markdown.Block.HtmlElement
+            , MB.HtmlElement
                 "title"
                 (List.append
                     (attributes
@@ -2560,10 +2560,10 @@ flattenMarkdownBlock legacyMode documents parentLevel overrideTitleRight block =
                     ]
                 )
                 children
-                |> Markdown.Block.HtmlBlock
+                |> MB.HtmlBlock
             )
 
-        Markdown.Block.HtmlBlock (Markdown.Block.HtmlElement "document" attributes _) ->
+        MB.HtmlBlock (MB.HtmlElement "document" attributes _) ->
             let
                 originalDocumentLevel : Int
                 originalDocumentLevel =
@@ -2607,7 +2607,7 @@ flattenMarkdownBlock legacyMode documents parentLevel overrideTitleRight block =
                     Dict.get idToWorkWith documents
                         |> Maybe.andThen Result.toMaybe
 
-                documentBlocks : Maybe (List Markdown.Block.Block)
+                documentBlocks : Maybe (List MB.Block)
                 documentBlocks =
                     document
                         |> Maybe.map .markdown
@@ -2626,8 +2626,8 @@ flattenMarkdownBlock legacyMode documents parentLevel overrideTitleRight block =
                                 blocks
                     in
                     ( hasChildren
-                    , Markdown.Block.HtmlBlock
-                        (Markdown.Block.HtmlElement
+                    , MB.HtmlBlock
+                        (MB.HtmlElement
                             "document-flattened"
                             (List.append
                                 (attributes
@@ -2649,7 +2649,7 @@ flattenMarkdownBlock legacyMode documents parentLevel overrideTitleRight block =
                 Nothing ->
                     ( True, block )
 
-        Markdown.Block.HtmlBlock (Markdown.Block.HtmlElement "document-flattened" attributes blocks) ->
+        MB.HtmlBlock (MB.HtmlElement "document-flattened" attributes blocks) ->
             let
                 documentLevel : Int
                 documentLevel =
@@ -2661,22 +2661,22 @@ flattenMarkdownBlock legacyMode documents parentLevel overrideTitleRight block =
                     flattenMarkdown legacyMode documents documentLevel Nothing blocks
             in
             ( hasChildren
-            , Markdown.Block.HtmlBlock
-                (Markdown.Block.HtmlElement
+            , MB.HtmlBlock
+                (MB.HtmlElement
                     "document-flattened"
                     attributes
                     flattenedBlocks
                 )
             )
 
-        Markdown.Block.HtmlBlock (Markdown.Block.HtmlElement tag attributes blocks) ->
+        MB.HtmlBlock (MB.HtmlElement tag attributes blocks) ->
             let
                 ( hasChildren, flattenedBlocks ) =
                     flattenMarkdown legacyMode documents parentLevel Nothing blocks
             in
             ( hasChildren
-            , Markdown.Block.HtmlBlock
-                (Markdown.Block.HtmlElement
+            , MB.HtmlBlock
+                (MB.HtmlElement
                     tag
                     attributes
                     flattenedBlocks
@@ -2707,8 +2707,37 @@ getValueFromAttribute name attributes =
         |> Maybe.map .value
 
 
-mergeInlines : Markdown.Block.Block -> Markdown.Block.Block
+mergeInlines : MB.Block -> MB.Block
 mergeInlines block =
+    mapHtmlElementChildren
+        (List.foldl
+            mergeInlinesHelper
+            []
+            >> List.reverse
+        )
+        block
+
+
+mapHtmlElementChildren :
+    (List (MB.Block) -> List (MB.Block))
+    -> MB.Block
+    -> MB.Block
+mapHtmlElementChildren mapFun block =
+    case block of
+        MB.HtmlBlock (MB.HtmlElement name attrs children) ->
+            MB.HtmlBlock
+                (MB.HtmlElement
+                    name
+                    attrs
+                    (mapFun children)
+                )
+
+        _ ->
+            block
+
+
+mergeInlinesHelper : MB.Block -> List MB.Block -> List MB.Block
+mergeInlinesHelper block result =
     let
         inlineTags : List String
         inlineTags =
@@ -2718,93 +2747,118 @@ mergeInlines block =
             , "sup"
             ]
 
-        inlinesStartWithPunctuation : List Markdown.Block.Inline -> Bool
-        inlinesStartWithPunctuation inlines =
-            Markdown.Block.extractInlineText inlines
-                |> String.left 1
-                |> \c -> List.member c [ ",", ".", "!" ]
+        nextInlineIsStrong : List MB.Inline -> Bool
+        nextInlineIsStrong inlines =
+            case List.head inlines of
+                Just (MB.Strong _) ->
+                    True
+
+                _ ->
+                    False
+
+        inlinesStartWithAlphaNum : List MB.Inline -> Bool
+        inlinesStartWithAlphaNum inlines =
+            MB.extractInlineText inlines
+                |> String.uncons
+                |> Maybe.map Tuple.first
+                |> Maybe.map (not << Char.isAlphaNum)
+                |> Maybe.withDefault False
     in
-    mapHtmlElementChildren
-        (List.foldl
-            (\child children ->
-                case child of
-                    Markdown.Block.HtmlBlock (Markdown.Block.HtmlElement tagName a c) ->
-                        if List.member tagName inlineTags then
-                            case List.Extra.splitAt (List.length children - 1) children of
-                                -- If previous block is a paragraph, add the block to its inlines
-                                ( before, [ Markdown.Block.Paragraph inlines ] ) ->
-                                    Markdown.Block.HtmlInline (Markdown.Block.HtmlElement tagName a c)
-                                        |> List.singleton
-                                        |> (if tagName == "sup" then
-                                                List.append [ Markdown.Block.Text " " ]
-
-                                            else
-                                                identity
-                                           )
-                                        |> List.append inlines
-                                        |> Markdown.Block.Paragraph
-                                        |> List.singleton
-                                        |> List.append before
-
-                                _ ->
-                                    List.append children [ child ]
-
-                        else
-                            List.append children [ child ]
-
-                    Markdown.Block.Paragraph inlines ->
-                        case List.Extra.splitAt (List.length children - 1) children of
-                            -- If previous block is a paragraph and its last inline is an inline tag,
-                            -- then merge the paragraphs
-                            ( before, [ Markdown.Block.Paragraph prevInlines ] ) ->
-                                case List.Extra.last prevInlines of
-                                    Just (Markdown.Block.HtmlInline (Markdown.Block.HtmlElement tagName _ _)) ->
-                                        if List.member tagName inlineTags then
-                                            List.append
-                                                before
-                                                [ Markdown.Block.Paragraph
-                                                    (List.concat
-                                                        [ prevInlines
-                                                        , if inlinesStartWithPunctuation inlines then
-                                                            []
-
-                                                          else
-                                                            [ Markdown.Block.Text " " ]
-                                                        , inlines
-                                                        ]
-                                                    )
-                                                ]
-
-                                        else
-                                            List.append children [ child ]
-
-                                    _ ->
-                                        List.append children [ child ]
-
-                            _ ->
-                                List.append children [ child ]
+    case block of
+        MB.HtmlBlock (MB.HtmlElement tagName attrs children) ->
+            if List.member tagName inlineTags then
+                case List.head result of
+                    -- If previous block is a paragraph, add the block to its inlines.
+                    Just (MB.Paragraph inlines) ->
+                        (MB.Paragraph
+                            (MB.HtmlElement tagName attrs children
+                                |> MB.HtmlInline
+                                |> List.singleton
+                                |> List.append inlines
+                            )
+                        )
+                            :: (List.drop 1 result)
 
                     _ ->
-                        List.append children [ child ]
-            )
-            []
-        )
-        block
+                        block :: result
+
+            else
+                block :: result
+
+        MB.Paragraph inlines ->
+            case List.head result of
+                -- If previous block is an HTML block with an inline tag, merge it into this
+                -- paragraph.
+                Just (MB.HtmlBlock (MB.HtmlElement tagName attrs children)) ->
+                    if List.member tagName inlineTags then
+                        MB.Paragraph
+                            (MB.HtmlInline (MB.HtmlElement tagName attrs children)
+                                :: inlines
+                            )
+                            :: (List.drop 1 result)
+
+                    else
+                        block :: result
+
+                -- If previous block is a paragraph, its last inline is an inline tag,
+                -- and the next inline isn't a Strong, then merge the paragraphs.
+                Just (MB.Paragraph prevInlines) ->
+                    case List.Extra.last prevInlines of
+                        Just (MB.HtmlInline (MB.HtmlElement tagName _ _)) ->
+                            if List.member tagName inlineTags && not (nextInlineIsStrong inlines) then
+
+                                MB.Paragraph
+                                    (List.concat
+                                        [ prevInlines
+                                        , if inlinesStartWithAlphaNum inlines then
+                                            []
+
+                                          else
+                                            [ MB.Text " " ]
+                                        , inlines
+                                        ]
+                                    )
+                                    :: (List.drop 1 result)
+
+                            else
+                                block :: result
+
+                        _ ->
+                            block :: result
+
+                _ ->
+                    block :: result
+
+        _ ->
+            block :: result
 
 
-mapHtmlElementChildren :
-    (List (Markdown.Block.Block) -> List (Markdown.Block.Block))
-    -> Markdown.Block.Block
-    -> Markdown.Block.Block
-mapHtmlElementChildren mapFun block =
+paragraphToInline : MB.Block -> MB.Block
+paragraphToInline block =
     case block of
-        Markdown.Block.HtmlBlock (Markdown.Block.HtmlElement name attrs children) ->
-            Markdown.Block.HtmlBlock
-                (Markdown.Block.HtmlElement
-                    name
-                    attrs
-                    (mapFun children)
+        MB.HtmlBlock (MB.HtmlElement tagName attr [ MB.Paragraph [ inline ] ]) ->
+            MB.HtmlBlock
+                (MB.HtmlElement
+                    tagName
+                    attr
+                    [ MB.Inlines [ inline ] ]
                 )
+
+        MB.Paragraph inlines ->
+            inlines
+                |> List.map
+                    (\inline ->
+                        case inline of
+                            MB.HtmlInline (MB.HtmlElement name attrs [ MB.Paragraph [ innerInline ] ]) ->
+                                MB.Inlines [ innerInline ]
+                                    |> List.singleton
+                                    |> MB.HtmlElement name attrs
+                                    |> MB.HtmlInline
+
+                            _ ->
+                                inline
+                    )
+                |> MB.Paragraph
 
         _ ->
             block

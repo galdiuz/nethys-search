@@ -1,0 +1,3 @@
+[submodule "lib/elm-markdown"]
+	path = lib/elm-markdown
+	url = ../elm-markdown.git

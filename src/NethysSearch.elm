@@ -1635,6 +1635,7 @@ parseMarkdown markdown =
             string
                 |> Markdown.Parser.parse
                 |> Result.map (List.map (Markdown.Block.walk mergeInlines))
+                |> Result.map (List.map (Markdown.Block.walk paragraphToInline))
                 |> Result.mapError (List.map Markdown.Parser.deadEndToString)
                 |> \result ->
                     case result of
