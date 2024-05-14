@@ -3350,11 +3350,11 @@ buildElasticsearchQueryStringQueryBody queryString =
                     , List.head match.submatches
                         |> Maybe.Extra.join
                         |> Maybe.andThen String.toInt
-                        |> Maybe.withDefault 1
+                        |> Maybe.withDefault 0
                     )
 
                 _ ->
-                    ( queryString, 1 )
+                    ( queryString, 0 )
     in
     [ ( "query_string"
       , Encode.object
