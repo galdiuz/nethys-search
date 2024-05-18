@@ -2288,6 +2288,9 @@ urlToDocumentId url =
         "/npcs.aspx" ->
             withId "creature"
 
+        "/monstertemplates.aspx" ->
+            withId "creature-adjustment"
+
         "/monsterfamilies.aspx" ->
             withId "creature-family"
 
