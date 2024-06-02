@@ -198,7 +198,7 @@ def fetch_docs(url):
                     'weapon_type',
                     'will_proficiency',
                     'will_save',
-                    'will_save_scale_number'
+                    'will_save_scale_number',
                     'wisdom',
                     'wisdom_scale_number',
                 ]
