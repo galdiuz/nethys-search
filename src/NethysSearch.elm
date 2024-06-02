@@ -3415,7 +3415,12 @@ getQueryParam url param =
 
 searchWithCurrentQuery : LoadType -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 searchWithCurrentQuery load ( model, cmd ) =
-    if (Just (getSearchHash model.url) /= model.searchModel.lastSearchHash) || load /= LoadNew then
+    let
+        searchHash : String
+        searchHash =
+            getSearchHash model model.searchModel
+    in
+    if (Just searchHash /= model.searchModel.lastSearchHash) || load /= LoadNew then
         let
             searchModel : SearchModel
             searchModel =
@@ -3435,7 +3440,7 @@ searchWithCurrentQuery load ( model, cmd ) =
                 { model
                     | searchModel =
                         { searchModel
-                            | lastSearchHash = Just (getSearchHash model.url)
+                            | lastSearchHash = Just searchHash
                             , searchResults =
                                 if load /= LoadNew && load /= LoadNewForce then
                                     searchModel.searchResults
@@ -3523,37 +3528,22 @@ searchWithGroups groups ( model, cmd ) =
     )
 
 
-getSearchHash : Url -> String
-getSearchHash url =
-    url.query
-        |> Maybe.withDefault ""
-        |> String.split "&"
-        |> List.filter
-            (\s ->
-                case String.split "=" s of
-                    [ "columns", _ ] ->
-                        False
+getSearchHash : Model -> SearchModel -> String
+getSearchHash model searchModel =
+    getSearchModelQueryParams model searchModel
+        |> Dict.fromList
+        |> Dict.map (\_ -> String.join "+")
+        |> Dict.filter
+            (\k v ->
+                if k == "q" then
+                    not (String.Extra.isBlank v)
 
-                    [ "display", _ ] ->
-                        False
-
-                    [ "group-fields", _ ] ->
-                        False
-
-                    [ "link-layout", _ ] ->
-                        False
-
-                    [ "q", q ] ->
-                        q
-                            |> Url.percentDecode
-                            |> Maybe.withDefault ""
-                            |> String.trim
-                            |> String.isEmpty
-                            |> not
-
-                    _ ->
-                        True
+                else
+                    List.member k [ "columns", "display", "group-fields", "link-layout" ]
+                        |> not
             )
+        |> Dict.toList
+        |> List.map (\( k, v ) -> k ++ "=" ++ v)
         |> String.join "&"
 
 
