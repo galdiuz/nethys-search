@@ -5698,9 +5698,13 @@ viewSearchResultGroupedVerticalWithSummary viewModel document =
               ]
             , case document.summary of
                 Just summary ->
-                    List.append
-                        [ Html.text " - " ]
-                        (parseAndViewAsMarkdown viewModel summary)
+                    if documentShouldBeMasked viewModel document then
+                        []
+
+                    else
+                        List.append
+                            [ Html.text " - " ]
+                            (parseAndViewAsMarkdown viewModel summary)
 
                 Nothing ->
                     []
