@@ -2481,6 +2481,34 @@ viewFilterItems model searchModel =
                     Nothing
             )
         ]
+
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Items with children" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-medium"
+            ]
+            [ viewRadioButton
+                { checked = searchModel.filterItemChildren
+                , enabled = True
+                , name = "item-children"
+                , onInput = FilterItemChildrenChanged True
+                , text = "Show separately"
+                }
+            , viewRadioButton
+                { checked = not searchModel.filterItemChildren
+                , enabled = True
+                , name = "item-children"
+                , onInput = FilterItemChildrenChanged False
+                , text = "Show parent"
+                }
+            ]
+        ]
     ]
 
 
@@ -3631,6 +3659,16 @@ viewActiveFilters canClick searchModel =
                       , removeMsg = \_ -> FilterApCreaturesChanged False
                       }
                     , { class = Nothing
+                      , label = "Items with children:"
+                      , list =
+                            if searchModel.filterItemChildren then
+                                []
+
+                            else
+                                [ "Show parent" ]
+                      , removeMsg = \_ -> FilterItemChildrenChanged True
+                      }
+                    , { class = Nothing
                       , label = "Legacy / Remaster:"
                       , list =
                             case searchModel.legacyMode of
@@ -3999,11 +4037,14 @@ viewSingleShortResultLoaded viewModel document =
 
                     _ ->
                         Html.text document.type_
-                , case document.level of
-                    Just level ->
+                , case ( document.level, document.itemHasChildren ) of
+                    ( Just level, True ) ->
+                        Html.text (" " ++ String.fromInt level ++ "+")
+
+                    ( Just level, False ) ->
                         Html.text (" " ++ String.fromInt level)
 
-                    Nothing ->
+                    ( Nothing, _ ) ->
                         Html.text ""
                 ]
             ]
@@ -4081,11 +4122,14 @@ viewMaskedDocument viewModel document =
 
                     _ ->
                         Html.text document.type_
-                , case document.level of
-                    Just level ->
+                , case ( document.level, document.itemHasChildren ) of
+                    ( Just level, True ) ->
+                        Html.text (" " ++ String.fromInt level ++ "+")
+
+                    ( Just level, False ) ->
                         Html.text (" " ++ String.fromInt level)
 
-                    Nothing ->
+                    ( Nothing, _ ) ->
                         Html.text ""
                 ]
             ]

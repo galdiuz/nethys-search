@@ -109,6 +109,7 @@ def fetch_docs(url):
                     'intelligence',
                     'intelligence_scale_number',
                     'item_category',
+                    'item_child_id',
                     'item_subcategory',
                     'language_markdown',
                     'legacy_id',

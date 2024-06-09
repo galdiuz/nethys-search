@@ -83,6 +83,7 @@ type alias SearchModel =
     , filteredToValues : Dict String String
     , filteredValues : Dict String (Dict String Bool)
     , filterApCreatures : Bool
+    , filterItemChildren : Bool
     , filterOperators : Dict String Bool
     , filterSpoilers : Bool
     , fixedQueryString : String
@@ -124,6 +125,7 @@ emptySearchModel { defaultQuery, fixedQueryString, removeFilters } =
     , filteredToValues = Dict.empty
     , filteredValues = Dict.empty
     , filterApCreatures = False
+    , filterItemChildren = True
     , filterOperators = Dict.empty
     , filterSpoilers = False
     , fixedQueryString = fixedQueryString
@@ -250,6 +252,7 @@ type alias Document =
     , intelligence : Maybe Int
     , intelligenceScale : Maybe Int
     , itemCategory : Maybe String
+    , itemHasChildren : Bool
     , itemSubcategory : Maybe String
     , languages : Maybe String
     , legacyId : Maybe String
@@ -513,6 +516,7 @@ type Msg
     | FilterRemoved String String
     | FilterToggled String String
     | FilterApCreaturesChanged Bool
+    | FilterItemChildrenChanged Bool
     | FilterOperatorChanged String Bool
     | FilterSpoilersChanged Bool
     | FilteredFromValueChanged String String
@@ -1719,6 +1723,7 @@ updateSearchModelFromParams params model searchModel =
                     else
                         Standard
         , filterApCreatures = Dict.get "ap-creatures" params == Just [ "hide" ]
+        , filterItemChildren = Dict.get "item-children" params /= Just [ "parent" ]
         , filterSpoilers = Dict.get "spoilers" params == Just [ "hide" ]
         , filterOperators =
             List.map
@@ -2022,6 +2027,11 @@ currentQueryAsComplex searchModel =
 
       else
         []
+    , if searchModel.filterItemChildren then
+        []
+
+      else
+        [ "!item_parent_id:*" ]
     , case searchModel.legacyMode of
         Just True ->
             [ "!legacy_id:*" ]
@@ -3250,6 +3260,7 @@ documentDecoder =
     Field.attempt "intelligence" Decode.int <| \intelligence ->
     Field.attempt "intelligence_scale_number" Decode.int <| \intelligenceScale ->
     Field.attempt "item_category" Decode.string <| \itemCategory ->
+    Field.attempt "item_child_id" stringListDecoder <| \itemChildrenIds ->
     Field.attempt "item_subcategory" Decode.string <| \itemSubcategory ->
     Field.attempt "language_markdown" Decode.string <| \languages ->
     Field.attempt "legacy_id" Decode.string <| \legacyId ->
@@ -3424,6 +3435,7 @@ documentDecoder =
         , intelligence = intelligence
         , intelligenceScale = intelligenceScale
         , itemCategory = itemCategory
+        , itemHasChildren = not (List.isEmpty (Maybe.withDefault [] itemChildrenIds))
         , itemSubcategory = itemSubcategory
         , languages = languages
         , legacyId = legacyId

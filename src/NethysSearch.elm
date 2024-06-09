@@ -439,6 +439,16 @@ update msg model =
                 |> updateUrlWithSearchParams
             )
 
+        FilterItemChildrenChanged value ->
+            ( model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | filterItemChildren = value }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+
         FilterOperatorChanged filterType value ->
             ( model
             , updateCurrentSearchModel
@@ -2584,6 +2594,13 @@ getSearchModelQueryParams model searchModel =
           else
             []
         )
+      , ( "item-children"
+        , if searchModel.filterItemChildren then
+            []
+
+          else
+            [ "parent" ]
+        )
       , ( "legacy"
         , case searchModel.legacyMode of
             Just True ->
@@ -3241,6 +3258,20 @@ buildSearchMustNotTerms model searchModel =
 
           else
             []
+
+        , [ [ ( "exists"
+              , Encode.object
+                    [ ( "field"
+                      , if searchModel.filterItemChildren then
+                            Encode.string "item_child_id"
+
+                        else
+                            Encode.string "item_parent_id"
+                      )
+                    ]
+              )
+            ]
+          ]
 
         , [ [ ( "term"
               , Encode.object
