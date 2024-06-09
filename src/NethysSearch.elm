@@ -3503,11 +3503,19 @@ searchWithCurrentQuery load ( model, cmd ) =
                         { searchModel
                             | lastSearchHash = Just searchHash
                             , searchResults =
-                                if load /= LoadNew && load /= LoadNewForce then
-                                    searchModel.searchResults
+                                case load of
+                                    LoadMore _ ->
+                                        searchModel.searchResults
 
-                                else
-                                    []
+                                    _ ->
+                                        []
+                            , searchGroupResults =
+                                case load of
+                                    LoadMore _ ->
+                                        searchModel.searchGroupResults
+
+                                    _ ->
+                                        []
                             , tracker = Just newTracker
                         }
                 }
