@@ -19,6 +19,7 @@ import Markdown.Parser
 import Maybe.Extra
 import NethysSearch.Data as Data exposing (..)
 import NethysSearch.View as View
+import Order.Extra
 import Process
 import Random
 import Regex
@@ -1551,8 +1552,8 @@ fetchDocumentsFromJson alwaysParseMarkdown legacyMode ids ( model, cmd ) =
                 ids
                 |> List.Extra.unique
 
-        filesToFetch : List ( String, List String )
-        filesToFetch =
+        idsWithFile : List ( String, Maybe String )
+        idsWithFile =
             idsToFetch
                 |> List.map
                     (\id ->
@@ -1560,9 +1561,37 @@ fetchDocumentsFromJson alwaysParseMarkdown legacyMode ids ( model, cmd ) =
                         , Dict.get id model.documentIndex
                         )
                     )
-                |> Dict.Extra.filterGroupBy Tuple.second
+
+        idsToFetchFromElasticsearch : List String
+        idsToFetchFromElasticsearch =
+            if Dict.isEmpty model.documentIndex then
+                []
+
+            else
+                idsWithFile
+                    |> List.filter (Tuple.second >> Maybe.Extra.isNothing)
+                    |> List.map Tuple.first
+
+        idsToFetchFromJson : List ( String, String )
+        idsToFetchFromJson =
+            idsWithFile
+                |> List.filterMap Maybe.Extra.combineSecond
+
+        order : String -> String -> Order
+        order =
+            idsToFetchFromJson
+                |> List.map Tuple.second
+                |> List.Extra.unique
+                |> Order.Extra.explicit
+                |> Order.Extra.reverse
+
+        filesToFetch : List ( String, List String )
+        filesToFetch =
+            idsToFetchFromJson
+                |> Dict.Extra.groupBy Tuple.second
                 |> Dict.map (\_ v -> List.map Tuple.first v)
                 |> Dict.toList
+                |> List.sortWith (Order.Extra.byFieldWith order Tuple.first)
     in
     ( { model
         | documentsToFetch =
@@ -1592,6 +1621,7 @@ fetchDocumentsFromJson alwaysParseMarkdown legacyMode ids ( model, cmd ) =
         |> List.append [ cmd ]
         |> Cmd.batch
     )
+        |> fetchDocumentsFromElasticsearch alwaysParseMarkdown legacyMode idsToFetchFromElasticsearch
 
 
 fetchDocumentsFromElasticsearch : Bool -> LegacyMode -> List String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
