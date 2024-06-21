@@ -5363,6 +5363,17 @@ viewSearchResultsGrouped model searchModel remaining =
                     total =
                         Dict.get key1 counts
                             |> Maybe.withDefault 0
+
+                    loadButton : Html Msg
+                    loadButton =
+                        if loaded < total then
+                            viewLoadGroupButton
+                                model
+                                searchModel
+                                [ ( searchModel.groupField1, key1 ) ]
+
+                          else
+                            Html.text ""
                 in
                 Html.div
                     [ HA.class "column"
@@ -5381,14 +5392,7 @@ viewSearchResultsGrouped model searchModel remaining =
                             , HA.class "align-center"
                             , HA.class "nowrap"
                             ]
-                            [ if loaded < total then
-                                viewLoadGroupButton
-                                    model
-                                    searchModel
-                                    [ ( searchModel.groupField1, key1 ) ]
-
-                              else
-                                Html.text ""
+                            [ loadButton
                             , Html.div
                                 []
                                 [ Html.text (String.fromInt loaded)
@@ -5403,7 +5407,7 @@ viewSearchResultsGrouped model searchModel remaining =
                             viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1
 
                         Nothing ->
-                            viewSearchResultsGroupedLinkList model searchModel documents1 (total - loaded)
+                            viewSearchResultsGroupedLinkList model searchModel documents1 (total - loaded) loadButton
                     ]
             )
             (if searchModel.searchResultGroupAggs == Nothing then
@@ -5480,6 +5484,19 @@ viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1 =
                     total =
                         Dict.get (key1 ++ "--" ++ key2) counts
                             |> Maybe.withDefault 0
+
+                    loadButton : Html Msg
+                    loadButton =
+                        if loaded < total then
+                            viewLoadGroupButton
+                                model
+                                searchModel
+                                [ ( searchModel.groupField1, key1 )
+                                , ( field2, key2 )
+                                ]
+
+                        else
+                            Html.text ""
                 in
                 Html.div
                     [ HA.class "column"
@@ -5502,16 +5519,7 @@ viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1 =
                                 , HA.class "align-center"
                                 , HA.class "nowrap"
                                 ]
-                                [ if loaded < total then
-                                    viewLoadGroupButton
-                                        model
-                                        searchModel
-                                        [ ( searchModel.groupField1, key1 )
-                                        , ( field2, key2 )
-                                        ]
-
-                                  else
-                                    Html.text ""
+                                [ loadButton
                                 , Html.div
                                     []
                                     [ Html.text (String.fromInt loaded)
@@ -5525,7 +5533,7 @@ viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1 =
                             viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2
 
                         Nothing ->
-                            viewSearchResultsGroupedLinkList model searchModel documents2 (total - loaded)
+                            viewSearchResultsGroupedLinkList model searchModel documents2 (total - loaded) loadButton
                     ]
             )
             groupedDocuments
@@ -5587,6 +5595,20 @@ viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2 =
                     total =
                         Dict.get (key1 ++ "--" ++ key2 ++ "--" ++ key3) counts
                             |> Maybe.withDefault 0
+
+                    loadButton : Html Msg
+                    loadButton =
+                        if loaded < total then
+                            viewLoadGroupButton
+                                model
+                                searchModel
+                                [ ( searchModel.groupField1, key1 )
+                                , ( Maybe.withDefault "" searchModel.groupField2, key2 )
+                                , ( field3, key3 )
+                                ]
+
+                        else
+                            Html.text ""
                 in
                 Html.div
                     [ HA.class "column"
@@ -5610,17 +5632,7 @@ viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2 =
                                 , HA.class "align-center"
                                 , HA.class "nowrap"
                                 ]
-                                [ if loaded < total then
-                                    viewLoadGroupButton
-                                        model
-                                        searchModel
-                                        [ ( searchModel.groupField1, key1 )
-                                        , ( Maybe.withDefault "" searchModel.groupField2, key2 )
-                                        , ( field3, key3 )
-                                        ]
-
-                                  else
-                                    Html.text ""
+                                [ loadButton
                                 , Html.div
                                     []
                                     [ Html.text (String.fromInt loaded)
@@ -5629,7 +5641,7 @@ viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2 =
                                     ]
                                 ]
                             ]
-                    , viewSearchResultsGroupedLinkList model searchModel documents3 (total - loaded)
+                    , viewSearchResultsGroupedLinkList model searchModel documents3 (total - loaded) loadButton
                     ]
             )
             groupedDocuments
@@ -5651,12 +5663,12 @@ viewLoadGroupButton model searchModel groups =
             [ Html.text "Load" ]
 
 
-viewSearchResultsGroupedLinkList : Model -> SearchModel -> List Document -> Int -> Html Msg
-viewSearchResultsGroupedLinkList model searchModel documents remaining =
+viewSearchResultsGroupedLinkList : Model -> SearchModel -> List Document -> Int -> Html Msg -> Html Msg
+viewSearchResultsGroupedLinkList model searchModel documents remaining loadButton =
     Html.div
         [ case searchModel.groupedLinkLayout of
             Horizontal ->
-                HA.class "row"
+                HA.class "row align-center"
 
             _ ->
                 HA.class "column"
@@ -5679,7 +5691,23 @@ viewSearchResultsGroupedLinkList model searchModel documents remaining =
                 )
                 (List.sortBy .name documents)
             )
-            [ viewSearchResultsGroupedNotLoaded remaining ]
+            [ if remaining > 0 then
+                Html.div
+                    [ HA.class "row"
+                    , HA.class "gap-small"
+                    , HA.class "align-center"
+                    ]
+                    [ Html.div
+                        [ HA.style "color" "var(--color-text-inactive)"
+                        ]
+                        [ Html.text (String.Extra.pluralize "result" "results" remaining ++ " not loaded")
+                        ]
+                    , loadButton
+                    ]
+
+              else
+                Html.text ""
+            ]
         )
 
 
@@ -5819,19 +5847,6 @@ viewGroupedRarityBadge viewModel document =
 
             _ ->
                 Html.text ""
-
-    else
-        Html.text ""
-
-
-viewSearchResultsGroupedNotLoaded : Int -> Html msg
-viewSearchResultsGroupedNotLoaded remaining =
-    if remaining > 0 then
-        Html.div
-            [ HA.style "color" "var(--color-text-inactive)"
-            ]
-            [ Html.text (String.Extra.pluralize "result" "results" remaining ++ " not loaded")
-            ]
 
     else
         Html.text ""
