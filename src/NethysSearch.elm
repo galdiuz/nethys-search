@@ -2824,6 +2824,7 @@ buildSearchBody model searchModel load =
                 )
           )
             |> Just
+        , Just ( "track_total_hits", Encode.bool True )
         , Just ( "_source" , Encode.bool False )
         , searchModel.searchResults
             |> List.Extra.last
@@ -3533,7 +3534,7 @@ searchWithCurrentQuery load ( model, cmd ) =
 
             , Http.request
                 { method = "POST"
-                , url = model.elasticUrl ++ "/_search?track_total_hits=true"
+                , url = model.elasticUrl ++ "/_search?stats=search"
                 , headers = []
                 , body = Http.jsonBody (buildSearchBody newModel newModel.searchModel load)
                 , expect = Http.expectJson GotSearchResult searchResultDecoder
@@ -3586,7 +3587,7 @@ searchWithGroups groups ( model, cmd ) =
 
         , Http.request
             { method = "POST"
-            , url = model.elasticUrl ++ "/_search?track_total_hits=true"
+            , url = model.elasticUrl ++ "/_search?stats=search_grouped"
             , headers = []
             , body = Http.jsonBody (buildSearchGroupedBody newModel newModel.searchModel groups)
             , expect = Http.expectJson GotGroupSearchResult searchResultDecoder
@@ -3632,7 +3633,7 @@ updateWithNewGroupFields model =
         [ updateUrlWithSearchParams model
         , Http.request
             { method = "POST"
-            , url = model.elasticUrl ++ "/_search"
+            , url = model.elasticUrl ++ "/_search?stats=group_aggregations"
             , headers = []
             , body = Http.jsonBody (buildSearchGroupAggregationsBody model model.searchModel)
             , expect = Http.expectJson GotGroupAggregationsResult searchResultDecoder
@@ -3647,7 +3648,7 @@ getAggregations : Model -> Cmd Msg
 getAggregations model =
     Http.request
         { method = "POST"
-        , url = model.elasticUrl ++ "/_search"
+        , url = model.elasticUrl ++ "/_search?stats=aggregations"
         , headers = []
         , body = Http.jsonBody (buildAggregationsBody model.searchModel)
         , expect = Http.expectJson GotAggregationsResult aggregationsDecoder
@@ -3841,7 +3842,7 @@ aggregationsHttpTask model body decoder =
     Http.task
         { method = "POST"
         , headers = []
-        , url = model.elasticUrl ++ "/_search"
+        , url = model.elasticUrl ++ "/_search?stats=global_aggregations"
         , body = Http.jsonBody body
         , resolver = Http.stringResolver
             (\response ->
