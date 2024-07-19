@@ -13,6 +13,7 @@ import Markdown.Block as MB
 import Markdown.Parser
 import Markdown.Renderer
 import Maybe.Extra
+import Order.Extra
 import Set exposing (Set)
 import String.Extra
 import Tuple3
@@ -46,6 +47,7 @@ type alias Model =
     , pageSizeDefaults : Dict String Int
     , pageWidth : Int
     , previewLink : Maybe PreviewLink
+    , queryFieldFocused : Bool
     , randomSeed : Int
     , savedColumnConfigurations : Dict String (List String)
     , savedColumnConfigurationName : String
@@ -79,6 +81,9 @@ type alias SearchModel =
     { aggregations : Maybe (Result Http.Error Aggregations)
     , debounce : Int
     , defaultQuery : String
+    , dropdownFilterInput : String
+    , dropdownFilterSelectedIndex : Int
+    , dropdownFilterState : DropdownFilterState
     , filteredFromValues : Dict String String
     , filteredToValues : Dict String String
     , filteredValues : Dict String (Dict String Bool)
@@ -102,6 +107,8 @@ type alias SearchModel =
     , searchResultGroupAggs : Maybe GroupAggregations
     , searchResults : List (Result Http.Error SearchResult)
     , selectValues : Dict String String
+    , showDropdownFilter : Bool
+    , showDropdownFilterHint : Bool
     , showFilters : Bool
     , sort : List ( String, SortDir )
     , sortHasChanged : Bool
@@ -121,6 +128,9 @@ emptySearchModel { defaultQuery, fixedQueryString, removeFilters } =
     { aggregations = Nothing
     , debounce = 0
     , defaultQuery = defaultQuery
+    , dropdownFilterInput = ""
+    , dropdownFilterSelectedIndex = 0
+    , dropdownFilterState = SelectField
     , filteredFromValues = Dict.empty
     , filteredToValues = Dict.empty
     , filteredValues = Dict.empty
@@ -144,6 +154,8 @@ emptySearchModel { defaultQuery, fixedQueryString, removeFilters } =
     , searchGroupResults = []
     , searchResults = []
     , selectValues = Dict.empty
+    , showDropdownFilter = False
+    , showDropdownFilterHint = True
     , showFilters = False
     , sort = []
     , sortHasChanged = False
@@ -409,24 +421,9 @@ defaultFlags =
 
 
 type alias Aggregations =
-    { actions : List String
-    , alignments : List String
-    , areaTypes : List String
-    , creatureFamilies : List String
-    , deityCategories : List String
-    , domains : List String
-    , favoredWeapons : List String
-    , hands : List String
-    , itemCategories : List String
-    , itemSubcategories : List { category : String, name : String }
-    , regions : List String
-    , reloads : List String
-    , sizes : List String
-    , skills : List String
-    , sources : List String
-    , traits : List String
-    , types : List String
-    , weaponGroups : List String
+    { itemSubcategories : List { category : String, name : String }
+    , minmax : Dict String ( Float, Float )
+    , values : Dict String (List String)
     }
 
 
@@ -500,9 +497,14 @@ type alias Source =
 type Msg
     = AlwaysShowFiltersChanged Bool
     | AutoQueryTypeChanged Bool
+    | CloseDropdownFilterHint
     | DateFormatChanged String
     | DebouncePassed Int
     | DeleteColumnConfigurationPressed
+    | DropdownFilterFinalized DropdownFilterComplete
+    | DropdownFilterInputChanged String
+    | DropdownFilterOptionSelected DropdownFilterState
+    | DropdownFilterToggled
     | ExportAsCsvPressed
     | ExportAsJsonPressed
     | GotAggregationsResult (Result Http.Error Aggregations)
@@ -519,6 +521,7 @@ type Msg
     | FilterItemChildrenChanged Bool
     | FilterOperatorChanged String Bool
     | FilterSpoilersChanged Bool
+    | FilteredBothValuesChanged String String
     | FilteredFromValueChanged String String
     | FilteredToValueChanged String String
     | GroupField1Changed String
@@ -531,6 +534,7 @@ type Msg
     | GroupedShowPfsIconChanged Bool
     | GroupedShowRarityChanged Bool
     | GroupedSortChanged GroupedSort
+    | KeyDown String
     | LegacyModeChanged (Maybe Bool)
     | LimitTableWidthChanged Bool
     | LinkEntered String Position
@@ -547,6 +551,8 @@ type Msg
     | PageSizeDefaultsChanged String Int
     | PageWidthChanged Int
     | QueryChanged String
+    | QueryFieldBlurred
+    | QueryFieldFocused
     | QueryTypeSelected QueryType
     | RandomSeedGenerated Int
     | RemoveAllFiltersOfTypePressed String
@@ -651,6 +657,29 @@ type SortDir
     | Desc
 
 
+type DropdownFilterState
+    = SelectField
+    | SelectValueOperator String String
+    | SelectValue String String DropdownFilterValueOperator
+    | SelectNumericOperator String String
+    | SelectNumericSubfield String String
+    | SelectNumericValue String String Order
+    | SelectSortDirection String String Bool
+
+
+type DropdownFilterValueOperator
+    = Is
+    | IsAnd
+    | IsOr
+    | IsNot
+
+
+type DropdownFilterComplete
+    = Numeric String Order Float
+    | Sort String SortDir
+    | Value String DropdownFilterValueOperator String
+
+
 allAttributes : List String
 allAttributes =
     [ "strength"
@@ -730,6 +759,15 @@ allDamageTypes =
     , "spirit"
     , "splash"
     , "unholy"
+    ]
+
+
+castingComponents : List String
+castingComponents =
+    [ "focus"
+    , "material"
+    , "somatic"
+    , "verbal"
     ]
 
 
@@ -890,9 +928,9 @@ fields =
     , ( "speed_raw", "Speed exactly as written" )
     , ( "speed_penalty", "Speed penalty of armor or shield" )
     , ( "spell", "Related spells" )
-    , ( "spell_attack_bonus", "Spell attack bonus for creatures" )
+    , ( "spell_attack_bonus", "[n] Spell attack bonus for creatures" )
     , ( "spell_attack_bonus_scale", "Spell attack bonus scale according to creature building rules" )
-    , ( "spell_dc", "Spell DC for creatures" )
+    , ( "spell_dc", "[n] Spell DC for creatures" )
     , ( "spell_dc_scale", "Spell DC scale according to creature building rules" )
     , ( "spell_type", "Spell type ( Spell / Cantrip / Focus )" )
     , ( "spoilers", "Adventure path name if there is a spoiler warning on the page" )
@@ -932,221 +970,672 @@ fields =
     ]
 
 
-filterFields : SearchModel -> List { field : String, key : String, useOperator : Bool }
-filterFields searchModel =
+type alias FilterField =
+    { field : String
+    , key : String
+    , useOperator : Bool
+    , values : List String -> List String
+    }
+
+
+filterFields : List FilterField
+filterFields =
     [ { field = "ac_scale"
       , key = "ac-scales"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit scales)
       }
     , { field = "actions.keyword"
       , key = "actions"
       , useOperator = False
+      , values = List.sortBy actionsToInt
       }
     , { field = "alignment"
       , key = "alignments"
       , useOperator = False
+      , values =
+            List.filter (\a -> List.member a (List.map Tuple.first allAlignments))
+                >> List.sort
       }
     , { field = "area_type"
       , key = "area-types"
       , useOperator = False
+      , values = List.sort
       }
     , { field = "armor_category"
       , key = "armor-categories"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit armorCategories)
       }
     , { field = "armor_group"
       , key = "armor-groups"
       , useOperator = False
+      , values = List.sort
       }
     , { field = "attack_bonus_scale"
       , key = "attack-bonus-scales"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit scales)
       }
     , { field = "attribute"
       , key = "attributes"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit allAttributes)
       }
     , { field = "charisma_scale"
       , key = "charisma-scales"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit scales)
       }
     , { field = "component"
       , key = "components"
       , useOperator = True
+      , values = List.sort
+      }
+    , { field = "complexity"
+      , key = "complexities"
+      , useOperator = False
+      , values = List.sort
       }
     , { field = "constitution_scale"
       , key = "constitution-scales"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit scales)
       }
     , { field = "creature_family.keyword"
       , key = "creature-families"
       , useOperator = False
+      , values = List.sort
       }
     , { field = "damage_type"
       , key = "damage-types"
       , useOperator = True
+      , values = List.sort
       }
     , { field = "dexterity_scale"
       , key = "dexterity-scales"
       , useOperator = False
+      , values = List.sort
       }
     , { field = "deity_category.keyword"
       , key = "deity-categories"
       , useOperator = False
+      , values = List.sort
       }
     , { field = "divine_font"
       , key = "divine-fonts"
       , useOperator = True
+      , values = List.sort
       }
     , { field = "domain"
       , key = "domains"
       , useOperator = True
+      , values = List.sort
       }
     , { field = "favored_weapon.keyword"
       , key = "favored-weapons"
       , useOperator = False
+      , values = List.sort
       }
     , { field = "fortitude_save_scale"
       , key = "fortitude-scales"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit scales)
       }
     , { field = "hands.keyword"
       , key = "hands"
       , useOperator = False
+      , values = List.sort
+      }
+    , { field = "hazard_type"
+      , key = "hazard-types"
+      , useOperator = False
+      , values = List.sort
+      }
+    , { field = "pantheon.keyword"
+      , key = "pantheons"
+      , useOperator = False
+      , values = List.sort
       }
     , { field = "hp_scale"
       , key = "hp-scales"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit scales)
       }
     , { field = "intelligence_scale"
       , key = "intelligence-scales"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit scales)
       }
     , { field = "item_category.keyword"
       , key = "item-categories"
       , useOperator = False
+      , values = List.sort
       }
     , { field = "item_subcategory.keyword"
       , key = "item-subcategories"
       , useOperator = False
+      , values = List.sort
       }
     , { field = "perception_scale"
       , key = "perception-scales"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit scales)
       }
     , { field = "pfs"
       , key = "pfs"
       , useOperator = False
+      , values = (::) "none"
       }
     , { field = "rarity"
       , key = "rarities"
       , useOperator = False
+      , values = identity
       }
     , { field = "reflex_save_scale"
       , key = "reflex-scales"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit scales)
       }
     , { field = "region"
       , key = "regions"
       , useOperator = False
+      , values = List.sort
       }
     , { field = "reload_raw.keyword"
       , key = "reloads"
       , useOperator = False
+      , values = List.sort
       }
     , { field = "sanctification"
       , key = "sanctifications"
       , useOperator = True
+      , values = List.sort
       }
     , { field = "saving_throw"
       , key = "saving-throws"
       , useOperator = False
+      , values =
+            List.concatMap explodeSaves
+                >> List.Extra.unique
+                >> List.sort
       }
     , { field = "school"
       , key = "schools"
       , useOperator = False
+      , values = List.sort
       }
     , { field = "size"
       , key = "sizes"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit allSizes)
       }
     , { field = "skill.keyword"
       , key = "skills"
       , useOperator = True
+      , values =
+            List.filter (\skill -> List.member skill allSkills)
+                >> List.sort
       }
     , { field = "skill.keyword"
       , key = "lore-skills"
       , useOperator = True
+      , values =
+            List.filter (String.endsWith "lore")
+                >> List.filter ((/=) "lore")
+                >> List.sort
       }
     , { field = "source.keyword"
       , key = "sources"
       , useOperator = False
+      , values = List.sort
       }
     , { field = "source_category"
       , key = "source-categories"
       , useOperator = False
+      , values = List.sort
+      }
+    , { field = "source_group.keyword"
+      , key = "source-groups"
+      , useOperator = False
+      , values = List.sort
+      }
+    , { field = "spell.keyword"
+      , key = "spells"
+      , useOperator = False
+      , values = List.sort
       }
     , { field = "spell_attack_bonus_scale"
       , key = "spell-attack-bonus-scales"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit scales)
       }
     , { field = "spell_dc_scale"
       , key = "spell-dc-scales"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit scales)
       }
     , { field = "strength_scale"
       , key = "strength-scales"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit scales)
       }
     , { field = "strike_damage_scale"
       , key = "strike-damage-scales"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit scales)
       }
     , { field = "strongest_save"
       , key = "strongest-saves"
       , useOperator = False
+      , values =
+            List.filter (\s -> List.Extra.notMember s [ "fort", "ref" ])
+                >> List.sort
       }
     , { field = "tradition"
       , key = "traditions"
       , useOperator = True
+      , values = List.sort
       }
     , { field = "trait"
       , key = "traits"
       , useOperator = True
+      , values = List.sort
       }
     , { field = "trait_group"
       , key = "trait-groups"
       , useOperator = True
+      , values =
+            List.filter (\group -> List.Extra.notMember group [ "half-elf", "half-orc", "aon-special", "settlement" ])
+                >> List.sort
       }
     , { field = "type"
       , key = "types"
       , useOperator = False
+      , values = List.sort
       }
+    , { field = "warden_spell_tier"
+      , key = "warden-spell-tiers"
+      , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit wardenSpellTiers)
+      }
+    -- , { field = "vision.keyword"
+    --   , key = "visions"
+    --   , useOperator = False
+    --   , values = List.sort
+    --   }
     , { field = "weakest_save"
       , key = "weakest-saves"
       , useOperator = False
+      , values =
+            List.filter (\s -> List.Extra.notMember s [ "fort", "ref" ])
+                >> List.sort
       }
     , { field = "weapon_category"
       , key = "weapon-categories"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit weaponCategories)
       }
     , { field = "weapon_group"
       , key = "weapon-groups"
       , useOperator = False
+      , values = List.sort
       }
     , { field = "weapon_type"
       , key = "weapon-types"
       , useOperator = False
+      , values = List.sort
       }
     , { field = "will_save_scale"
       , key = "will-scales"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit scales)
       }
     , { field = "wisdom_scale"
       , key = "wisdom-scales"
       , useOperator = False
+      , values = List.sortWith (Order.Extra.explicit scales)
       }
     ]
+
+
+numericFields : List String
+numericFields =
+    [ "ac"
+    , "area"
+    , "attack_bonus"
+    , "bulk"
+    , "charisma"
+    , "check_penalty"
+    , "constitution"
+    , "damage_die"
+    , "dexterity"
+    , "dex_cap"
+    , "duration"
+    , "fortitude_save"
+    , "hardness"
+    , "hp"
+    , "level"
+    , "rank"
+    , "intelligence"
+    , "onset"
+    , "perception"
+    , "price"
+    , "range"
+    , "reflex_save"
+    , "required_abilities"
+    , "resistance"
+    , "secondary_casters"
+    , "skill_mod"
+    , "speed"
+    , "spell_attack_bonus"
+    , "spell_dc"
+    , "strength"
+    , "weakness"
+    , "will_save"
+    , "wisdom"
+    ]
+
+
+numericFieldsWithSubfields : List String
+numericFieldsWithSubfields =
+    [ "resistance"
+    , "skill_mod"
+    , "speed"
+    , "weakness"
+    ]
+
+
+mapNumericFields : String -> List String
+mapNumericFields field =
+    case field of
+        "resistance" ->
+            List.map
+                ((++) "resistance.")
+                allDamageTypes
+
+        "skill_mod" ->
+            List.map
+                ((++) "skill_mod.")
+                allSkills
+
+        "speed" ->
+            List.map
+                ((++) "speed.")
+                speedTypes
+
+        "weakness" ->
+            List.map
+                ((++) "weakness.")
+                allDamageTypes
+
+        _ ->
+            [ field ]
+
+
+dropdownFilterFields : Model -> SearchModel -> List { label : String, key : String, onSelect : Msg }
+dropdownFilterFields model searchModel =
+    availableDropdownFilterFields model searchModel
+        |> List.filter
+            (\field ->
+                caseInsensitiveContains
+                    searchModel.dropdownFilterInput
+                    field.label
+            )
+
+
+availableDropdownFilterFields : Model -> SearchModel -> List { label : String, key : String, onSelect : Msg }
+availableDropdownFilterFields model searchModel =
+    let
+        toLabel : String -> String
+        toLabel field =
+            field
+                |> String.replace "_raw" ""
+                |> String.replace ".keyword" ""
+                |> String.Extra.humanize
+                |> toTitleCase
+    in
+    case searchModel.dropdownFilterState of
+        SelectField ->
+            -- TODO: Legacy / Remaster toggle?
+            List.append
+                (filterFields
+                    |> List.filter
+                        (\field ->
+                            (getAggregationValues field.field searchModel
+                                |> field.values
+                                |> List.length
+                                |> (<=) 2
+                            )
+                        )
+                    |> List.map
+                        (\field ->
+                            let
+                                label : String
+                                label =
+                                    if field.key == "lore-skills" then
+                                        "Lore Skills"
+
+                                    else
+                                        toLabel field.field
+                            in
+                            { label = label
+                            , key = field.key
+                            , onSelect =
+                                DropdownFilterOptionSelected
+                                    (SelectValueOperator
+                                        field.key
+                                        label
+                                    )
+                            }
+                        )
+                    |> List.filter
+                        (\field ->
+                            (List.Extra.notMember field.key [ "alignments", "components", "schools" ])
+                                || model.showLegacyFilters
+                        )
+                )
+                (List.filterMap
+                    (\field ->
+                        if List.member field numericFieldsWithSubfields then
+                            if hasMinmaxAggregationForSubfield field searchModel then
+                                { label = toLabel field
+                                , key = field
+                                , onSelect =
+                                    DropdownFilterOptionSelected
+                                        (SelectNumericSubfield
+                                            field
+                                            (toLabel field)
+                                        )
+                                }
+                                    |> Just
+
+                            else
+                                Nothing
+
+                        else
+                            case getAggregationMinmax field searchModel of
+                                Just ( min, max ) ->
+                                    if min == max then
+                                        Nothing
+
+                                    else
+                                        { label = toLabel field
+                                        , key = field
+                                        , onSelect =
+                                            DropdownFilterOptionSelected
+                                                (SelectNumericOperator
+                                                    field
+                                                    (toLabel field)
+                                                )
+                                        }
+                                            |> Just
+
+                                Nothing ->
+                                    Nothing
+                    )
+                    numericFields
+                )
+                    |> List.sortBy .label
+
+        SelectNumericOperator field label ->
+            List.append
+                [ { label = "is exactly"
+                  , key = "=="
+                  , onSelect = DropdownFilterOptionSelected (SelectNumericValue field label EQ)
+                  }
+                , { label = "is at least"
+                  , key = "<="
+                  , onSelect = DropdownFilterOptionSelected (SelectNumericValue field label GT)
+                  }
+                , { label = "is at most"
+                  , key = ">="
+                  , onSelect = DropdownFilterOptionSelected (SelectNumericValue field label LT)
+                  }
+                ]
+                (if List.any (Tuple3.first >> (==) field) sortFields
+                    || List.member field numericFieldsWithSubfields
+                 then
+                    [ { label = "sort by"
+                      , key = "sort"
+                      , onSelect = DropdownFilterOptionSelected (SelectSortDirection field label True)
+                      }
+                    ]
+
+                 else
+                    []
+                )
+
+        SelectNumericSubfield field label ->
+            (if field == "resistance" || field == "weakness" then
+                allDamageTypes
+
+             else if field == "skill_mod" then
+                allSkills
+
+             else if field == "speed" then
+                speedTypes
+
+             else
+                []
+            )
+                |> List.filter
+                    (\t ->
+                        getAggregationMinmax (field ++ "." ++ t) searchModel
+                            |> Maybe.Extra.isJust
+                    )
+                |> List.map
+                    (\damageType ->
+                        { label = toLabel damageType
+                        , key = damageType
+                        , onSelect =
+                            DropdownFilterOptionSelected
+                                (SelectNumericOperator
+                                    (field ++ "." ++ damageType)
+                                    (toLabel damageType ++ " " ++ label)
+                                )
+                        }
+                    )
+
+        SelectNumericValue field label operator ->
+            case String.toFloat searchModel.dropdownFilterInput of
+                Just value ->
+                    [ { label = String.fromFloat value
+                      , key = "value"
+                      , onSelect = DropdownFilterFinalized (Numeric field operator value)
+                      }
+                    ]
+
+                Nothing ->
+                    []
+
+        SelectValueOperator key label ->
+            let
+                useOperator : Bool
+                useOperator =
+                    filterFields
+                        |> List.Extra.find (.key >> (==) key)
+                        |> Maybe.map .useOperator
+                        |> Maybe.withDefault False
+
+                field : String
+                field =
+                    filterFields
+                        |> List.Extra.find (.key >> (==) key)
+                        |> Maybe.map .field
+                        |> Maybe.withDefault ""
+            in
+            List.concat
+                [ if List.isEmpty (boolDictIncluded key searchModel.filteredValues) then
+                    [ { label = "is"
+                      , key = "is"
+                      , onSelect = DropdownFilterOptionSelected (SelectValue key label Is)
+                      }
+                    ]
+
+                  else if useOperator then
+                    [ { label = "is"
+                      , key = "and"
+                      , onSelect = DropdownFilterOptionSelected (SelectValue key label IsAnd)
+                      }
+                    , { label = "is any"
+                      , key = "or"
+                      , onSelect = DropdownFilterOptionSelected (SelectValue key label IsOr)
+                      }
+                    ]
+
+                  else
+                    [ { label = "is"
+                      , key = "or"
+                      , onSelect = DropdownFilterOptionSelected (SelectValue key label IsOr)
+                      }
+                    ]
+
+                , [ { label = "is not"
+                    , key = "not"
+                    , onSelect = DropdownFilterOptionSelected (SelectValue key label IsNot)
+                    }
+                  ]
+
+                , if List.any (Tuple3.first >> (==) field) sortFields then
+                    [ { label = "sort by"
+                      , key = "sort"
+                      , onSelect = DropdownFilterOptionSelected (SelectSortDirection field label False)
+                      }
+                    ]
+
+                  else
+                    []
+
+                ]
+
+        SelectSortDirection field label isNumeric ->
+            [ { label = "asc"
+              , key = "asc"
+              , onSelect = DropdownFilterFinalized (Sort field Asc)
+              }
+            , { label = "desc"
+              , key = "desc"
+              , onSelect = DropdownFilterFinalized (Sort field Desc)
+              }
+            ]
+
+        SelectValue key _ operator ->
+            case List.Extra.find (.key >> (==) key) filterFields of
+                Just fieldSpec ->
+                    List.map
+                        (\value ->
+                            { label = toTitleCase value
+                            , key = value
+                            , onSelect = DropdownFilterFinalized (Value key operator value)
+                            }
+                        )
+                        (getAggregationValues fieldSpec.field searchModel
+                            |> fieldSpec.values
+                        )
+
+                Nothing ->
+                    []
 
 
 groupFields : List String
@@ -1306,6 +1795,30 @@ saves =
     , "fortitude"
     , "reflex"
     , "will"
+    ]
+
+
+explodeSaves : String -> List String
+explodeSaves string =
+    List.filterMap
+        (\save ->
+            if String.contains save (String.toLower string) then
+                Just save
+
+            else
+                Nothing
+        )
+        saves
+
+
+scales : List String
+scales =
+    [ "terrible"
+    , "low"
+    , "moderate"
+    , "high"
+    , "extreme"
+    , "undefined"
     ]
 
 
@@ -1682,6 +2195,15 @@ traditionsAndSpellLists =
     ]
 
 
+wardenSpellTiers : List String
+wardenSpellTiers =
+    [ "initiate"
+    , "advanced"
+    , "master"
+    , "peerless"
+    ]
+
+
 weaponCategories : List String
 weaponCategories =
     [ "simple"
@@ -1732,7 +2254,7 @@ updateSearchModelFromParams params model searchModel =
                     , Dict.get (filter.key ++ "-operator") params /= Just [ "or" ]
                     )
                 )
-                (filterFields searchModel
+                (filterFields
                     |> List.filter .useOperator
                 )
                 |> Dict.fromList
@@ -1748,7 +2270,7 @@ updateSearchModelFromParams params model searchModel =
                             identity
                     )
                 )
-                (filterFields searchModel)
+                filterFields
                 |> Dict.fromList
         , filteredFromValues =
             Dict.get "values-from" params
@@ -1964,7 +2486,7 @@ currentQueryAsComplex searchModel =
             else
                 s
     in
-    [ filterFields searchModel
+    [ filterFields
         |> List.filterMap
             (\filter ->
                 let
@@ -2085,6 +2607,20 @@ toTitleCase str =
         |> String.replace ", the " ", The "
         |> String.replace "Pfs" "PFS"
         |> String.replace "Gm's " "GM's "
+        |> String.replace " Dc" " DC"
+        |> String.replace "Ac " "AC "
+        |> replaceString "Ac" "AC"
+        |> String.replace "Hp " "HP "
+        |> replaceString "Hp" "HP"
+
+
+replaceString : String -> String -> String -> String
+replaceString search replacement input =
+    if input == search then
+        replacement
+
+    else
+        input
 
 
 sortDirToString : SortDir -> String
@@ -2193,6 +2729,7 @@ sortFieldToLabel field =
         |> List.reverse
         |> String.join " "
         |> String.Extra.humanize
+        |> toTitleCase
 
 
 sortFieldSuffix : String -> String
@@ -2221,11 +2758,52 @@ getAggregation fun searchModel =
         |> Maybe.withDefault []
 
 
+getAggregationValues : String -> SearchModel -> List String
+getAggregationValues key searchModel =
+    searchModel.aggregations
+        |> Maybe.andThen Result.toMaybe
+        |> Maybe.map .values
+        |> Maybe.andThen (Dict.get (String.replace ".keyword" "" key))
+        |> Maybe.withDefault []
+
+
+moreThanOneValueAggregation : String -> SearchModel -> Bool
+moreThanOneValueAggregation key searchModel =
+    getAggregationValues key searchModel
+        |> List.length
+        |> (<) 1
+
+
 moreThanOneAggregation : (Aggregations -> List a) -> SearchModel -> Bool
 moreThanOneAggregation fun searchModel =
     getAggregation fun searchModel
         |> List.length
         |> (<) 1
+
+
+getAggregationMinmax : String -> SearchModel -> Maybe ( Float, Float )
+getAggregationMinmax field searchModel =
+    searchModel.aggregations
+        |> Maybe.andThen Result.toMaybe
+        |> Maybe.map .minmax
+        |> Maybe.andThen (Dict.get field)
+
+
+hasMultipleMinmaxValues : String -> SearchModel -> Bool
+hasMultipleMinmaxValues field searchModel =
+    getAggregationMinmax field searchModel
+        |> Maybe.map (\( min, max ) -> min < max)
+        |> Maybe.withDefault False
+
+
+hasMinmaxAggregationForSubfield : String -> SearchModel -> Bool
+hasMinmaxAggregationForSubfield field searchModel =
+    searchModel.aggregations
+        |> Maybe.andThen Result.toMaybe
+        |> Maybe.map .minmax
+        |> Maybe.map Dict.keys
+        |> Maybe.withDefault []
+        |> List.any (String.startsWith (field ++ "."))
 
 
 numberWithSign : Int -> String
@@ -3013,43 +3591,7 @@ decodeToString =
 aggregationsDecoder : Decode.Decoder Aggregations
 aggregationsDecoder =
     Field.requireAt
-        [ "aggregations", "actions.keyword" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \actions ->
-    Field.requireAt
-        [ "aggregations", "alignment" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \alignments ->
-    Field.requireAt
-        [ "aggregations", "area_type" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \areaTypes ->
-    Field.requireAt
-        [ "aggregations", "creature_family.keyword" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \creatureFamilies ->
-    Field.requireAt
-        [ "aggregations", "deity_category.keyword" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \deityCategories ->
-    Field.requireAt
-        [ "aggregations", "domain" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \domains ->
-    Field.requireAt
-        [ "aggregations", "favored_weapon.keyword" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \favoredWeapons ->
-    Field.requireAt
-        [ "aggregations", "hands.keyword" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \hands ->
-    Field.requireAt
-        [ "aggregations", "item_category.keyword" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \itemCategories ->
-    Field.requireAt
-        [ "aggregations", "item_subcategory" ]
+        [ "aggregations", "item_category_subcategory" ]
         (aggregationBucketDecoder
             (Field.require "category" Decode.string <| \category ->
              Field.require "name" Decode.string <| \name ->
@@ -3060,63 +3602,69 @@ aggregationsDecoder =
             )
         )
         <| \itemSubcategories ->
-    Field.requireAt
-        [ "aggregations", "region" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \regions ->
-    Field.requireAt
-        [ "aggregations", "reload_raw.keyword" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \reloads ->
-    Field.requireAt
-        [ "aggregations", "size" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \sizes ->
-    Field.requireAt
-        [ "aggregations", "skill.keyword" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \skills ->
-    Field.requireAt
-        [ "aggregations", "source.keyword" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \sources ->
-    Field.requireAt
-        [ "aggregations", "trait" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \traits ->
-    Field.requireAt
-        [ "aggregations", "type" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \types ->
-    Field.requireAt
-        [ "aggregations", "weapon_group" ]
-        (aggregationBucketDecoder Decode.string)
-        <| \weaponGroups ->
+    Field.require
+        "aggregations"
+        valuesAggregationsDecoder
+        <| \values ->
+    Field.require
+        "aggregations"
+        minmaxAggregationsDecoder
+        <| \minmax ->
     Decode.succeed
-        { actions = actions
-        , alignments = alignments
-        , areaTypes = areaTypes
-        , creatureFamilies = creatureFamilies
-        , deityCategories = deityCategories
-        , domains = domains
-        , favoredWeapons = favoredWeapons
-        , hands = hands
-        , itemCategories = itemCategories
-        , itemSubcategories = itemSubcategories
-        , regions = regions
-        , reloads = reloads
-        , sizes = sizes
-        , skills = skills
-        , sources = sources
-        , traits = traits
-        , types = types
-        , weaponGroups = weaponGroups
+        { itemSubcategories = itemSubcategories
+        , minmax = minmax
+        , values = values
         }
 
 
 aggregationBucketDecoder : Decode.Decoder a -> Decode.Decoder (List a)
 aggregationBucketDecoder keyDecoder =
     Decode.field "buckets" (Decode.list (Decode.field "key" keyDecoder))
+
+
+valuesAggregationsDecoder : Decode.Decoder (Dict String (List String))
+valuesAggregationsDecoder =
+    Decode.dict
+        (Decode.oneOf
+            [ aggregationBucketDecoder Decode.string
+                |> Decode.map Just
+            , Decode.succeed Nothing
+            ]
+        )
+        |> Decode.map (Dict.Extra.filterMap (\k v -> v))
+
+
+minmaxAggregationsDecoder : Decode.Decoder (Dict String ( Float, Float ))
+minmaxAggregationsDecoder =
+    Decode.dict
+        (Decode.oneOf
+            [ Decode.field "value" Decode.float
+                |> Decode.map Just
+            , Decode.succeed Nothing
+            ]
+        )
+        |> Decode.map (Dict.Extra.filterMap (\k v -> v))
+        |> Decode.map
+            (\dict ->
+                Dict.foldl
+                    (\key min result ->
+                        if String.endsWith ".min" key then
+                            case Dict.get (String.replace ".min" ".max" key) dict of
+                                Just max ->
+                                    Dict.insert
+                                        (String.replace ".min" "" key)
+                                        ( min, max )
+                                        result
+
+                                Nothing ->
+                                    result
+
+                        else
+                            result
+                    )
+                    Dict.empty
+                    dict
+            )
 
 
 globalAggregationsDecoder : Decode.Decoder GlobalAggregations

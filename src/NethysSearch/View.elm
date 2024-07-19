@@ -23,6 +23,7 @@ import Markdown.Parser
 import Markdown.Renderer
 import Maybe.Extra
 import NethysSearch.Data as Data exposing (..)
+import Order.Extra
 import Regex
 import Set
 import String.Extra
@@ -72,29 +73,47 @@ viewQuery model searchModel =
         [ Html.div
             [ HA.class "row"
             , HA.class "input-container"
+            , HA.style "position" "relative"
             ]
-            [ Html.input
+            [ Html.button
+                [ HA.class "input-button"
+                , HA.style "font-size" "24px"
+                , HA.title "Toggle filter menu [Ctrl+Space]"
+                , HAE.attributeIf
+                    (not searchModel.showDropdownFilter)
+                    (HA.style "color" "#808080")
+                , HE.onClick DropdownFilterToggled
+                ]
+                [ FontAwesome.view FontAwesome.Solid.list ]
+            , Html.input
                 [ HA.autofocus model.autofocus
                 , HA.class "query-input"
+                , HA.id "query"
                 , HA.maxlength 8192
                 , HA.placeholder "Enter search query"
                 , HA.type_ "text"
                 , HA.value searchModel.query
+                , HA.attribute "autocomplete" "off"
                 , HA.attribute "autocapitalize" "off"
                 , HE.onInput QueryChanged
+                , HE.onFocus QueryFieldFocused
+                , HE.onBlur QueryFieldBlurred
                 ]
                 [ Html.text searchModel.query ]
-            , if String.isEmpty searchModel.query then
-                Html.text ""
-
-              else
-                Html.button
+            , Html.Extra.viewIf
+                model.searchModel.showDropdownFilter
+                (viewQueryDropdownFilter model searchModel)
+            , viewQueryDropdownFilterHint model
+            , Html.Extra.viewIf
+                (not <| String.isEmpty searchModel.query)
+                (Html.button
                     [ HA.class "input-button"
                     , HA.style "font-size" "24px"
                     , HA.attribute "aria-label" "Clear query"
                     , HE.onClick (QueryChanged "")
                     ]
                     [ FontAwesome.view FontAwesome.Solid.times ]
+                )
             ]
         , Html.a
             [ HA.class "skip-link"
@@ -105,6 +124,226 @@ viewQuery model searchModel =
         , viewFilters model searchModel
         , viewActiveFiltersAndOptions model searchModel
         ]
+
+
+viewQueryDropdownFilter : Model -> SearchModel -> Html Msg
+viewQueryDropdownFilter model searchModel =
+    let
+        buttons : List (Html Msg)
+        buttons =
+            queryDropdownFilterButtons searchModel.dropdownFilterState
+
+        filterFields : List { label : String, key : String, onSelect : Msg }
+        filterFields =
+            dropdownFilterFields model searchModel
+    in
+    Html.div
+        [ HA.class "column"
+        , HA.class "gap-tiny"
+        , HA.class "dropdown-filter-container"
+        ]
+        [ if List.isEmpty buttons then
+            Html.text ""
+
+          else
+            Html.div
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.style "padding" "2px"
+                ]
+                buttons
+
+        , Html.div
+            [ HA.class "input-container" ]
+            [ Html.input
+                [ HA.id "dropdown-filter-input"
+                , HA.placeholder "Filter"
+                , HA.type_ "text"
+                , HA.value searchModel.dropdownFilterInput
+                , HA.attribute "autocomplete" "off"
+                , HE.onInput DropdownFilterInputChanged
+                ]
+                []
+            ]
+
+        , case ( filterFields, searchModel.dropdownFilterState ) of
+            ( [], SelectNumericValue _ _ _ ) ->
+                Html.div
+                    [ HA.class "dropdown-filter-item"
+                    , HA.style "color" "var(--color-text-inactive)"
+                    ]
+                    [ Html.text "Type a number in the filter box"
+                    ]
+
+            ( [], _ ) ->
+                Html.div
+                    [ HA.class "dropdown-filter-item"
+                    , HA.style "color" "var(--color-text-inactive)"
+                    ]
+                    [ Html.text "No matches"
+                    ]
+
+            _ ->
+                Html.Keyed.ul
+                    [ HA.style "overflow-y" "auto"
+                    , HA.style "max-height" "100%"
+                    , HA.style "list-style" "none"
+                    , HA.style "padding-inline-start" "0"
+                    , HA.style "margin" "0"
+                    ]
+                    (List.indexedMap
+                        (\index field ->
+                            ( field.key
+                            , Html.li
+                                []
+                                [ Html.button
+                                    [ HA.class "row"
+                                    , HA.class "gap-small"
+                                    , HA.class "dropdown-filter-item"
+                                    , HA.style "justify-content" "space-between"
+                                    , HA.id ("dropdown-filter-item-" ++ field.key)
+                                    , HA.tabindex -1
+                                    , HAE.attributeIf
+                                        (searchModel.dropdownFilterSelectedIndex == index)
+                                        (HA.class "selected")
+                                    , HE.onClick field.onSelect
+                                    -- TODO: Add class style depending on field
+                                    ]
+                                    -- TODO: Icons based on numeric / value
+                                    [ Html.text field.label
+                                    , Html.Extra.viewIf
+                                        (searchModel.dropdownFilterSelectedIndex == index + 1)
+                                        (Html.span
+                                            [ HA.style "color" "var(--color-text-inactive)"
+                                            ]
+                                            [ Html.text "↑"
+                                            ]
+                                        )
+                                    , Html.Extra.viewIf
+                                        (searchModel.dropdownFilterSelectedIndex == index)
+                                        (Html.span
+                                            [ HA.style "color" "var(--color-text-inactive)"
+                                            ]
+                                            [ Html.text "Enter"
+                                            ]
+                                        )
+                                    , Html.Extra.viewIf
+                                        (searchModel.dropdownFilterSelectedIndex == index - 1)
+                                        (Html.span
+                                            [ HA.style "color" "var(--color-text-inactive)"
+                                            ]
+                                            [ Html.text "↓"
+                                            ]
+                                        )
+                                    ]
+                                ]
+                            )
+                        )
+                        (dropdownFilterFields model searchModel)
+                    )
+        ]
+
+
+queryDropdownFilterButtons : DropdownFilterState -> List (Html Msg)
+queryDropdownFilterButtons dropdownFilterState =
+    let
+        button : String -> Msg -> Html Msg
+        button label onClick =
+            Html.button
+                [ HA.class "row"
+                , HA.class "gap-tiny"
+                , HA.class "align-center"
+                , HA.tabindex -1
+                , HE.onClick onClick
+                ]
+                [ Html.text label
+                , FontAwesome.view FontAwesome.Solid.times
+                ]
+
+    in
+    case dropdownFilterState of
+        SelectField ->
+            []
+
+        SelectNumericOperator field label ->
+            [ button label (DropdownFilterOptionSelected SelectField)
+            ]
+
+        SelectNumericSubfield field label ->
+            [ button label (DropdownFilterOptionSelected SelectField)
+            ]
+
+        SelectNumericValue field label operator ->
+            [ button label (DropdownFilterOptionSelected SelectField)
+            , button
+                (case operator of
+                    EQ ->
+                        "is exactly"
+
+                    LT ->
+                        "is at most"
+
+                    GT ->
+                        "is at least"
+                )
+                (DropdownFilterOptionSelected (SelectNumericOperator field label))
+            ]
+
+        SelectValueOperator key label ->
+            [ button label (DropdownFilterOptionSelected SelectField)
+            ]
+
+        SelectSortDirection field label isNumeric ->
+            [ button label (DropdownFilterOptionSelected SelectField)
+            , button
+                "sort by"
+                (if isNumeric then
+                    DropdownFilterOptionSelected (SelectNumericOperator field label)
+
+                 else
+                    DropdownFilterOptionSelected (SelectValueOperator field label)
+                )
+            ]
+
+        SelectValue key label operator ->
+            [ button label (DropdownFilterOptionSelected SelectField)
+            , button
+                (case operator of
+                    Is ->
+                        "is"
+
+                    IsAnd ->
+                        "is all of"
+
+                    IsOr ->
+                        "is any of"
+
+                    IsNot ->
+                        "is not"
+                )
+                (DropdownFilterOptionSelected (SelectValueOperator key label))
+            ]
+
+
+viewQueryDropdownFilterHint : Model -> Html Msg
+viewQueryDropdownFilterHint model =
+    if model.searchModel.showDropdownFilterHint then
+        Html.div
+            [ HA.class "dropdown-filter-hint"
+            , HA.class "row"
+            , HA.class "gap-tiny"
+            ]
+            [ Html.text "Try the new filter menu!"
+            , Html.button
+                [ HA.class "input-button"
+                , HA.attribute "aria-label" "Close"
+                , HE.onClick CloseDropdownFilterHint
+                ]
+                [ FontAwesome.view FontAwesome.Solid.times ]
+            ]
+
+    else
+        Html.text ""
 
 
 viewFilters : Model -> SearchModel -> Html Msg
@@ -213,45 +452,50 @@ allFilters model =
     [ { id = "actions"
       , label = "⏳ Actions / Cast time"
       , view = viewFilterActions
-      , visibleIf = moreThanOneAggregation .actions
+      , visibleIf = moreThanOneValueAggregation "actions"
       }
     , { id = "alignments"
       , label = "😇 Alignments"
       , view = viewFilterAlignments
       , visibleIf =
             \searchModel ->
-                moreThanOneAggregation .alignments searchModel
+                moreThanOneValueAggregation "alignment" searchModel
                     && model.showLegacyFilters
       }
     , { id = "armor"
       , label = "🛡 Armor"
       , view = viewFilterArmor
-      , visibleIf = getAggregation .itemSubcategories >> List.any (.name >> (==) "base armor")
+      , visibleIf = getAggregationValues "item_subcategory" >> List.any ((==) "base armor")
       }
     , { id = "attributes"
       , label = "💪 Attributes"
       , view = viewFilterAttributes
-      , visibleIf = \_ -> True
+      , visibleIf =
+            \searchModel ->
+                moreThanOneValueAggregation "attribute" searchModel
+                    || List.any
+                        (\field -> Data.hasMultipleMinmaxValues field searchModel)
+                        Data.allAttributes
       }
     , { id = "creature"
       , label = "🐉 Creatures"
       , view = viewFilterCreatures
-      , visibleIf = getAggregation .types >> List.any ((==) "creature")
+      , visibleIf = getAggregationValues "type" >> List.any ((==) "creature")
       }
     , { id = "deities"
       , label = "🌓 Deities"
       , view = viewFilterDeities
-      , visibleIf = getAggregation .types >> List.any ((==) "deity")
+      , visibleIf = getAggregationValues "type" >> List.any ((==) "deity")
       }
     , { id = "domains"
       , label = "🎭 Domains"
       , view = viewFilterDomains
-      , visibleIf = moreThanOneAggregation .domains
+      , visibleIf = moreThanOneValueAggregation "domain"
       }
     , { id = "items"
       , label = "🎒 Items"
       , view = viewFilterItems
-      , visibleIf = getAggregation .types >> List.any ((==) "item")
+      , visibleIf = getAggregationValues "type" >> List.any ((==) "item")
       }
     , { id = "legacy"
       , label = "🏛 Legacy / Remaster"
@@ -261,57 +505,60 @@ allFilters model =
     , { id = "level"
       , label = "📊 Level"
       , view = viewFilterLevel
-      , visibleIf = \_ -> True
+      , visibleIf = Data.hasMultipleMinmaxValues "level"
       }
     , { id = "pfs"
       , label = "🔵 PFS"
       , view = viewFilterPfs
-      , visibleIf = \_ -> True
+      , visibleIf = moreThanOneValueAggregation "pfs"
       }
     , { id = "rarities"
       , label = "💎 Rarities"
       , view = viewFilterRarities
-      , visibleIf = moreThanOneAggregation .traits
+      , visibleIf = moreThanOneValueAggregation "rarity"
       }
     , { id = "regions"
       , label = "🌐 Regions"
       , view = viewFilterRegions
-      , visibleIf = moreThanOneAggregation .regions
+      , visibleIf = moreThanOneValueAggregation "region"
       }
     , { id = "sizes"
       , label = "🐥 Sizes"
       , view = viewFilterSizes
-      , visibleIf = moreThanOneAggregation .sizes
+      , visibleIf = moreThanOneValueAggregation "size"
       }
     , { id = "skills"
       , label = "🏅 Skills"
       , view = viewFilterSkills
-      , visibleIf = moreThanOneAggregation .skills
+      , visibleIf = moreThanOneValueAggregation "skill"
       }
     , { id = "sources"
       , label = "📚 Sources / Spoilers"
       , view = viewFilterSources
-      , visibleIf = \_ -> True
+      , visibleIf = moreThanOneValueAggregation "source"
       }
     , { id = "spells"
       , label = "✨  Spells / Rituals"
       , view = viewFilterSpells
-      , visibleIf = \_ -> True
+      , visibleIf =
+            \searchModel ->
+                (getAggregationValues "type" searchModel |> List.any ((==) "spell"))
+                    || (getAggregationValues "type" searchModel |> List.any ((==) "ritual"))
       }
     , { id = "traits"
       , label = "🔖 Traits"
       , view = viewFilterTraits
-      , visibleIf = moreThanOneAggregation .traits
+      , visibleIf = moreThanOneValueAggregation "trait"
       }
     , { id = "types"
       , label = "📋 Types / Categories"
       , view = viewFilterTypes
-      , visibleIf = moreThanOneAggregation .types
+      , visibleIf = moreThanOneValueAggregation "type"
       }
     , { id = "weapons"
       , label = "⚔ Weapons"
       , view = viewFilterWeapons
-      , visibleIf = moreThanOneAggregation .weaponGroups
+      , visibleIf = getAggregationValues "item_subcategory" >> List.any ((==) "base weapons")
       }
     ]
 
@@ -1802,7 +2049,11 @@ viewSortResultsField searchModel field =
                 ]
                 (List.append
                     (viewSortButtons searchModel field)
-                    [ Html.text (String.Extra.humanize field)
+                    [ Html.text
+                        (field
+                            |> String.Extra.humanize
+                            |> toTitleCase
+                        )
                     ]
                 )
 
@@ -2040,8 +2291,8 @@ viewFilterActions model searchModel =
         , showOperator = False
         , showSearch = False
         , values =
-            getAggregationMaybe .actions searchModel
-                |> Maybe.map (List.sortBy actionsToInt)
+            getAggregationValues "actions" searchModel
+                |> List.sortBy actionsToInt
         }
     ]
 
@@ -2055,10 +2306,9 @@ viewFilterAlignments model searchModel =
         , showOperator = False
         , showSearch = False
         , values =
-            Data.allAlignments
-                |> List.map Tuple.first
-                |> List.filter (\size -> List.member size (getAggregation .alignments searchModel))
-                |> Just
+            getAggregationValues "alignment" searchModel
+                |> List.filter (\a -> List.member a (List.map Tuple.first Data.allAlignments))
+                |> List.sort
         }
     ]
 
@@ -2071,7 +2321,9 @@ viewFilterArmor model searchModel =
         , filterKey = "armor-categories"
         , showOperator = False
         , showSearch = False
-        , values = Just Data.armorCategories
+        , values =
+            getAggregationValues "armor_category" searchModel
+                |> List.sortWith (Order.Extra.explicit armorCategories)
         }
     , viewFilterList
         searchModel
@@ -2079,7 +2331,9 @@ viewFilterArmor model searchModel =
         , filterKey = "armor-groups"
         , showOperator = False
         , showSearch = False
-        , values = Just Data.armorGroups
+        , values =
+            getAggregationValues "armor_group" searchModel
+                |> List.sort
         }
     , Html.div
         [ HA.class "numbers-grid" ]
@@ -2106,7 +2360,7 @@ viewFilterArmor model searchModel =
               , suffix = Nothing
               }
             , { field = "bulk"
-              , hint = Just "(L bulk is 0,1)"
+              , hint = Just "(L bulk is 0.1)"
               , step = "0.1"
               , suffix = Nothing
               }
@@ -2128,7 +2382,10 @@ viewFilterAttributes model searchModel =
         , filterKey = "attributes"
         , showOperator = False
         , showSearch = False
-        , values = Just Data.allAttributes
+        , values =
+            getAggregationValues "attribute" searchModel
+                |> List.filter (\trait -> List.member trait Data.allAttributes)
+                |> List.sortWith (Order.Extra.explicit Data.allAttributes)
         }
     , Html.div
         [ HA.class "numbers-grid"
@@ -2181,7 +2438,7 @@ viewFilterCreatures model searchModel =
                                 , filterKey = filterType
                                 , showOperator = False
                                 , showSearch = False
-                                , values = Just values
+                                , values = values
                                 }
                         )
                         scales
@@ -2277,38 +2534,39 @@ viewFilterCreatures model searchModel =
             , showOperator = False
             , showSearch = True
             , values =
-                getAggregationMaybe .creatureFamilies searchModel
-                    |> Maybe.map List.sort
+                getAggregationValues "creature_family" searchModel
+                    |> List.sort
             }
         ]
 
 
+    -- TODO: From aggs
     , scaleDetails
         "Offensive scales"
-        [ ( "attack-bonus-scales", "Attack bonus scale", [ "extreme", "high", "moderate", "low" ] )
-        , ( "strike-damage-scales", "Strike damage scale", [ "extreme", "high", "moderate", "low" ] )
-        , ( "spell-attack-bonus-scales", "Spell attack bonus scale", [ "extreme", "high", "moderate" ] )
-        , ( "spell-dc-scales", "Spell DC scale", [ "extreme", "high", "moderate" ] )
+        [ ( "attack-bonus-scales", "Attack bonus scale", [ "low", "moderate", "high", "extreme" ] )
+        , ( "strike-damage-scales", "Strike damage scale", [ "low", "moderate", "high", "extreme" ] )
+        , ( "spell-attack-bonus-scales", "Spell attack bonus scale", [ "moderate", "high", "extreme" ] )
+        , ( "spell-dc-scales", "Spell DC scale", [ "moderate", "high", "extreme" ] )
         ]
 
     , scaleDetails
         "Defensive scales"
-        [ ( "hp-scales", "HP scale", [ "high", "moderate", "low" ] )
-        , ( "ac-scales", "AC scale", [ "extreme", "high", "moderate", "low" ] )
-        , ( "fortitude-scales", "Fortitude save scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
-        , ( "reflex-scales", "Reflex save scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
-        , ( "will-scales", "Will save scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
-        , ( "perception-scales", "Perception scale", [ "extreme", "high", "moderate", "low", "terrible" ] )
+        [ ( "hp-scales", "HP scale", [ "low", "moderate", "high" ] )
+        , ( "ac-scales", "AC scale", [ "low", "moderate", "high", "extreme" ] )
+        , ( "fortitude-scales", "Fortitude save scale", [ "terrible", "low", "moderate", "high", "extreme" ] )
+        , ( "reflex-scales", "Reflex save scale", [ "terrible", "low", "moderate", "high", "extreme" ] )
+        , ( "will-scales", "Will save scale", [ "terrible", "low", "moderate", "high", "extreme" ] )
+        , ( "perception-scales", "Perception scale", [ "terrible", "low", "moderate", "high", "extreme" ] )
         ]
 
     , scaleDetails
         "Attribute scales"
-        [ ( "strength-scales", "Strength scale", [ "extreme", "high", "moderate", "low" ] )
-        , ( "dexterity-scales", "Dexterity scale", [ "extreme", "high", "moderate", "low" ] )
-        , ( "constitution-scales", "Constitution scale", [ "extreme", "high", "moderate", "low" ] )
-        , ( "intelligence-scales", "Intelligence scale", [ "extreme", "high", "moderate", "low" ] )
-        , ( "wisdom-scales", "Wisdom scale", [ "extreme", "high", "moderate", "low" ] )
-        , ( "charisma-scales", "Charisma scale", [ "extreme", "high", "moderate", "low" ] )
+        [ ( "strength-scales", "Strength scale", [ "low", "moderate", "high", "extreme" ] )
+        , ( "dexterity-scales", "Dexterity scale", [ "low", "moderate", "high", "extreme" ] )
+        , ( "constitution-scales", "Constitution scale", [ "low", "moderate", "high", "extreme" ] )
+        , ( "intelligence-scales", "Intelligence scale", [ "low", "moderate", "high", "extreme" ] )
+        , ( "wisdom-scales", "Wisdom scale", [ "low", "moderate", "high", "extreme" ] )
+        , ( "charisma-scales", "Charisma scale", [ "low", "moderate", "high", "extreme" ] )
         ]
 
     , details
@@ -2319,7 +2577,10 @@ viewFilterCreatures model searchModel =
             , filterKey = "strongest-saves"
             , showOperator = False
             , showSearch = False
-            , values = Just Data.saves
+            , values =
+                getAggregationValues "strongest_save" searchModel
+                    |> List.filter (\s -> List.Extra.notMember s [ "fort", "ref" ])
+                    |> List.sort
             }
         ]
 
@@ -2331,7 +2592,38 @@ viewFilterCreatures model searchModel =
             , filterKey = "weakest-saves"
             , showOperator = False
             , showSearch = False
-            , values = Just Data.saves
+            , values =
+                getAggregationValues "weakest_save" searchModel
+                    |> List.filter (\s -> List.Extra.notMember s [ "fort", "ref" ])
+                    |> List.sort
+            }
+        ]
+
+    , details
+        "Spells"
+        [ viewFilterList
+            searchModel
+            { label = ""
+            , filterKey = "spells"
+            , showOperator = False
+            , showSearch = True
+            , values =
+                getAggregationValues "spell" searchModel
+                    |> List.sort
+            }
+        ]
+
+    , details
+        "Spellcasting traditions"
+        [ viewFilterList
+            searchModel
+            { label = ""
+            , filterKey = "traditions"
+            , showOperator = True
+            , showSearch = False
+            , values =
+                getAggregationValues "tradition" searchModel
+                    |> List.sort
             }
         ]
     ]
@@ -2346,8 +2638,8 @@ viewFilterDeities model searchModel =
         , showOperator = False
         , showSearch = False
         , values =
-            getAggregationMaybe .deityCategories searchModel
-                |> Maybe.map List.sort
+            getAggregationValues "deity_category" searchModel
+                |> List.sort
         }
 
     , viewFilterList
@@ -2356,7 +2648,9 @@ viewFilterDeities model searchModel =
         , filterKey = "divine-fonts"
         , showOperator = False
         , showSearch = False
-        , values = Just [ "heal", "harm" ]
+        , values =
+            getAggregationValues "divine_font" searchModel
+                |> List.sort
         }
 
     , viewFilterList
@@ -2365,7 +2659,9 @@ viewFilterDeities model searchModel =
         , filterKey = "sanctifications"
         , showOperator = False
         , showSearch = False
-        , values = Just [ "holy", "unholy" ]
+        , values =
+            getAggregationValues "sanctification" searchModel
+                |> List.sort
         }
 
     , viewFilterList
@@ -2375,8 +2671,19 @@ viewFilterDeities model searchModel =
         , showOperator = False
         , showSearch = True
         , values =
-            getAggregationMaybe .favoredWeapons searchModel
-                |> Maybe.map List.sort
+            getAggregationValues "favored_weapon" searchModel
+                |> List.sort
+        }
+
+    , viewFilterList
+        searchModel
+        { label = "Pantheons"
+        , filterKey = "pantheons"
+        , showOperator = False
+        , showSearch = True
+        , values =
+            getAggregationValues "pantheon" searchModel
+                |> List.sort
         }
     ]
 
@@ -2390,8 +2697,8 @@ viewFilterDomains model searchModel =
         , showOperator = True
         , showSearch = True
         , values =
-            getAggregationMaybe .domains searchModel
-                |> Maybe.map List.sort
+            getAggregationValues "domain" searchModel
+                |> List.sort
         }
     ]
 
@@ -2419,7 +2726,7 @@ viewFilterItems model searchModel =
               , suffix = Just "cp"
               }
             , { field = "bulk"
-              , hint = Just "(L bulk is 0,1)"
+              , hint = Just "(L bulk is 0.1)"
               , step = "0.1"
               , suffix = Nothing
               }
@@ -2433,8 +2740,8 @@ viewFilterItems model searchModel =
         , showOperator = False
         , showSearch = True
         , values =
-            getAggregationMaybe .itemCategories searchModel
-                |> Maybe.map List.sort
+            getAggregationValues "item_category" searchModel
+                |> List.sort
         }
 
     , Html.div
@@ -2472,13 +2779,12 @@ viewFilterItems model searchModel =
                             )
                         |> List.map .name
                         |> List.sort
-                        |> Just
 
                 Just (Err _) ->
-                    Just []
+                    []
 
                 Nothing ->
-                    Nothing
+                    []
             )
         ]
 
@@ -2548,7 +2854,7 @@ viewFilterLevel model searchModel =
     [ viewFilterNumber
         searchModel
             { field = "level"
-            , hint = Just "/ Rank"
+            , hint = Nothing
             , step = "1"
             , suffix = Nothing
             }
@@ -2564,12 +2870,8 @@ viewFilterPfs model searchModel =
         , showOperator = False
         , showSearch = False
         , values =
-            Just
-                [ "none"
-                , "standard"
-                , "limited"
-                , "restricted"
-                ]
+            getAggregationValues "pfs" searchModel
+                |> (::) "none"
         }
     ]
 
@@ -2583,10 +2885,8 @@ viewFilterRarities model searchModel =
         , showOperator = False
         , showSearch = False
         , values =
-            getAggregationMaybe .traits searchModel
-                |> Maybe.map (List.filter (\trait -> List.member trait Data.rarities))
-                |> Maybe.map (List.filter ((/=) "common"))
-                |> Maybe.map ((::) "common")
+            getAggregationValues "rarity" searchModel
+                |> List.sortWith (Order.Extra.explicit Data.rarities)
         }
     ]
 
@@ -2600,8 +2900,8 @@ viewFilterRegions model searchModel =
         , showOperator = False
         , showSearch = False
         , values =
-            getAggregationMaybe .regions searchModel
-                |> Maybe.map List.sort
+            getAggregationValues "region" searchModel
+                |> List.sort
         }
     ]
 
@@ -2615,9 +2915,8 @@ viewFilterSizes model searchModel =
         , showOperator = False
         , showSearch = False
         , values =
-            Data.allSizes
-                |> List.filter (\size -> List.member size (getAggregation .sizes searchModel))
-                |> Just
+            getAggregationValues "size" searchModel
+                |> List.sortWith (Order.Extra.explicit Data.allSizes)
         }
     ]
 
@@ -2631,9 +2930,9 @@ viewFilterSkills model searchModel =
         , showOperator = True
         , showSearch = False
         , values =
-            getAggregationMaybe .skills searchModel
-                |> Maybe.map (List.filter (\skill -> List.member skill Data.allSkills))
-                |> Maybe.map List.sort
+            getAggregationValues "skill" searchModel
+                |> List.filter (\skill -> List.member skill Data.allSkills)
+                |> List.sort
         }
     , viewFilterList
         searchModel
@@ -2642,10 +2941,10 @@ viewFilterSkills model searchModel =
         , showOperator = True
         , showSearch = True
         , values =
-            getAggregationMaybe .skills searchModel
-                |> Maybe.map (List.filter (String.endsWith "lore"))
-                |> Maybe.map (List.filter ((/=) "lore"))
-                |> Maybe.map List.sort
+            getAggregationValues "skill" searchModel
+                |> List.filter (String.endsWith "lore")
+                |> List.filter ((/=) "lore")
+                |> List.sort
         }
     ]
 
@@ -2725,7 +3024,9 @@ viewFilterSources model searchModel =
         , filterKey = "source-categories"
         , showOperator = False
         , showSearch = False
-        , values = Just Data.allSourceCategories
+        , values =
+            getAggregationValues "source_category" searchModel
+                |> List.sort
         }
 
     , Html.div
@@ -2741,9 +3042,9 @@ viewFilterSources model searchModel =
             searchModel
             "sources"
             (case ( model.globalAggregations, searchModel.aggregations ) of
-                ( Just (Ok globalAggregations), Just (Ok { sources }) ) ->
+                ( Just (Ok globalAggregations), Just (Ok aggregations) ) ->
                     globalAggregations.sources
-                        |> List.filter (\source -> List.member source.name sources)
+                        |> List.filter (\source -> List.member source.name (getAggregationValues "source" searchModel))
                         |> List.filter
                             (\{ category } ->
                                 (&&)
@@ -2764,16 +3065,15 @@ viewFilterSources model searchModel =
                             )
                         |> List.map .name
                         |> List.sort
-                        |> Just
 
                 ( Just (Err _), _ ) ->
-                    Just []
+                    []
 
                 ( _, Just (Err _) ) ->
-                    Just []
+                    []
 
                 _ ->
-                    Nothing
+                    []
             )
         ]
 
@@ -2839,7 +3139,9 @@ viewFilterSpells model searchModel =
         , filterKey = "traditions"
         , showOperator = True
         , showSearch = False
-        , values = Just Data.traditionsAndSpellLists
+        , values =
+            getAggregationValues "tradition" searchModel
+                |> List.sort
         }
 
     , if model.showLegacyFilters then
@@ -2849,7 +3151,9 @@ viewFilterSpells model searchModel =
             , filterKey = "schools"
             , showOperator = False
             , showSearch = False
-            , values = Just Data.magicSchools
+            , values =
+                getAggregationValues "school" searchModel
+                    |> List.sort
             }
 
         else
@@ -2863,12 +3167,9 @@ viewFilterSpells model searchModel =
             , showOperator = False
             , showSearch = False
             , values =
-                Just
-                    [ "focus"
-                    , "material"
-                    , "somatic"
-                    , "verbal"
-                    ]
+                getAggregationValues "component" searchModel
+                    |> List.filter (\v -> List.member v Data.castingComponents)
+                    |> List.sort
             }
 
         else
@@ -2880,7 +3181,11 @@ viewFilterSpells model searchModel =
         , filterKey = "saving-throws"
         , showOperator = False
         , showSearch = False
-        , values = Just Data.saves
+        , values =
+            getAggregationValues "saving_throw" searchModel
+                |> List.concatMap Data.explodeSaves
+                |> List.Extra.unique
+                |> List.sort
         }
 
     , viewFilterList
@@ -2890,8 +3195,8 @@ viewFilterSpells model searchModel =
         , showOperator = False
         , showSearch = False
         , values =
-            getAggregationMaybe .areaTypes searchModel
-                |> Maybe.map List.sort
+            getAggregationValues "area_type" searchModel
+                |> List.sort
         }
 
     , Html.div
@@ -2899,8 +3204,8 @@ viewFilterSpells model searchModel =
         ]
         (List.map
             (viewFilterNumber searchModel)
-            [ { field = "level"
-              , hint = Just "/ Rank"
+            [ { field = "rank"
+              , hint = Nothing
               , step = "1"
               , suffix = Nothing
               }
@@ -2954,10 +3259,10 @@ viewFilterTraits model searchModel =
 
                         uncategorizedTraits : List String
                         uncategorizedTraits =
-                            aggregations.traits
-                                |> List.filter (\trait -> not (List.member trait categorizedTraits))
-                                |> List.filter (\trait -> not (List.member trait (List.map Tuple.first Data.allAlignments)))
-                                |> List.filter (\trait -> not (List.member trait Data.allSizes))
+                            getAggregationValues "trait" searchModel
+                                |> List.filter (\trait -> List.Extra.notMember trait categorizedTraits)
+                                |> List.filter (\trait -> List.Extra.notMember trait (List.map Tuple.first Data.allAlignments))
+                                |> List.filter (\trait -> List.Extra.notMember trait Data.allSizes)
                     in
                     (List.map
                         (\( group, traits ) ->
@@ -2989,7 +3294,7 @@ viewFilterTraits model searchModel =
                                         ]
                                         [ Html.text "Reset group selection" ]
                                     ]
-                                , viewFilterScrollbox searchModel "traits" (Just (List.sort traits))
+                                , viewFilterScrollbox searchModel "traits" (List.sort traits)
                                 ]
                         )
                         (globalAggregations.traits
@@ -3001,7 +3306,7 @@ viewFilterTraits model searchModel =
                             |> (::) ( "uncategorized", uncategorizedTraits )
                             |> List.map (Tuple.mapSecond (List.filter (caseInsensitiveContains searchValue)))
                             |> List.map (Tuple.mapSecond (List.filter ((/=) "common")))
-                            |> List.map (Tuple.mapSecond (List.filter (\trait -> List.member trait aggregations.traits)))
+                            |> List.map (Tuple.mapSecond (List.filter (\trait -> List.member trait (getAggregationValues "trait" searchModel))))
                             |> List.filter (Tuple.second >> List.isEmpty >> not)
                         )
                     )
@@ -3018,13 +3323,11 @@ viewFilterTraits model searchModel =
         viewFilterScrollbox
             searchModel
             "traits"
-            (getAggregationMaybe .traits searchModel
-                |> Maybe.map
-                    (List.filter (\trait -> not (List.member trait (List.map Tuple.first Data.allAlignments)))
-                        >> List.filter (\trait -> not (List.member trait Data.allSizes))
-                        >> List.filter (\trait -> not (List.member trait Data.settlementSizes))
-                        >> List.sort
-                    )
+            (getAggregationValues "trait" searchModel
+                |> List.filter (\trait -> List.Extra.notMember trait (List.map Tuple.first Data.allAlignments))
+                |> List.filter (\trait -> List.Extra.notMember trait Data.allSizes)
+                |> List.filter (\trait -> List.Extra.notMember trait Data.settlementSizes)
+                |> List.sort
             )
     ]
         |> Html.div
@@ -3043,8 +3346,8 @@ viewFilterTypes model searchModel =
         , showOperator = False
         , showSearch = True
         , values =
-            getAggregationMaybe .types searchModel
-                |> Maybe.map List.sort
+            getAggregationValues "type" searchModel
+                |> List.sort
         }
     ]
 
@@ -3057,7 +3360,9 @@ viewFilterWeapons model searchModel =
         , filterKey = "weapon-categories"
         , showOperator = False
         , showSearch = False
-        , values = Just Data.weaponCategories
+        , values =
+            getAggregationValues "weapon_category" searchModel
+                |> List.sortWith (Order.Extra.explicit Data.weaponCategories)
         }
     , viewFilterList
         searchModel
@@ -3066,8 +3371,8 @@ viewFilterWeapons model searchModel =
         , showOperator = False
         , showSearch = False
         , values =
-            getAggregationMaybe .weaponGroups searchModel
-                |> Maybe.map List.sort
+            getAggregationValues "weapon_group" searchModel
+                |> List.sort
         }
     , viewFilterList
         searchModel
@@ -3075,7 +3380,9 @@ viewFilterWeapons model searchModel =
         , filterKey = "weapon-types"
         , showOperator = False
         , showSearch = False
-        , values = Just Data.weaponTypes
+        , values =
+            getAggregationValues "weapon_type" searchModel
+                |> List.sort
         }
     , viewFilterList
         searchModel
@@ -3084,11 +3391,8 @@ viewFilterWeapons model searchModel =
         , showOperator = True
         , showSearch = False
         , values =
-            Just
-                [ "bludgeoning"
-                , "piercing"
-                , "slashing"
-                ]
+            getAggregationValues "damage_type" searchModel
+                |> List.sort
         }
     , viewFilterList
         searchModel
@@ -3097,8 +3401,8 @@ viewFilterWeapons model searchModel =
         , showOperator = False
         , showSearch = False
         , values =
-            getAggregationMaybe .reloads searchModel
-                |> Maybe.map List.sort
+            getAggregationValues "reload_raw" searchModel
+                |> List.sort
         }
     , viewFilterList
         searchModel
@@ -3107,8 +3411,8 @@ viewFilterWeapons model searchModel =
         , showOperator = False
         , showSearch = False
         , values =
-            getAggregationMaybe .hands searchModel
-                |> Maybe.map List.sort
+            getAggregationValues "hands" searchModel
+                |> List.sort
         }
     , Html.div
         [ HA.class "numbers-grid"
@@ -3116,7 +3420,7 @@ viewFilterWeapons model searchModel =
         (List.map
             (viewFilterNumber searchModel)
             [ { field = "bulk"
-              , hint = Just "(L bulk is 0,1)"
+              , hint = Just "(L bulk is 0.1)"
               , step = "0.1"
               , suffix = Nothing
               }
@@ -3149,6 +3453,37 @@ viewFilterNumber :
        }
     -> Html Msg
 viewFilterNumber searchModel { field, hint, step, suffix } =
+    case getAggregationMinmax field searchModel of
+        Just ( min, max ) ->
+            if min < max then
+                viewFilterNumberWithMinmax
+                    searchModel
+                    { field = field
+                    , hint = hint
+                    , min = min
+                    , max = max
+                    , step = step
+                    , suffix = suffix
+                    }
+
+            else
+                Html.text ""
+
+        Nothing ->
+            Html.text ""
+
+
+viewFilterNumberWithMinmax :
+    SearchModel
+    -> { field : String
+       , hint : Maybe String
+       , min : Float
+       , max : Float
+       , step : String
+       , suffix : Maybe String
+       }
+    -> Html Msg
+viewFilterNumberWithMinmax searchModel { field, hint, step, suffix } =
     Html.div
         [ HA.class "column"
         , HA.class "gap-tiny"
@@ -3177,6 +3512,12 @@ viewFilterNumber searchModel { field, hint, step, suffix } =
                     [ HA.type_ "number"
                     , HA.step step
                     , HA.value (dictGetString field searchModel.filteredFromValues)
+                    , HA.placeholder
+                        (getAggregationMinmax field searchModel
+                            |> Maybe.map Tuple.first
+                            |> Maybe.map String.fromFloat
+                            |> Maybe.withDefault ""
+                        )
                     , HE.onInput (FilteredFromValueChanged field)
                     ]
                     []
@@ -3199,6 +3540,12 @@ viewFilterNumber searchModel { field, hint, step, suffix } =
                     [ HA.type_ "number"
                     , HA.step step
                     , HA.value (dictGetString field searchModel.filteredToValues)
+                    , HA.placeholder
+                        (getAggregationMinmax field searchModel
+                            |> Maybe.map Tuple.second
+                            |> Maybe.map String.fromFloat
+                            |> Maybe.withDefault ""
+                        )
                     , HE.onInput (FilteredToValueChanged field)
                     ]
                     []
@@ -3274,6 +3621,12 @@ viewFilterNumberWithSelect searchModel { field, hint, step, suffix, values, defa
                     [ HA.type_ "number"
                     , HA.step step
                     , HA.value (dictGetString currentField searchModel.filteredFromValues)
+                    , HA.placeholder
+                        (getAggregationMinmax currentField searchModel
+                            |> Maybe.map Tuple.first
+                            |> Maybe.map String.fromFloat
+                            |> Maybe.withDefault ""
+                        )
                     , HE.onInput (FilteredFromValueChanged currentField)
                     ]
                     []
@@ -3296,6 +3649,12 @@ viewFilterNumberWithSelect searchModel { field, hint, step, suffix, values, defa
                     [ HA.type_ "number"
                     , HA.step step
                     , HA.value (dictGetString currentField searchModel.filteredToValues)
+                    , HA.placeholder
+                        (getAggregationMinmax currentField searchModel
+                            |> Maybe.map Tuple.second
+                            |> Maybe.map String.fromFloat
+                            |> Maybe.withDefault ""
+                        )
                     , HE.onInput (FilteredToValueChanged currentField)
                     ]
                     []
@@ -3310,29 +3669,28 @@ viewFilterList :
        , filterKey : String
        , showOperator : Bool
        , showSearch : Bool
-       , values : Maybe (List String)
+       , values : List String
        }
     -> Html Msg
 viewFilterList searchModel { label, filterKey, showOperator, showSearch, values } =
-    case values of
-        Just [] ->
-            Html.text ""
+    if List.isEmpty values then
+        Html.text ""
 
-        _ ->
-            Html.div
-                [ HA.class "column"
-                , HA.class "gap-small"
-                ]
-                [ Html.Extra.viewIf
-                    (label /= "")
-                    (Html.h3
-                        []
-                        [ Html.text label ]
-                    )
-                , viewFilterButtons searchModel filterKey showOperator
-                , Html.Extra.viewIf showSearch (viewFilterSearch searchModel filterKey)
-                , viewFilterScrollbox searchModel filterKey values
-                ]
+    else
+        Html.div
+            [ HA.class "column"
+            , HA.class "gap-small"
+            ]
+            [ Html.Extra.viewIf
+                (label /= "")
+                (Html.h3
+                    []
+                    [ Html.text label ]
+                )
+            , viewFilterButtons searchModel filterKey showOperator
+            , Html.Extra.viewIf showSearch (viewFilterSearch searchModel filterKey)
+            , viewFilterScrollbox searchModel filterKey values
+            ]
 
 
 viewFilterButtons : SearchModel -> String -> Bool -> Html Msg
@@ -3405,78 +3763,72 @@ viewFilterSearch searchModel filterKey =
         ]
 
 
-viewFilterScrollbox : SearchModel -> String -> Maybe (List String) -> Html Msg
-viewFilterScrollbox searchModel filterKey maybeValues =
+viewFilterScrollbox : SearchModel -> String -> List String -> Html Msg
+viewFilterScrollbox searchModel filterKey values =
     Html.div
         [ HA.class "row"
         , HA.class "gap-tiny"
         , HA.class "scrollbox"
         ]
-        (case maybeValues of
-            Just values ->
-                (List.map
-                    (\value ->
-                        Html.button
-                            [ HA.class "row"
-                            , HA.class "gap-tiny"
-                            , HA.class "align-center"
-                            , HE.onClick (FilterToggled filterKey value)
-                            , case filterKey of
-                                "alignments" ->
-                                    HA.class "trait trait-alignment"
+        (List.map
+            (\value ->
+                Html.button
+                    [ HA.class "row"
+                    , HA.class "gap-tiny"
+                    , HA.class "align-center"
+                    , HE.onClick (FilterToggled filterKey value)
+                    , case filterKey of
+                        "alignments" ->
+                            HA.class "trait trait-alignment"
 
-                                "schools" ->
-                                    HA.class "trait"
+                        "schools" ->
+                            HA.class "trait"
 
-                                "sizes" ->
-                                    HA.class "trait trait-size"
+                        "sizes" ->
+                            HA.class "trait trait-size"
 
-                                "rarities" ->
-                                    HA.class ("trait trait-" ++ value)
+                        "rarities" ->
+                            HA.class ("trait trait-" ++ value)
 
-                                "traits" ->
-                                    HA.class "trait"
+                        "traits" ->
+                            HA.class "trait"
 
-                                "types" ->
-                                    HA.class "filter-type"
+                        "types" ->
+                            HA.class "filter-type"
 
-                                _ ->
-                                    HAE.empty
-                            , HAE.attributeIf (filterKey == "traits") (getTraitClass value)
-                            ]
-                            [ if filterKey == "pfs" then
-                                viewPfsIcon 16 value
+                        _ ->
+                            HAE.empty
+                    , HAE.attributeIf (filterKey == "traits") (getTraitClass value)
+                    ]
+                    [ if filterKey == "pfs" then
+                        viewPfsIcon 16 value
 
-                              else
-                                Html.text ""
+                      else
+                        Html.text ""
 
-                            , case filterKey of
-                                "actions" ->
-                                    Html.span
-                                        []
-                                        (viewTextWithActionIcons value)
+                    , case filterKey of
+                        "actions" ->
+                            Html.span
+                                []
+                                (viewTextWithActionIcons value)
 
-                                "alignments" ->
-                                    Dict.fromList Data.allAlignments
-                                        |> Dict.get value
-                                        |> Maybe.withDefault value
-                                        |> toTitleCase
-                                        |> Html.text
+                        "alignments" ->
+                            Dict.fromList Data.allAlignments
+                                |> Dict.get value
+                                |> Maybe.withDefault value
+                                |> toTitleCase
+                                |> Html.text
 
-                                _ ->
-                                    Html.text (toTitleCase value)
+                        _ ->
+                            Html.text (toTitleCase value)
 
-                            , viewFilterIcon (nestedDictGet filterKey value searchModel.filteredValues)
-                            ]
-                    )
-                    (List.filter
-                        (caseInsensitiveContains (dictGetString filterKey searchModel.searchFilters))
-                        values
-                    )
-                )
-
-            Nothing ->
-                [ viewScrollboxLoader ]
+                    , viewFilterIcon (nestedDictGet filterKey value searchModel.filteredValues)
+                    ]
+            )
+            (List.filter
+                (caseInsensitiveContains (dictGetString filterKey searchModel.searchFilters))
+                values
+            )
         )
 
 
@@ -3621,32 +3973,34 @@ viewActiveFilters canClick searchModel =
 
                                 label : String
                                 label =
-                                    filter.key
+                                    filter.field
+                                        |> String.replace ".keyword" ""
                                         |> String.Extra.humanize
-                                        |> String.toLower
+                                        |> toTitleCase
                             in
                             [ { class = class
                               , label =
+                                    -- TODO: Dynamic based on no. of values
                                     if filter.useOperator then
                                         if isAnd then
-                                            "Include all " ++ label ++ ":"
+                                            label ++ " is:"
 
                                         else
-                                            "Include any " ++ label ++ ":"
+                                            label ++ " is any of:"
 
                                     else
-                                        "Include " ++ label ++ ":"
+                                        label ++ " is:"
                               , list = boolDictIncluded filter.key searchModel.filteredValues
                               , removeMsg = FilterRemoved filter.key
                               }
                             , { class = class
-                              , label = "Exclude " ++ label ++ ":"
+                              , label = label ++ " is not:"
                               , list = boolDictExcluded filter.key searchModel.filteredValues
                               , removeMsg = FilterRemoved filter.key
                               }
                             ]
                         )
-                        (filterFields searchModel)
+                        filterFields
                     )
                     [ { class = Nothing
                       , label = "AP creatures:"
@@ -3703,26 +4057,41 @@ viewActiveFilters canClick searchModel =
                             , HA.class "gap-tiny"
                             , HA.class "align-baseline"
                             ]
-                            [ Html.text (sortFieldToLabel field ++ ":")
-                            , maybeFrom
-                                |> Maybe.map
-                                    (\from ->
-                                        Html.button
-                                            [ HAE.attributeIf canClick (HE.onClick (FilteredFromValueChanged field ""))
-                                            ]
-                                            [ Html.text ("at least " ++ from ++ " " ++ sortFieldSuffix field) ]
-                                    )
-                                |> Maybe.withDefault (Html.text "")
-                            , maybeTo
-                                |> Maybe.map
-                                    (\to ->
-                                        Html.button
-                                            [ HAE.attributeIf canClick (HE.onClick (FilteredToValueChanged field ""))
-                                            ]
-                                            [ Html.text ("up to " ++ to ++ " " ++ sortFieldSuffix field) ]
-                                    )
-                                |> Maybe.withDefault (Html.text "")
-                            ]
+                            (if maybeFrom == maybeTo then
+                                [ Html.text (sortFieldToLabel field ++ ":")
+                                , maybeFrom
+                                    |> Maybe.map
+                                        (\from ->
+                                            Html.button
+                                                [ HAE.attributeIf canClick (HE.onClick (FilteredBothValuesChanged field ""))
+                                                ]
+                                                [ Html.text ("exactly " ++ from ++ " " ++ sortFieldSuffix field) ]
+                                        )
+                                    |> Maybe.withDefault (Html.text "")
+                                ]
+
+                             else
+                                [ Html.text (sortFieldToLabel field ++ ":")
+                                , maybeFrom
+                                    |> Maybe.map
+                                        (\from ->
+                                            Html.button
+                                                [ HAE.attributeIf canClick (HE.onClick (FilteredFromValueChanged field ""))
+                                                ]
+                                                [ Html.text ("at least " ++ from ++ " " ++ sortFieldSuffix field) ]
+                                        )
+                                    |> Maybe.withDefault (Html.text "")
+                                , maybeTo
+                                    |> Maybe.map
+                                        (\to ->
+                                            Html.button
+                                                [ HAE.attributeIf canClick (HE.onClick (FilteredToValueChanged field ""))
+                                                ]
+                                                [ Html.text ("at most " ++ to ++ " " ++ sortFieldSuffix field) ]
+                                        )
+                                    |> Maybe.withDefault (Html.text "")
+                                ]
+                            )
                     )
             )
         )
@@ -8077,6 +8446,70 @@ css args =
 
     .dim .dim {
         opacity: inherit;
+    }
+
+    .dropdown-filter-container {
+        background-color: var(--color-box-bg);
+        border-color: var(--color-box-border);
+        border-style: solid;
+        border-width: 1px;
+        box-shadow: 0px 0px 10px black;
+        color: var(--color-box-text);
+        max-height: 250px;
+        min-width: 200px;
+        padding: 2px;
+        position: absolute;
+        top: calc(100% + 6px);
+        z-index: 1;
+    }
+
+    .dropdown-filter-item {
+        border: 0;
+        padding: 8px;
+        width: 100%;
+        text-align: start;
+    }
+
+    .dropdown-filter-item.selected {
+        border: solid 1px white;
+        padding: 7px;
+    }
+
+    .dropdown-filter-hint {
+        background-color: var(--color-box-bg);
+        border: solid 1px var(--color-box-border);
+        box-shadow: 0px 0px 10px black;
+        color: var(--color-box-text);
+        padding: 8px;
+        font-size: 18px;
+        position: absolute;
+        top: calc(100% + 8px);
+        z-index: 1;
+    }
+
+    .dropdown-filter-hint:after, .dropdown-filter-hint:before {
+        content: "";
+        width: 0;
+        height: 0;
+        position: absolute;
+        bottom: 100%;
+        left: 20px;
+        border: solid transparent;
+        pointer-events: none;
+    }
+
+    .dropdown-filter-hint:after {
+        border-color: rgba(136, 183, 213, 0);
+        border-bottom-color: var(--color-box-bg);
+        border-width: 12px;
+        margin-left: -12px;
+    }
+
+    .dropdown-filter-hint:before {
+        border-color: rgba(194, 225, 245, 0);
+        border-bottom-color: var(--color-box-border);
+        border-width: 13px;
+        margin-left: -13px;
     }
 
     .fade-in {

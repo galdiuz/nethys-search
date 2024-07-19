@@ -34,9 +34,11 @@ import Url.Parser
 import Url.Parser.Query
 
 
+port document_focusElement : String -> Cmd msg
 port document_linkEntered : (Decode.Value -> msg) -> Sub msg
 port document_linkLeft : (String -> msg) -> Sub msg
 port document_receiveBodySize : (Size -> msg) -> Sub msg
+port document_scrollElementIntoView : String -> Cmd msg
 port document_setTitle : String -> Cmd msg
 port localStorage_set : Encode.Value -> Cmd msg
 port localStorage_get : String -> Cmd msg
@@ -94,6 +96,7 @@ init flagsValue =
       , pageSizeDefaults = Dict.empty
       , pageWidth = 0
       , previewLink = Nothing
+      , queryFieldFocused = False
       , randomSeed = flags.randomSeed
       , savedColumnConfigurations = Dict.empty
       , savedColumnConfigurationName = ""
@@ -166,7 +169,45 @@ subscriptions model =
         , localStorage_receive LocalStorageValueReceived
         , navigation_urlChanged UrlChanged
         , Browser.Events.onResize WindowResized
+        , if model.searchModel.showDropdownFilter then
+            Browser.Events.onKeyDown dropdownKeysDecoder
+
+          else
+            Sub.none
+        , Browser.Events.onKeyDown dropdownToggleKeyDecoder
         ]
+
+
+dropdownKeysDecoder : Decode.Decoder Msg
+dropdownKeysDecoder =
+    let
+        keys : List String
+        keys =
+            [ "ArrowUp"
+            , "ArrowDown"
+            , "Enter"
+            ]
+    in
+    Field.require "key" Decode.string <| \key ->
+    if key == "Escape" then
+        Decode.succeed DropdownFilterToggled
+
+    else if List.member key keys then
+        Decode.succeed (KeyDown key)
+
+    else
+        Decode.fail key
+
+
+dropdownToggleKeyDecoder : Decode.Decoder Msg
+dropdownToggleKeyDecoder =
+    Field.require "key" Decode.string <| \key ->
+    Field.require "ctrlKey" Decode.bool <| \ctrl ->
+    if key == " " && ctrl then
+        Decode.succeed DropdownFilterToggled
+
+    else
+        Decode.fail key
 
 
 linkEnteredDecoder : Decode.Decoder ( String, Position )
@@ -207,6 +248,17 @@ update msg model =
                 ]
             )
 
+        CloseDropdownFilterHint ->
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel | showDropdownFilterHint = False }
+                )
+                model
+            , saveToLocalStorage
+                "closed-dropdown-filter-hint"
+                "1"
+            )
+
         DateFormatChanged format ->
             ( updateViewModel
                 (\viewModel ->
@@ -235,6 +287,202 @@ update msg model =
             , Cmd.none
             )
                 |> saveColumnConfigurationsToLocalStorage
+
+        DropdownFilterFinalized filter ->
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | dropdownFilterSelectedIndex = 0
+                        , dropdownFilterState = SelectField
+                        , showDropdownFilter = False
+                    }
+                )
+                model
+            , updateCurrentSearchModel
+                (\searchModel ->
+                    case filter of
+                        Numeric field operator value ->
+                            case operator of
+                                EQ ->
+                                    { searchModel
+                                        | filteredFromValues =
+                                            Dict.insert
+                                                field
+                                                (String.fromFloat value)
+                                                searchModel.filteredFromValues
+                                        , filteredToValues =
+                                            Dict.insert
+                                                field
+                                                (String.fromFloat value)
+                                                searchModel.filteredToValues
+                                    }
+
+                                LT ->
+                                    { searchModel
+                                        | filteredToValues =
+                                            Dict.insert
+                                                field
+                                                (String.fromFloat value)
+                                                searchModel.filteredToValues
+                                    }
+
+                                GT ->
+                                    { searchModel
+                                        | filteredFromValues =
+                                            Dict.insert
+                                                field
+                                                (String.fromFloat value)
+                                                searchModel.filteredFromValues
+                                    }
+
+                        Sort field direction ->
+                            let
+                                sort : List ( String, SortDir )
+                                sort =
+                                    if searchModel.sortHasChanged then
+                                        searchModel.sort
+
+                                    else
+                                        []
+                            in
+                            { searchModel
+                                | sort =
+                                    sort
+                                        |> List.filter (Tuple.first >> (/=) field)
+                                        |> \l -> List.append l [ ( field, direction ) ]
+                                , sortHasChanged = True
+                            }
+
+                        Value filterType operator value ->
+                            -- TODO: Handle stuff like item subcategories
+                            case operator of
+                                Is ->
+                                    { searchModel
+                                        | filteredValues =
+                                            searchModel.filteredValues
+                                                |> Dict.update
+                                                    filterType
+                                                    (Maybe.withDefault Dict.empty
+                                                        >> Dict.insert value True
+                                                        >> Just
+                                                    )
+                                    }
+
+                                IsAnd ->
+                                    { searchModel
+                                        | filterOperators =
+                                            Dict.update
+                                                filterType
+                                                (Maybe.map (always True))
+                                                searchModel.filterOperators
+                                        , filteredValues =
+                                            searchModel.filteredValues
+                                                |> Dict.update
+                                                    filterType
+                                                    (Maybe.withDefault Dict.empty
+                                                        >> Dict.insert value True
+                                                        >> Just
+                                                    )
+                                    }
+
+                                IsOr ->
+                                    { searchModel
+                                        | filterOperators =
+                                            Dict.update
+                                                filterType
+                                                (Maybe.map (always False))
+                                                searchModel.filterOperators
+                                        , filteredValues =
+                                            Dict.update
+                                                filterType
+                                                (Maybe.withDefault Dict.empty
+                                                    >> Dict.insert value True
+                                                    >> Just
+                                                )
+                                                searchModel.filteredValues
+                                    }
+
+                                IsNot ->
+                                    { searchModel
+                                        | filteredValues =
+                                            searchModel.filteredValues
+                                                |> Dict.update
+                                                    filterType
+                                                    (Maybe.withDefault Dict.empty
+                                                        >> Dict.insert value False
+                                                        >> Just
+                                                    )
+                                    }
+                )
+                model
+                |> updateUrlWithSearchParams
+            )
+                |> Cmd.Extra.add (document_focusElement "query")
+
+        DropdownFilterInputChanged value ->
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    let
+                        searchModelWithNewInput : SearchModel
+                        searchModelWithNewInput =
+                            { searchModel
+                                | dropdownFilterInput = value
+                            }
+                    in
+                    { searchModelWithNewInput
+                        | dropdownFilterSelectedIndex =
+                            dropdownFilterFields model searchModelWithNewInput
+                                |> List.Extra.findIndex
+                                    (\field ->
+                                        String.toLower value == String.toLower field.label
+                                    )
+                                |> Maybe.withDefault 0
+                    }
+                )
+                model
+            , Cmd.none
+            )
+                |> addCmd scrollDropdownFilterIntoView
+
+        DropdownFilterOptionSelected state ->
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | dropdownFilterSelectedIndex = 0
+                        , dropdownFilterState = state
+                        , dropdownFilterInput = ""
+                    }
+                )
+                model
+            , Cmd.batch
+                [ document_focusElement "dropdown-filter-input"
+                ]
+            )
+                |> addCmd scrollDropdownFilterIntoView
+
+        DropdownFilterToggled ->
+            ( updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | dropdownFilterInput = ""
+                        , dropdownFilterSelectedIndex = 0
+                        , dropdownFilterState = SelectField
+                        , showDropdownFilter = not searchModel.showDropdownFilter
+                        , showDropdownFilterHint = False
+                    }
+                )
+                model
+            , Cmd.batch
+                [ if not model.searchModel.showDropdownFilter then
+                    document_focusElement "dropdown-filter-input"
+
+                  else
+                    document_focusElement "query"
+                , saveToLocalStorage
+                    "closed-dropdown-filter-hint"
+                    "1"
+                ]
+            )
 
         ExportAsCsvPressed ->
             ( model
@@ -468,6 +716,33 @@ update msg model =
                 )
                 model
                 |> updateUrlWithSearchParams
+            )
+
+        FilteredBothValuesChanged key value ->
+            let
+                updatedModel : Model
+                updatedModel =
+                    updateCurrentSearchModel
+                        (\searchModel ->
+                            { searchModel
+                                | filteredFromValues =
+                                    if String.isEmpty value then
+                                        Dict.remove key searchModel.filteredFromValues
+
+                                    else
+                                        Dict.insert key value searchModel.filteredFromValues
+                                , filteredToValues =
+                                    if String.isEmpty value then
+                                        Dict.remove key searchModel.filteredToValues
+
+                                    else
+                                        Dict.insert key value searchModel.filteredToValues
+                            }
+                        )
+                        model
+            in
+            ( updatedModel
+            , updateUrlWithSearchParams updatedModel
             )
 
         FilteredFromValueChanged key value ->
@@ -750,6 +1025,64 @@ update msg model =
                 )
             )
 
+        KeyDown key ->
+            case key of
+                "ArrowDown" ->
+                    ( updateCurrentSearchModel
+                        (\searchModel ->
+                            let
+                                isLastIndex : Bool
+                                isLastIndex =
+                                    Data.dropdownFilterFields model searchModel
+                                        |> List.length
+                                        |> (>=) (searchModel.dropdownFilterSelectedIndex + 1)
+                            in
+                            { searchModel
+                                | dropdownFilterSelectedIndex =
+                                    if isLastIndex then
+                                        0
+
+                                    else
+                                        searchModel.dropdownFilterSelectedIndex + 1
+                            }
+                        )
+                        model
+                    , Cmd.none
+                    )
+                        |> addCmd scrollDropdownFilterIntoView
+
+                "ArrowUp" ->
+                    ( updateCurrentSearchModel
+                        (\searchModel ->
+                            { searchModel
+                                | dropdownFilterSelectedIndex =
+                                    if searchModel.dropdownFilterSelectedIndex == 0 then
+                                        Data.dropdownFilterFields model searchModel
+                                            |> List.length
+                                            |> \l -> l - 1
+
+                                    else
+                                        searchModel.dropdownFilterSelectedIndex - 1
+                            }
+                        )
+                        model
+                    , Cmd.none
+                    )
+                        |> addCmd scrollDropdownFilterIntoView
+
+                "Enter" ->
+                    ( model
+                    , Data.dropdownFilterFields model model.searchModel
+                        |> List.Extra.getAt model.searchModel.dropdownFilterSelectedIndex
+                        |> Maybe.map .onSelect
+                        |> Cmd.Extra.maybe
+                    )
+
+                _ ->
+                    ( model
+                    , Cmd.none
+                    )
+
         LegacyModeChanged value ->
             ( model
             , updateCurrentSearchModel
@@ -958,6 +1291,16 @@ update msg model =
                 model
             , Process.sleep 250
                 |> Task.perform (\_ -> DebouncePassed (model.searchModel.debounce + 1))
+            )
+
+        QueryFieldBlurred ->
+            ( { model | queryFieldFocused = False }
+            , Cmd.none
+            )
+
+        QueryFieldFocused ->
+            ( { model | queryFieldFocused = True }
+            , Cmd.none
             )
 
         QueryTypeSelected queryType ->
@@ -1447,6 +1790,23 @@ addCmd fn ( model, cmd ) =
     )
 
 
+scrollDropdownFilterIntoView : Model -> Cmd Msg
+scrollDropdownFilterIntoView model =
+    let
+        maybeKey : Maybe String
+        maybeKey =
+            Data.dropdownFilterFields model model.searchModel
+                |> List.Extra.getAt model.searchModel.dropdownFilterSelectedIndex
+                |> Maybe.map .key
+    in
+    case maybeKey of
+        Just key ->
+            document_scrollElementIntoView ("dropdown-filter-item-" ++ key)
+
+        Nothing ->
+            Cmd.none
+
+
 updateIndex : Maybe String -> ( Model, Cmd Msg ) -> ( Model, Cmd Msg )
 updateIndex maybeIndex ( model, cmd ) =
     case maybeIndex of
@@ -1897,6 +2257,15 @@ updateModelFromLocalStorage ( key, value ) model =
 
                 _ ->
                     model
+
+        "closed-dropdown-filter-hint" ->
+            updateCurrentSearchModel
+                (\searchModel ->
+                    { searchModel
+                        | showDropdownFilterHint = False
+                    }
+                )
+                model
 
         "column-configurations" ->
             case Decode.decodeString (Decode.dict (Decode.list Decode.string)) value of
@@ -2593,7 +2962,7 @@ getSearchModelQueryParams model searchModel =
               )
             ]
         )
-        (filterFields searchModel)
+        filterFields
     , List.map
         (\{ key } ->
             ( key ++ "-operator"
@@ -2604,7 +2973,7 @@ getSearchModelQueryParams model searchModel =
                 [ "or" ]
             )
         )
-        (filterFields searchModel
+        (filterFields
             |> List.filter .useOperator
         )
     , [ ( "values-from"
@@ -3079,7 +3448,7 @@ buildSearchFilterTerms model searchModel groupFilters =
                       ]
                     ]
             )
-            (filterFields searchModel)
+            filterFields
 
         , List.map
             (\( field, value ) ->
@@ -3236,7 +3605,7 @@ buildSearchMustNotTerms model searchModel =
                             Nothing
                         ]
             )
-            (filterFields searchModel)
+            filterFields
 
         , List.map
             (\category ->
@@ -3688,34 +4057,24 @@ buildAggregationsBody searchModel =
 
         , ( "aggs"
           , Encode.object
-                (List.append
-                    (List.map
+                (List.concat
+                    [ List.map
                         buildTermsAggregation
-                        [ "actions.keyword"
-                        , "alignment"
-                        , "area_type"
-                        , "creature_family.keyword"
-                        , "deity_category.keyword"
-                        , "domain"
-                        , "favored_weapon.keyword"
-                        , "item_category.keyword"
-                        , "hands.keyword"
-                        , "region"
-                        , "reload_raw.keyword"
-                        , "size"
-                        , "skill.keyword"
-                        , "source.keyword"
-                        , "trait"
-                        , "type"
-                        , "weapon_group"
-                        ]
-                    )
-                    [ buildCompositeAggregation
-                        "item_subcategory"
+                        (Data.filterFields
+                            |> List.map .field
+                            |> List.Extra.unique
+                            |> List.map (replaceString "saving_throw" "saving_throw.keyword")
+                        )
+                    , [ buildCompositeAggregation
+                        "item_category_subcategory"
                         False
                         [ ( "category", "item_category.keyword" )
                         , ( "name", "item_subcategory.keyword" )
                         ]
+                      ]
+                    , Data.numericFields
+                        |> List.concatMap mapNumericFields
+                        |> List.concatMap buildMinmaxAggregation
                     ]
                 )
           )
@@ -3725,7 +4084,7 @@ buildAggregationsBody searchModel =
 
 buildTermsAggregation : String -> ( String, Encode.Value )
 buildTermsAggregation field =
-    ( field
+    ( String.replace ".keyword" "" field
     , Encode.object
         [ ( "terms"
           , Encode.object
@@ -3765,6 +4124,33 @@ buildCompositeTermsSource missing ( name, field ) =
                     ]
               )
             ]
+      )
+    ]
+
+
+buildMinmaxAggregation : String -> List ( String, Encode.Value )
+buildMinmaxAggregation field =
+    [ ( field ++ ".min"
+      , Encode.object
+        [ ( "min"
+          , Encode.object
+                [ ( "field"
+                  , Encode.string field
+                  )
+                ]
+          )
+        ]
+      )
+    , ( field ++ ".max"
+      , Encode.object
+        [ ( "max"
+          , Encode.object
+                [ ( "field"
+                  , Encode.string field
+                  )
+                ]
+          )
+        ]
       )
     ]
 
