@@ -4334,4 +4334,4 @@ buildTraitsAggregationBody =
 
 whatsNewVersion : Int
 whatsNewVersion =
-    2
+    3

@@ -2143,6 +2143,28 @@ viewWhatsNew model _ =
         , HA.class "no-ul-margin"
         ]
         ("""
+        ### Filter menu
+
+        A new way to apply filters and sorting has been added. Use the button to the left of the
+        query box or press Ctrl+Space to show the filter menu. This also allows for filtering things
+        that was previously only possible with complex queries, like for example creature spells,
+        hazard complexity, or poison onset duration.
+
+
+        ### Min and max values
+
+        Numeric inputs now display minimum and maximum values.
+
+
+        ### Show parent items
+
+        A filter has been added to the _Items_ filter menu to only show the parent item for items
+        with multiple children variants (e.g. runes).
+
+
+        ### Previous updates
+
+        <details summary="2024-05-27">
         ### Filter button changes &amp; new filters
 
         Filter buttons have been reorganized in an effort to reduce the number of buttons.
@@ -2232,8 +2254,7 @@ viewWhatsNew model _ =
         - `wisdom_scale` - new
         </details>
 
-
-        ### Previous updates
+        </details>
 
         <details summary="2024-03-13">
         - Added option under _General settings_ to hide legacy filters (hides alignment, casting component, and spell school filters).
@@ -2794,7 +2815,7 @@ viewFilterItems model searchModel =
         ]
         [ Html.h3
             []
-            [ Html.text "Items with children" ]
+            [ Html.text "Items with children variants" ]
         , Html.div
             [ HA.class "row"
             , HA.class "gap-medium"
