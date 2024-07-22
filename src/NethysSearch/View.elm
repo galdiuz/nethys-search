@@ -8481,7 +8481,7 @@ css args =
         padding: 2px;
         position: absolute;
         top: calc(100% + 6px);
-        z-index: 1;
+        z-index: 2;
     }
 
     .dropdown-filter-item {
@@ -8505,7 +8505,7 @@ css args =
         font-size: 18px;
         position: absolute;
         top: calc(100% + 8px);
-        z-index: 1;
+        z-index: 2;
     }
 
     .dropdown-filter-hint:after, .dropdown-filter-hint:before {
@@ -8685,6 +8685,7 @@ css args =
 
     .query-input {
         font-size: var(--font-very-large);
+        min-width: 0;
     }
 
     .results-list {
