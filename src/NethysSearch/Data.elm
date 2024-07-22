@@ -1202,7 +1202,7 @@ filterFields =
       }
     , { field = "spell.keyword"
       , key = "spells"
-      , useOperator = False
+      , useOperator = True
       , values = List.sort
       }
     , { field = "spell_attack_bonus_scale"
