@@ -1057,6 +1057,11 @@ filterFields =
       , useOperator = False
       , values = List.sort
       }
+    , { field = "deity.keyword"
+      , key = "deities"
+      , useOperator = True
+      , values = List.sort
+      }
     , { field = "deity_category.keyword"
       , key = "deity-categories"
       , useOperator = False
