@@ -7969,6 +7969,9 @@ getTraitClass trait =
         "stamina" ->
             HA.class "trait-aon-special"
 
+        "universal ancestry" ->
+            HA.class "trait-aon-special"
+
         _ ->
             HAE.empty
 
