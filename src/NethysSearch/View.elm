@@ -77,7 +77,7 @@ viewQuery model searchModel =
             ]
             [ Html.button
                 [ HA.class "input-button"
-                , HA.style "font-size" "24px"
+                , HA.style "font-size" "var(--font-very-large)"
                 , HA.title "Toggle filter menu [Ctrl+Space]"
                 , HAE.attributeIf
                     (not searchModel.showDropdownFilter)
@@ -108,7 +108,7 @@ viewQuery model searchModel =
                 (not <| String.isEmpty searchModel.query)
                 (Html.button
                     [ HA.class "input-button"
-                    , HA.style "font-size" "24px"
+                    , HA.style "font-size" "var(--font-very-large)"
                     , HA.attribute "aria-label" "Clear query"
                     , HE.onClick (QueryChanged "")
                     ]
@@ -3895,7 +3895,7 @@ viewActiveFiltersAndOptions model searchModel =
                 , HA.class "gap-small"
                 ]
                 [ Html.div
-                    [ HA.style "font-size" "24px"
+                    [ HA.style "font-size" "1.5em"
                     , HA.style "padding" "4px"
                     ]
                     [ FontAwesome.view FontAwesome.Solid.exclamation ]
@@ -6195,7 +6195,7 @@ viewGroupedHeightenableBadge viewModel document =
     if viewModel.groupedShowHeightenable && List.length document.heightenLevels >= 2 then
         Html.div
             [ HA.style "vertical-align" "super"
-            , HA.style "font-size" "10px"
+            , HA.style "font-size" "0.625em"
             , HA.title "Heightenable"
             ]
             [ Html.text "H" ]
@@ -8151,9 +8151,9 @@ css args =
         --color-trait-text: var(--text-2, #eeeeee);
         --element-font-variant: var(--font-variant, small-caps);
         --element-border-radius: var(--border-radius, 4px);
-        --font-normal: 16px;
-        --font-large: 20px;
-        --font-very-large: 24px;
+        --font-normal: 1em;
+        --font-large: 1.25em;
+        --font-very-large: 1.5em;
         --gap-tiny: 4px;
         --gap-small: 8px;
         --gap-medium: 12px;
@@ -8231,7 +8231,7 @@ css args =
     }
 
     h3, .h3 {
-        font-size: 18px;
+        font-size: 1.125em;
     }
 
     h3.title, h3 .title {
@@ -8241,7 +8241,7 @@ css args =
     }
 
     h4, .h4 {
-        font-size: 18px;
+        font-size: 1.125em;
     }
 
     h4.title, h4 .title {
@@ -8251,7 +8251,7 @@ css args =
     }
 
     h5 {
-        font-size: 18px;
+        font-size: 1.125em;
     }
 
     h5.title, h5 .title {
@@ -8261,7 +8261,7 @@ css args =
     }
 
     h6 {
-        font-size: 18px;
+        font-size: 1.125em;
     }
 
     h6.title, h6 .title {
@@ -8505,7 +8505,7 @@ css args =
         box-shadow: 0px 0px 10px black;
         color: var(--color-box-text);
         padding: 8px;
-        font-size: 18px;
+        font-size: 1.125em;
         position: absolute;
         top: calc(100% + 8px);
         z-index: 2;
@@ -8552,7 +8552,7 @@ css args =
         border-width: 0;
         background-color: var(--color-title1-bg);
         color: var(--color-title1-text);
-        font-size: 16px;
+        font-size: 1em;
         font-variant: small-caps;
         font-weight: 700;
         padding: 4px 9px;
@@ -8706,7 +8706,7 @@ css args =
 
     .results-list > li::marker {
         color: var(--color-text-inactive);
-        font-size: 14px;
+        font-size: 0.875em;
     }
 
     .rotatable {
@@ -8775,13 +8775,13 @@ css args =
         border-width: 2px;
         color: #eeeeee;
         padding: 3px 5px;
-        font-size: 16px;
+        font-size: 1em;
         font-variant: var(--element-font-variant);
         font-weight: 700;
     }
 
     .traitbadge {
-        font-size: 8px;
+        font-size: 0.5em;
         border-width: 1px;
         padding: 1px 2px;
         vertical-align: super;
