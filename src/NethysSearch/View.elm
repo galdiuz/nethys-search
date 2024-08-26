@@ -7694,19 +7694,19 @@ getPreviewDocument model link =
                 Just doc
 
             else
-                case ( model.legacyMode, doc.legacyId, doc.remasterId ) of
-                    ( True, Just legacyId, _ ) ->
+                case ( model.legacyMode, doc.legacyIds, doc.remasterIds ) of
+                    ( True, legacyId :: _, _ ) ->
                         Dict.get legacyId model.documents
                             |> Maybe.andThen Result.toMaybe
 
-                    ( True, Nothing, _ ) ->
+                    ( True, [], _ ) ->
                         Just doc
 
-                    ( False, _, Just remasterId ) ->
+                    ( False, _, remasterId :: _ ) ->
                         Dict.get remasterId model.documents
                             |> Maybe.andThen Result.toMaybe
 
-                    ( False, _, _ ) ->
+                    ( False, _, [] ) ->
                         Just doc
 
         _ ->

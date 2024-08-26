@@ -2092,23 +2092,23 @@ parseMarkdownAndCollectIdsToFetch idsToCheck idsToFetch documents legacyMode =
                 idToWorkWith =
                     case Dict.get id documents of
                         Just (Ok doc) ->
-                            case ( legacyMode, doc.legacyId, doc.remasterId ) of
-                                ( LegacyMode, Just "0", _ ) ->
+                            case ( legacyMode, doc.legacyIds, doc.remasterIds ) of
+                                ( LegacyMode, "0" :: _, _ ) ->
                                     id
 
-                                ( LegacyMode, Just legacyId, _ ) ->
+                                ( LegacyMode, legacyId :: _, _ ) ->
                                     legacyId
 
-                                ( LegacyMode, Nothing, _ ) ->
+                                ( LegacyMode, [], _ ) ->
                                     id
 
-                                ( RemasterMode, _, Just "0" ) ->
+                                ( RemasterMode, _, "0" :: _ ) ->
                                     id
 
-                                ( RemasterMode, _, Just remasterId ) ->
+                                ( RemasterMode, _, remasterId :: _ ) ->
                                     remasterId
 
-                                ( RemasterMode, _, _ ) ->
+                                ( RemasterMode, _, [] ) ->
                                     id
 
                                 ( NoRedirect, _, _ ) ->

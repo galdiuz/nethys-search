@@ -267,7 +267,7 @@ type alias Document =
     , itemHasChildren : Bool
     , itemSubcategory : Maybe String
     , languages : Maybe String
-    , legacyId : Maybe String
+    , legacyIds : List String
     , lessonType : Maybe String
     , lessons : Maybe String
     , level : Maybe Int
@@ -298,7 +298,7 @@ type alias Document =
     , region : Maybe String
     , releaseDate : Maybe String
     , reload : Maybe String
-    , remasterId : Maybe String
+    , remasterIds : List String
     , requiredAbilities : Maybe String
     , requirements : Maybe String
     , resistanceValues : Maybe DamageTypeValues
@@ -3194,23 +3194,23 @@ flattenMarkdownBlock legacyMode documents parentLevel overrideTitleRight block =
                 idToWorkWith =
                     case Dict.get documentId documents of
                         Just (Ok doc) ->
-                            case ( legacyMode, doc.legacyId, doc.remasterId ) of
-                                ( LegacyMode, Just "0", _ ) ->
+                            case ( legacyMode, doc.legacyIds, doc.remasterIds ) of
+                                ( LegacyMode, "0" :: _, _ ) ->
                                     documentId
 
-                                ( LegacyMode, Just legacyId, _ ) ->
+                                ( LegacyMode, legacyId :: _, _ ) ->
                                     legacyId
 
-                                ( LegacyMode, Nothing, _ ) ->
+                                ( LegacyMode, [], _ ) ->
                                     documentId
 
-                                ( RemasterMode, _, Just "0" ) ->
+                                ( RemasterMode, _, "0" :: _ ) ->
                                     documentId
 
-                                ( RemasterMode, _, Just remasterId ) ->
+                                ( RemasterMode, _, remasterId :: _ ) ->
                                     remasterId
 
-                                ( RemasterMode, _, _ ) ->
+                                ( RemasterMode, _, [] ) ->
                                     documentId
 
                                 ( NoRedirect, _, _ ) ->
@@ -3816,7 +3816,7 @@ documentDecoder =
     Field.attempt "item_child_id" stringListDecoder <| \itemChildrenIds ->
     Field.attempt "item_subcategory" Decode.string <| \itemSubcategory ->
     Field.attempt "language_markdown" Decode.string <| \languages ->
-    Field.attempt "legacy_id" Decode.string <| \legacyId ->
+    Field.attempt "legacy_id" stringListDecoder <| \legacyIds ->
     Field.attempt "lesson_markdown" Decode.string <| \lessons ->
     Field.attempt "lesson_type" Decode.string <| \lessonType ->
     Field.attempt "level" Decode.int <| \level ->
@@ -3847,7 +3847,7 @@ documentDecoder =
     Field.attempt "region" Decode.string <| \region->
     Field.attempt "release_date" Decode.string <| \releaseDate ->
     Field.attempt "reload_raw" Decode.string <| \reload ->
-    Field.attempt "remaster_id" Decode.string <| \remasterId ->
+    Field.attempt "remaster_id" stringListDecoder <| \remasterIds ->
     Field.attempt "required_abilities" Decode.string <| \requiredAbilities ->
     Field.attempt "requirement_markdown" Decode.string <| \requirements ->
     Field.attempt "resistance" damageTypeValuesDecoder <| \resistanceValues ->
@@ -3991,7 +3991,7 @@ documentDecoder =
         , itemHasChildren = not (List.isEmpty (Maybe.withDefault [] itemChildrenIds))
         , itemSubcategory = itemSubcategory
         , languages = languages
-        , legacyId = legacyId
+        , legacyIds = Maybe.withDefault [] legacyIds
         , lessonType = lessonType
         , lessons = lessons
         , level = level
@@ -4022,7 +4022,7 @@ documentDecoder =
         , region = region
         , releaseDate = releaseDate
         , reload = reload
-        , remasterId = remasterId
+        , remasterIds = Maybe.withDefault [] remasterIds
         , requiredAbilities = requiredAbilities
         , requirements = requirements
         , resistanceValues = resistanceValues
