@@ -8617,6 +8617,7 @@ css args =
         border-radius: 4px;
         border-width: 2px;
         border-color: #808080;
+        flex-wrap: nowrap;
     }
 
     .input-container:focus-within {
