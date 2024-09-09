@@ -4822,9 +4822,24 @@ viewSearchResultTableCell viewModel document column =
             maybeString
                 |> Maybe.withDefault ""
                 |> parseAndViewAsMarkdown viewModel
+
+        cellString : String
+        cellString =
+            searchResultTableCellToString viewModel document column
     in
     Html.td
         [ HAE.attributeIf (column == "name") (HA.class "sticky-left")
+        , if String.length cellString > 100 then
+            HA.style "min-width" "300px"
+
+          else if String.length cellString > 50 then
+            HA.style "min-width" "200px"
+
+          else if String.length cellString > 30 then
+            HA.style "min-width" "150px"
+
+          else
+            HAE.empty
         ]
         (case String.split "." column of
             [ "actions" ] ->
@@ -5082,7 +5097,7 @@ viewSearchResultTableCell viewModel document column =
                 maybeAsMarkdown document.weaknesses
 
             _ ->
-                [ Html.text (searchResultTableCellToString viewModel document column) ]
+                [ Html.text cellString ]
         )
 
 
@@ -6049,6 +6064,7 @@ viewLoadGroupButton model searchModel groups =
     else
         Html.button
             [ HE.onClick (LoadGroupPressed groups)
+            , HA.style "font-size" "1rem"
             ]
             [ Html.text "Load" ]
 
