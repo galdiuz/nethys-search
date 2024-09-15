@@ -4832,6 +4832,9 @@ viewSearchResultTableCell viewModel document column =
         , if String.length cellString > 100 then
             HA.style "min-width" "300px"
 
+          else if String.length cellString > 75 then
+            HA.style "min-width" "250px"
+
           else if String.length cellString > 50 then
             HA.style "min-width" "200px"
 
@@ -5014,6 +5017,9 @@ viewSearchResultTableCell viewModel document column =
                         , HA.class "align-center"
                         ]
                     |> List.singleton
+
+            [ "piloting_check" ] ->
+                maybeAsMarkdown document.pilotingCheck
 
             [ "prerequisite" ] ->
                 maybeAsMarkdown document.prerequisites
@@ -5236,6 +5242,9 @@ searchResultTableCellToString viewModel document column =
         [ "creature_family" ] ->
             maybeAsStringWithoutMarkdown document.creatureFamilyMarkdown
 
+        [ "crew" ] ->
+            maybeAsString document.crew
+
         [ "complexity" ] ->
             maybeAsString document.complexity
 
@@ -5425,6 +5434,9 @@ searchResultTableCellToString viewModel document column =
         [ "pantheon_member" ] ->
             maybeAsStringWithoutMarkdown document.pantheonMembers
 
+        [ "passengers" ] ->
+            maybeAsString document.passengers
+
         [ "patron_theme" ] ->
             maybeAsStringWithoutMarkdown document.patronThemes
 
@@ -5444,6 +5456,9 @@ searchResultTableCellToString viewModel document column =
         [ "pfs" ] ->
             document.pfs
                 |> Maybe.withDefault ""
+
+        [ "piloting_check" ] ->
+            maybeAsStringWithoutMarkdown document.pilotingCheck
 
         [ "plane_category" ] ->
             maybeAsString document.planeCategory
@@ -5547,6 +5562,9 @@ searchResultTableCellToString viewModel document column =
         [ "source_group" ] ->
             document.sourceGroups
                 |> String.join ", "
+
+        [ "space" ] ->
+            maybeAsString document.space
 
         [ "speed" ] ->
             maybeAsStringWithoutMarkdown document.speed

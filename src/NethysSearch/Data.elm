@@ -226,6 +226,7 @@ type alias Document =
     , creatureAbilities : List String
     , creatureFamily : Maybe String
     , creatureFamilyMarkdown : Maybe String
+    , crew : Maybe String
     , damage : Maybe String
     , damageTypes : List String
     , defenseProficiencies : List String
@@ -280,11 +281,13 @@ type alias Document =
     , pantheons : List String
     , pantheonMarkdown : Maybe String
     , pantheonMembers : Maybe String
+    , passengers : Maybe String
     , patronThemes : Maybe String
     , perception : Maybe Int
     , perceptionProficiency : Maybe String
     , perceptionScale : Maybe Int
     , pfs : Maybe String
+    , pilotingCheck : Maybe String
     , planeCategory : Maybe String
     , prerequisites : Maybe String
     , price : Maybe String
@@ -321,6 +324,7 @@ type alias Document =
     , sourceGroups : List String
     , sourceList : List String
     , sources : Maybe String
+    , space : Maybe String
     , speed : Maybe String
     , speedValues : Maybe SpeedTypeValues
     , speedPenalty : Maybe String
@@ -823,6 +827,7 @@ fields =
     , ( "cost", "Cost to use an action, ritual, or spell" )
     , ( "creature_ability", "Creature abilities" )
     , ( "creature_family", "Creature family" )
+    , ( "crew", "Seige weapon / vehicle crew" )
     , ( "damage", "Weapon damage" )
     , ( "damage_die", "[n] Weapon damage die" )
     , ( "damage_type", "Weapon damage type" )
@@ -884,12 +889,15 @@ fields =
     , ( "onset_raw", "Onset exactly as written" )
     , ( "pantheon", "Pantheons a deity is part of" )
     , ( "pantheon_member", "Deities part of a pantheon" )
+    , ( "passengers", "[n] Vehicle passengers" )
+    , ( "passengers_raw", "Vehicle passengers as written" )
     , ( "patron_theme", "Witch patron themes associated with a spell" )
     , ( "per", "[n] Alias for 'perception'" )
     , ( "perception", "[n] Perception" )
     , ( "perception_proficiency", "A class's starting perception proficiency" )
     , ( "perception_scale", "Perception scale according to creature building rules" )
     , ( "pfs", "Pathfinder Society status (Standard / Limited / Restricted)" )
+    , ( "piloting_check", "Piloting check for a vehicle" )
     , ( "plane_category", "Plane category" )
     , ( "prerequisite", "Prerequisites" )
     , ( "price", "[n] Item price in copper coins" )
@@ -927,6 +935,7 @@ fields =
     , ( "source_raw", "Source book exactly as written incl. page" )
     , ( "source_category", "Source book category" )
     , ( "source_group", "Source book group" )
+    , ( "space", "Siege weapon / vehicle space" )
     , ( "speed.<type>", "[n] Speed of <type>. Valid types are burrow, climb, fly, land, and swim. Use speed.\\* to match any type." )
     , ( "speed_raw", "Speed exactly as written" )
     , ( "speed_penalty", "Speed penalty of armor or shield" )
@@ -1327,6 +1336,7 @@ numericFields =
     , "rank"
     , "intelligence"
     , "onset"
+    , "passengers"
     , "perception"
     , "price"
     , "range"
@@ -1782,6 +1792,9 @@ predefinedColumnConfigurations =
     , { columns = [ "spell_type", "rank", "heighten", "tradition", "school", "trait", "actions", "component", "trigger", "target", "range", "area", "duration", "defense", "rarity", "pfs" ]
       , label = "Spells"
       }
+    , { columns = [ "source", "pfs", "size", "trait", "level", "price", "space", "crew", "passengers", "piloting_check", "speed", "ac", "fortitude", "hardness", "hp", "immunity", "resistance", "weakness" ]
+      , label = "Vehicles"
+      }
     , { columns = [ "weapon_type", "weapon_category", "weapon_group", "trait", "damage", "hands", "range", "reload", "bulk", "price" ]
       , label = "Weapons"
       }
@@ -1933,6 +1946,7 @@ sortFields =
     , ( "name", "name.keyword", False )
     , ( "onset", "onset", True )
     , ( "pantheon", "pantheon.keyword", False )
+    , ( "passengers", "passengers", True )
     , ( "patron_theme", "patron_theme", False )
     , ( "perception", "perception", True )
     , ( "perception_proficiency", "perception_proficiency", False )
@@ -2079,6 +2093,7 @@ tableColumns =
     , "cost"
     , "creature_ability"
     , "creature_family"
+    , "crew"
     , "damage"
     , "damage_type"
     , "defense"
@@ -2120,6 +2135,7 @@ tableColumns =
     , "level"
     , "mystery"
     , "onset"
+    , "passengers"
     , "pantheon"
     , "pantheon_member"
     , "patron_theme"
@@ -2152,6 +2168,7 @@ tableColumns =
     , "source"
     , "source_category"
     , "source_group"
+    , "space"
     , "speed"
     , "speed_penalty"
     , "spell"
@@ -3784,6 +3801,7 @@ documentDecoder =
     Field.attempt "creature_ability" stringListDecoder <| \creatureAbilities ->
     Field.attempt "creature_family" Decode.string <| \creatureFamily ->
     Field.attempt "creature_family_markdown" Decode.string <| \creatureFamilyMarkdown ->
+    Field.attempt "crew" Decode.string <| \crew ->
     Field.attempt "damage" Decode.string <| \damage ->
     Field.attempt "damage_type" stringListDecoder <| \damageTypes ->
     Field.attempt "defense_proficiency" stringListDecoder <| \defenseProficiencies ->
@@ -3838,11 +3856,13 @@ documentDecoder =
     Field.attempt "pantheon" stringListDecoder <| \pantheons ->
     Field.attempt "pantheon_markdown" Decode.string <| \pantheonMarkdown ->
     Field.attempt "pantheon_member_markdown" Decode.string <| \pantheonMembers ->
+    Field.attempt "passengers_raw" Decode.string <| \passengers ->
     Field.attempt "patron_theme_markdown" Decode.string <| \patronThemes ->
     Field.attempt "perception" Decode.int <| \perception ->
     Field.attempt "perception_proficiency" Decode.string <| \perceptionProficiency ->
     Field.attempt "perception_scale_number" Decode.int <| \perceptionScale ->
     Field.attempt "pfs" Decode.string <| \pfs ->
+    Field.attempt "piloting_check_markdown" Decode.string <| \pilotingCheck ->
     Field.attempt "plane_category" Decode.string <| \planeCategory ->
     Field.attempt "prerequisite_markdown" Decode.string <| \prerequisites ->
     Field.attempt "price_raw" Decode.string <| \price ->
@@ -3879,6 +3899,7 @@ documentDecoder =
     Field.attempt "source_category" stringListDecoder <| \sourceCategories ->
     Field.attempt "source_group" stringListDecoder <| \sourceGroups ->
     Field.attempt "source_markdown" Decode.string <| \sources ->
+    Field.attempt "space" Decode.string <| \space ->
     Field.attempt "speed" speedTypeValuesDecoder <| \speedValues ->
     Field.attempt "speed_markdown" Decode.string <| \speed ->
     Field.attempt "speed_penalty" Decode.string <| \speedPenalty ->
@@ -3962,6 +3983,7 @@ documentDecoder =
         , creatureAbilities = Maybe.withDefault [] creatureAbilities
         , creatureFamily = creatureFamily
         , creatureFamilyMarkdown = creatureFamilyMarkdown
+        , crew = crew
         , damage = damage
         , damageTypes = Maybe.withDefault [] damageTypes
         , defenseProficiencies = Maybe.withDefault [] defenseProficiencies
@@ -4016,11 +4038,13 @@ documentDecoder =
         , pantheons = Maybe.withDefault [] pantheons
         , pantheonMarkdown = pantheonMarkdown
         , pantheonMembers = pantheonMembers
+        , passengers = passengers
         , patronThemes = patronThemes
         , perception = perception
         , perceptionProficiency = perceptionProficiency
         , perceptionScale = perceptionScale
         , pfs = pfs
+        , pilotingCheck = pilotingCheck
         , planeCategory = planeCategory
         , prerequisites = prerequisites
         , price = price
@@ -4057,6 +4081,7 @@ documentDecoder =
         , sourceGroups = Maybe.withDefault [] sourceGroups
         , sourceList = Maybe.withDefault [] sourceList
         , sources = sources
+        , space = space
         , speed = speed
         , speedPenalty = speedPenalty
         , speedValues = speedValues
