@@ -200,6 +200,7 @@ type alias Document =
     , apocryphalSpell : Maybe String
     , archetype : Maybe String
     , area : Maybe String
+    , areasOfConcern : Maybe String
     , areaTypes : List String
     , armorCategory : Maybe String
     , armorGroup : Maybe String
@@ -237,6 +238,8 @@ type alias Document =
     , divineFonts : List String
     , domains : Maybe String
     , domainsList : List String
+    , domainsAlternate : Maybe String
+    , domainsPrimary : Maybe String
     , domainSpell : Maybe String
     , duration : Maybe String
     , durationValue : Maybe Int
@@ -1755,7 +1758,7 @@ predefinedColumnConfigurations =
         ]
       , label = "Creatures (extended)"
       }
-    , { columns = [ "pfs", "edict", "anathema", "domain", "divine_font", "sanctification", "ability", "skill", "favored_weapon", "deity_category", "pantheon", "source" ]
+    , { columns = [ "pfs", "area_of_concern", "edict", "anathema", "domain_primary", "domain_alternate", "divine_font", "sanctification", "attribute", "skill", "favored_weapon", "deity_category", "pantheon", "source" ]
       , label = "Deities"
       }
     , { columns = [ "level", "saving_throw", "onset", "stage", "trait", "rarity" ]
@@ -1906,6 +1909,8 @@ sortFields =
     , ( "dexterity_scale", "dexterity_scale_number", True )
     , ( "divine_font", "divine_font", False )
     , ( "domain", "domain", False )
+    , ( "domain_alternate", "domain_alternate", False )
+    , ( "domain_primary", "domain_primary", False )
     , ( "duration", "duration", True )
     , ( "favored_weapon", "favored_weapon.keyword", False )
     , ( "fortitude", "fortitude", False )
@@ -2083,6 +2088,8 @@ tableColumns =
     , "dexterity_scale"
     , "divine_font"
     , "domain"
+    , "domain_alternate"
+    , "domain_primary"
     , "domain_spell"
     , "duration"
     , "element"
@@ -3749,6 +3756,7 @@ documentDecoder =
     Field.attempt "apocryphal_spell_markdown" Decode.string <| \apocryphalSpell ->
     Field.attempt "archetype" Decode.string <| \archetype ->
     Field.attempt "area_raw" Decode.string <| \area ->
+    Field.attempt "area_of_concern_raw" Decode.string <| \areasOfConcern ->
     Field.attempt "area_type" stringListDecoder <| \areaTypes ->
     Field.attempt "armor_category" Decode.string <| \armorCategory ->
     Field.attempt "armor_group_markdown" Decode.string <| \armorGroup ->
@@ -3786,6 +3794,8 @@ documentDecoder =
     Field.attempt "divine_font" stringListDecoder <| \divineFonts ->
     Field.attempt "domain" stringListDecoder <| \domainsList ->
     Field.attempt "domain_markdown" Decode.string <| \domains ->
+    Field.attempt "domain_alternate_markdown" Decode.string <| \domainsAlternate ->
+    Field.attempt "domain_primary_markdown" Decode.string <| \domainsPrimary ->
     Field.attempt "domain_spell_markdown" Decode.string <| \domainSpell ->
     Field.attempt "duration" Decode.int <| \durationValue ->
     Field.attempt "duration_raw" Decode.string <| \duration ->
@@ -3924,6 +3934,7 @@ documentDecoder =
         , apocryphalSpell = apocryphalSpell
         , archetype = archetype
         , area = area
+        , areasOfConcern = areasOfConcern
         , areaTypes = Maybe.withDefault [] areaTypes
         , armorCategory = armorCategory
         , armorGroup = armorGroup
@@ -3961,6 +3972,8 @@ documentDecoder =
         , divineFonts = Maybe.withDefault [] divineFonts
         , domains = domains
         , domainsList = Maybe.withDefault [] domainsList
+        , domainsAlternate = domainsAlternate
+        , domainsPrimary = domainsPrimary
         , domainSpell = domainSpell
         , duration = duration
         , durationValue = durationValue

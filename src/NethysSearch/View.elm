@@ -4910,6 +4910,12 @@ viewSearchResultTableCell viewModel document column =
             [ "domain" ] ->
                 maybeAsMarkdown document.domains
 
+            [ "domain_alternate" ] ->
+                maybeAsMarkdown document.domainsAlternate
+
+            [ "domain_primary" ] ->
+                maybeAsMarkdown document.domainsPrimary
+
             [ "domain_spell" ] ->
                 maybeAsMarkdown document.domainSpell
 
@@ -5153,6 +5159,9 @@ searchResultTableCellToString viewModel document column =
         [ "area" ] ->
             maybeAsString document.area
 
+        [ "area_of_concern" ] ->
+            maybeAsString document.areasOfConcern
+
         [ "armor_category" ] ->
             maybeAsString document.armorCategory
 
@@ -5287,6 +5296,12 @@ searchResultTableCellToString viewModel document column =
 
         [ "domain" ] ->
             maybeAsStringWithoutMarkdown document.domains
+
+        [ "domain_alternate" ] ->
+            maybeAsStringWithoutMarkdown document.domainsAlternate
+
+        [ "domain_primary" ] ->
+            maybeAsStringWithoutMarkdown document.domainsPrimary
 
         [ "domain_spell" ] ->
             maybeAsStringWithoutMarkdown document.domainSpell
