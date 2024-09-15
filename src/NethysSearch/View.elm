@@ -5159,6 +5159,11 @@ searchResultTableCellToString viewModel document column =
         [ "area" ] ->
             maybeAsString document.area
 
+        [ "area_type" ] ->
+            document.areaTypes
+                |> List.map toTitleCase
+                |> String.join ", "
+
         [ "area_of_concern" ] ->
             maybeAsString document.areasOfConcern
 

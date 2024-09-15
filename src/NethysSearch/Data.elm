@@ -1881,6 +1881,7 @@ sortFields =
     , ( "alignment", "alignment", False )
     , ( "archetype", "archetype.keyword", False )
     , ( "area", "area", False )
+    , ( "area_type", "area_type", False )
     , ( "armor_category", "armor_category", False )
     , ( "armor_group", "armor_group", False )
     , ( "aspect", "aspect", False )
@@ -2055,6 +2056,7 @@ tableColumns =
     , "apocryphal_spell"
     , "archetype"
     , "area"
+    , "area_type"
     , "armor_category"
     , "armor_group"
     , "aspect"
