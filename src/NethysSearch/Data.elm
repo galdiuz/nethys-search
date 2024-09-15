@@ -1789,6 +1789,9 @@ predefinedColumnConfigurations =
     , { columns = [ "rank", "heighten", "school", "trait", "primary_check", "secondary_casters", "secondary_check", "cost", "actions", "target", "range", "area", "duration", "rarity", "pfs" ]
       , label = "Rituals"
       }
+    , { columns = [ "source", "pfs", "summary", "size", "trait", "level", "price", "usage", "space", "crew", "speed", "ac", "fortitude", "reflex", "hardness", "hp" ]
+      , label = "Siege Weapons"
+      }
     , { columns = [ "spell_type", "rank", "heighten", "tradition", "school", "trait", "actions", "component", "trigger", "target", "range", "area", "duration", "defense", "rarity", "pfs" ]
       , label = "Spells"
       }
@@ -1970,6 +1973,7 @@ sortFields =
     , ( "school", "school", False )
     , ( "secondary_casters", "secondary_casters", False )
     , ( "secondary_check", "secondary_check.keyword", False )
+    , ( "siege_weapon_category", "siege_weapon_category", False )
     , ( "size", "size_id", True )
     , ( "source", "source.keyword", False )
     , ( "source_category", "primary_source_category", False )
