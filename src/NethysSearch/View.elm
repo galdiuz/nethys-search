@@ -54,7 +54,15 @@ view model =
                 , HA.class "align-center"
                 , HA.class "gap-large"
                 ]
-                [ viewQuery model model.searchModel
+                [ if model.showQueryControls then
+                    viewQuery model model.searchModel
+
+                  else
+                    Html.button
+                        [ HA.style "align-self" "center"
+                        , HE.onClick ShowQueryControlsPressed
+                        ]
+                        [ Html.text "Show query controls" ]
                 , viewSearchResults model model.searchModel
                 ]
         , viewLinkPreview model
@@ -2751,6 +2759,11 @@ viewFilterItems model searchModel =
               , step = "0.1"
               , suffix = Nothing
               }
+            , { field = "item_bonus_value"
+              , hint = Nothing
+              , step = "1"
+              , suffix = Nothing
+              }
             ]
         )
 
@@ -2808,6 +2821,29 @@ viewFilterItems model searchModel =
                     []
             )
         ]
+
+    , viewFilterList
+        searchModel
+        { label = "Item Bonus Actions"
+        , filterKey = "item-bonus-actions"
+        , showOperator = False
+        , showSearch = False
+        , values =
+            getAggregationValues "item_bonus_action" searchModel
+                |> List.sort
+        }
+
+    , viewFilterList
+        searchModel
+        { label = "Item Bonus Consumable"
+        , filterKey = "item-bonus-consumable"
+        , showOperator = False
+        , showSearch = False
+        , values =
+            getAggregationValues "item_bonus_consumable" searchModel
+                |> List.sort
+                |> List.reverse
+        }
 
     , Html.div
         [ HA.class "column"
@@ -4196,7 +4232,6 @@ viewSearchResults model searchModel =
         , HA.class "gap-medium"
         , HA.class "align-center"
         , HA.style "align-self" "stretch"
-        , HA.style "min-height" "90vh"
         , HA.style "padding-bottom" "8px"
         , HA.id "results"
         , HA.tabindex -1
@@ -4269,6 +4304,7 @@ viewSearchResultsShort model searchModel remaining resultCount =
 
           else
             HA.class "item-gap-large"
+        , HAE.attributeIf searchModel.loadingNew (HA.class "dim")
         ]
         (List.concatMap
             (\result ->
@@ -4565,6 +4601,7 @@ viewSearchResultsFull model searchModel remaining =
 
           else
             HA.class "item-gap-large"
+        , HAE.attributeIf searchModel.loadingNew (HA.class "dim")
         ]
         (List.concatMap
             (\result ->
@@ -4625,6 +4662,7 @@ viewSearchResultsTableContainer model searchModel remaining =
             , HA.class "gap-medium"
             , HA.style "max-height" "95vh"
             , HA.style "overflow" "auto"
+            , HAE.attributeIf searchModel.loadingNew (HA.class "dim")
             ]
             [ viewSearchResultTable model searchModel
 
@@ -4732,28 +4770,38 @@ viewSearchResultTable model searchModel =
         , Html.Keyed.node
             "tbody"
             []
-            (List.concatMap
-                (\result ->
-                    case result of
-                        Ok r ->
-                            r.documentIds
-                                |> List.filterMap (\id -> Dict.get id model.documents)
-                                |> List.filterMap Result.toMaybe
-                                |> List.map
-                                    (\document ->
-                                        ( document.id
-                                        , Html.Lazy.lazy3
-                                            viewSearchResultTableRow
-                                            model.viewModel
-                                            searchModel.tableColumns
-                                            document
+            (searchModel.searchResults
+                |> List.map (Result.map .documentIds)
+                |> List.concatMap (Result.withDefault [])
+                |> List.map
+                    (\id ->
+                        ( id
+                        , case Dict.get id model.documents of
+                            Just (Ok document) ->
+                                Html.Lazy.lazy3
+                                    viewSearchResultTableRow
+                                    model.viewModel
+                                    searchModel.tableColumns
+                                    document
+
+                            Just (Err _) ->
+                                Html.text ""
+
+                            Nothing ->
+                                Html.tr
+                                    []
+                                    (List.append
+                                        [ Html.td
+                                            []
+                                            [ Html.text "Loading..." ]
+                                        ]
+                                        (List.repeat
+                                            (List.length searchModel.tableColumns)
+                                            (Html.td [] [])
                                         )
                                     )
-
-                        Err _ ->
-                            []
-                )
-                searchModel.searchResults
+                        )
+                    )
             )
         ]
 
@@ -4829,16 +4877,16 @@ viewSearchResultTableCell viewModel document column =
     in
     Html.td
         [ HAE.attributeIf (column == "name") (HA.class "sticky-left")
-        , if String.length cellString > 100 then
+        , if String.length cellString > 100 && column /= "name" then
             HA.style "min-width" "300px"
 
-          else if String.length cellString > 75 then
+          else if String.length cellString > 75 && column /= "name" then
             HA.style "min-width" "250px"
 
-          else if String.length cellString > 50 then
+          else if String.length cellString > 50 && column /= "name" then
             HA.style "min-width" "200px"
 
-          else if String.length cellString > 30 then
+          else if String.length cellString > 20 && column /= "name" then
             HA.style "min-width" "150px"
 
           else
@@ -4976,6 +5024,9 @@ viewSearchResultTableCell viewModel document column =
 
             [ "immunity" ] ->
                 maybeAsMarkdown document.immunities
+
+            [ "item_bonus_note" ] ->
+                maybeAsMarkdown document.itemBonusNote
 
             [ "language" ] ->
                 maybeAsMarkdown document.languages
@@ -5402,6 +5453,32 @@ searchResultTableCellToString viewModel document column =
                 |> Maybe.map scaleToString
                 |> maybeAsString
 
+        [ "item_bonus_action" ] ->
+            maybeAsString document.itemBonusAction
+
+        [ "item_bonus_consumable" ] ->
+            case document.itemBonusConsumable of
+                Just True ->
+                    "True"
+
+                Just False ->
+                    "False"
+
+                Nothing ->
+                    ""
+
+        [ "item_bonus_note" ] ->
+            maybeAsStringWithoutMarkdown document.itemBonusNote
+
+        [ "item_bonus_value" ] ->
+            if document.itemBonusValue == Just -1 then
+                "Varies"
+
+            else
+                document.itemBonusValue
+                    |> Maybe.map numberWithSign
+                    |> Maybe.withDefault ""
+
         [ "item_category" ] ->
             maybeAsString document.itemCategory
 
@@ -5794,6 +5871,7 @@ viewSearchResultsGrouped model searchModel remaining =
         , HA.class "gap-large"
         , HA.class "limit-width"
         , HA.class "fill-width-with-padding"
+        , HAE.attributeIf searchModel.loadingNew (HA.class "dim")
         ]
         (List.map
             (\( key1, documents1 ) ->

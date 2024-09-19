@@ -52,6 +52,7 @@ type alias Model =
     , savedColumnConfigurations : Dict String (List String)
     , savedColumnConfigurationName : String
     , searchModel : SearchModel
+    , showQueryControls : Bool
     , showLegacyFilters : Bool
     , url : Url
     , viewModel : ViewModel
@@ -98,6 +99,7 @@ type alias SearchModel =
     , groupedLinkLayout : GroupedLinkLayout
     , lastSearchHash : Maybe String
     , legacyMode : Maybe Bool
+    , loadingNew : Bool
     , query : String
     , queryType : QueryType
     , removeFilters : List String
@@ -145,6 +147,7 @@ emptySearchModel { defaultQuery, fixedQueryString, removeFilters } =
     , groupedLinkLayout = Horizontal
     , lastSearchHash = Nothing
     , legacyMode = Nothing
+    , loadingNew = False
     , query = ""
     , queryType = Standard
     , removeFilters = removeFilters
@@ -267,6 +270,10 @@ type alias Document =
     , immunities : Maybe String
     , intelligence : Maybe Int
     , intelligenceScale : Maybe Int
+    , itemBonusAction : Maybe String
+    , itemBonusConsumable : Maybe Bool
+    , itemBonusNote : Maybe String
+    , itemBonusValue : Maybe Int
     , itemCategory : Maybe String
     , itemHasChildren : Bool
     , itemSubcategory : Maybe String
@@ -398,6 +405,7 @@ type alias Flags =
     , pageId : String
     , randomSeed : Int
     , removeFilters : List String
+    , showQueryControls : Bool
     , resultBaseUrl : String
     , windowHeight : Int
     , windowWidth : Int
@@ -422,6 +430,7 @@ defaultFlags =
     , randomSeed = 1
     , removeFilters = []
     , resultBaseUrl = "https://2e.aonprd.com/"
+    , showQueryControls = True
     , windowHeight = 0
     , windowWidth = 0
     }
@@ -521,7 +530,7 @@ type Msg
     | GotGlobalAggregationsResult (Result Http.Error GlobalAggregations)
     | GotGroupAggregationsResult (Result Http.Error SearchResult)
     | GotGroupSearchResult (Result Http.Error SearchResult)
-    | GotSearchResult (Result Http.Error SearchResult)
+    | GotSearchResult Bool (Result Http.Error SearchResult)
     | FilterRemoved String String
     | FilterToggled String String
     | FilterApCreaturesChanged Bool
@@ -578,6 +587,7 @@ type Msg
     | ShowFilters
     | ShowFilterBox String Bool
     | ShowLegacyFiltersChanged Bool
+    | ShowQueryControlsPressed
     | ShowResultIndexChanged Bool
     | ShowShortPfsChanged Bool
     | ShowSpoilersChanged Bool
@@ -1124,6 +1134,16 @@ filterFields =
       , useOperator = False
       , values = List.sortWith (Order.Extra.explicit scales)
       }
+    , { field = "item_bonus_action.keyword"
+      , key = "item-bonus-actions"
+      , useOperator = False
+      , values = List.sort
+      }
+    , { field = "item_bonus_consumable"
+      , key = "item-bonus-consumable"
+      , useOperator = False
+      , values = List.sort >> List.reverse
+      }
     , { field = "item_category.keyword"
       , key = "item-categories"
       , useOperator = False
@@ -1334,6 +1354,7 @@ numericFields =
     , "hp"
     , "level"
     , "rank"
+    , "item_bonus_value"
     , "intelligence"
     , "onset"
     , "passengers"
@@ -1942,6 +1963,9 @@ sortFields =
     , ( "hp_scale", "hp_scale_number", True )
     , ( "intelligence", "intelligence", False )
     , ( "intelligence_scale", "intelligence_scale_number", True )
+    , ( "item_bonus_action", "item_bonus_action.keyword", False )
+    , ( "item_bonus_consumable", "item_bonus_consumable", False )
+    , ( "item_bonus_value", "item_bonus_value", False )
     , ( "item_category", "item_category.keyword", False )
     , ( "item_subcategory", "item_subcategory.keyword", False )
     , ( "level", "level", True )
@@ -1975,6 +1999,7 @@ sortFields =
     , ( "secondary_check", "secondary_check.keyword", False )
     , ( "siege_weapon_category", "siege_weapon_category", False )
     , ( "size", "size_id", True )
+    , ( "skill", "skill.keyword", True )
     , ( "source", "source.keyword", False )
     , ( "source_category", "primary_source_category", False )
     , ( "source_group", "primary_source_group.keyword", False )
@@ -2132,6 +2157,10 @@ tableColumns =
     , "immunity"
     , "intelligence"
     , "intelligence_scale"
+    , "item_bonus_action"
+    , "item_bonus_consumable"
+    , "item_bonus_note"
+    , "item_bonus_value"
     , "item_category"
     , "item_subcategory"
     , "language"
@@ -2632,6 +2661,7 @@ toTitleCase str =
     str
         |> String.Extra.toTitleCase
         |> String.replace " And " " and "
+        |> String.replace " A " " a "
         |> String.replace " In " " in "
         |> String.replace " Of " " of "
         |> String.replace " On " " on "
@@ -2647,6 +2677,7 @@ toTitleCase str =
         |> replaceString "Ac" "AC"
         |> String.replace "Hp " "HP "
         |> replaceString "Hp" "HP"
+        |> String.replace "Gm " "GM "
 
 
 replaceString : String -> String -> String -> String
@@ -3529,6 +3560,7 @@ flagsDecoder =
     Field.attempt "pageId" Decode.string <| \pageId ->
     Field.attempt "randomSeed" Decode.int <| \randomSeed ->
     Field.attempt "removeFilters" (Decode.list Decode.string) <| \removeFilters ->
+    Field.attempt "showQueryControls" Decode.bool <| \showQueryControls ->
     Field.attempt "windowHeight" Decode.int <| \windowHeight ->
     Field.attempt "windowWidth" Decode.int <| \windowWidth ->
     Decode.succeed
@@ -3558,6 +3590,7 @@ flagsDecoder =
                     filters
                )
         , resultBaseUrl = Maybe.withDefault defaultFlags.resultBaseUrl resultBaseUrl
+        , showQueryControls = Maybe.withDefault defaultFlags.showQueryControls showQueryControls
         , windowHeight = Maybe.withDefault defaultFlags.windowHeight windowHeight
         , windowWidth = Maybe.withDefault defaultFlags.windowWidth windowWidth
         }
@@ -3662,6 +3695,18 @@ valuesAggregationsDecoder =
     Decode.dict
         (Decode.oneOf
             [ aggregationBucketDecoder Decode.string
+                |> Decode.map Just
+            , aggregationBucketDecoder
+                (Decode.int
+                    |> Decode.map
+                        (\v ->
+                            if v == 0 then
+                                "false"
+
+                            else
+                                "true"
+                        )
+                )
                 |> Decode.map Just
             , Decode.succeed Nothing
             ]
@@ -3846,6 +3891,10 @@ documentDecoder =
     Field.attempt "immunity_markdown" Decode.string <| \immunities ->
     Field.attempt "intelligence" Decode.int <| \intelligence ->
     Field.attempt "intelligence_scale_number" Decode.int <| \intelligenceScale ->
+    Field.attempt "item_bonus_action" Decode.string <| \itemBonusAction ->
+    Field.attempt "item_bonus_consumable" Decode.bool <| \itemBonusConsumable ->
+    Field.attempt "item_bonus_note" Decode.string <| \itemBonusNote ->
+    Field.attempt "item_bonus_value" Decode.int <| \itemBonusValue ->
     Field.attempt "item_category" Decode.string <| \itemCategory ->
     Field.attempt "item_child_id" stringListDecoder <| \itemChildrenIds ->
     Field.attempt "item_subcategory" Decode.string <| \itemSubcategory ->
@@ -4028,6 +4077,10 @@ documentDecoder =
         , immunities = immunities
         , intelligence = intelligence
         , intelligenceScale = intelligenceScale
+        , itemBonusAction = itemBonusAction
+        , itemBonusConsumable = itemBonusConsumable
+        , itemBonusNote = itemBonusNote
+        , itemBonusValue = itemBonusValue
         , itemCategory = itemCategory
         , itemHasChildren = not (List.isEmpty (Maybe.withDefault [] itemChildrenIds))
         , itemSubcategory = itemSubcategory

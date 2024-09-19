@@ -107,6 +107,7 @@ init flagsValue =
                 , removeFilters = flags.removeFilters
                 }
       , showLegacyFilters = True
+      , showQueryControls = flags.showQueryControls
       , url = url
       , viewModel =
             { browserDateFormat = flags.browserDateFormat
@@ -883,19 +884,30 @@ update msg model =
                         |> List.filter (\id -> not (Dict.member id model.documents))
                     )
 
-        GotSearchResult result ->
+        GotSearchResult clearResults result ->
             ( updateCurrentSearchModel
                 (\searchModel ->
                     { searchModel
                         | searchResults =
-                            List.append
-                                (List.filter Result.Extra.isOk searchModel.searchResults)
+                            if clearResults then
                                 [ result ]
+
+                            else
+                                List.append
+                                    (List.filter Result.Extra.isOk searchModel.searchResults)
+                                    [ result ]
+                        , searchGroupResults =
+                            if clearResults then
+                                []
+
+                            else
+                                searchModel.searchGroupResults
                         , searchResultGroupAggs =
                             result
                                 |> Result.toMaybe
                                 |> Maybe.andThen .groupAggs
                                 |> Maybe.Extra.orElse searchModel.searchResultGroupAggs
+                        , loadingNew = False
                         , tracker = Nothing
                     }
                 )
@@ -1522,6 +1534,11 @@ update msg model =
             , saveToLocalStorage
                 "show-legacy-filters"
                 (if value then "1" else "0")
+            )
+
+        ShowQueryControlsPressed ->
+            ( { model | showQueryControls = True }
+            , Cmd.none
             )
 
         ShowResultIndexChanged value ->
@@ -3195,11 +3212,16 @@ buildSearchBody model searchModel load =
             |> Just
         , Just ( "track_total_hits", Encode.bool True )
         , Just ( "_source" , Encode.bool False )
-        , searchModel.searchResults
-            |> List.Extra.last
-            |> Maybe.andThen (Result.toMaybe)
-            |> Maybe.map .searchAfter
-            |> Maybe.map (Tuple.pair "search_after")
+        , case load of
+            LoadMore _ ->
+                searchModel.searchResults
+                    |> List.Extra.last
+                    |> Maybe.andThen (Result.toMaybe)
+                    |> Maybe.map .searchAfter
+                    |> Maybe.map (Tuple.pair "search_after")
+
+            _ ->
+                Nothing
         , if load == LoadNew || load == LoadNewForce then
             Just (buildGroupAggs searchModel)
 
@@ -3866,31 +3888,23 @@ searchWithCurrentQuery load ( model, cmd ) =
                     Nothing ->
                         1
 
-            newModel : Model
-            newModel =
-                { model
-                    | searchModel =
-                        { searchModel
-                            | lastSearchHash = Just searchHash
-                            , searchResults =
-                                case load of
-                                    LoadMore _ ->
-                                        searchModel.searchResults
+            loadingNew : Bool
+            loadingNew =
+                case load of
+                    LoadMore _ ->
+                        False
 
-                                    _ ->
-                                        []
-                            , searchGroupResults =
-                                case load of
-                                    LoadMore _ ->
-                                        searchModel.searchGroupResults
-
-                                    _ ->
-                                        []
-                            , tracker = Just newTracker
-                        }
-                }
+                    _ ->
+                        True
         in
-        ( newModel
+        ( { model
+            | searchModel =
+                { searchModel
+                    | lastSearchHash = Just searchHash
+                    , loadingNew = loadingNew
+                    , tracker = Just newTracker
+                }
+          }
         , Cmd.batch
             [ cmd
 
@@ -3905,8 +3919,8 @@ searchWithCurrentQuery load ( model, cmd ) =
                 { method = "POST"
                 , url = model.elasticUrl ++ "/_search?stats=search"
                 , headers = []
-                , body = Http.jsonBody (buildSearchBody newModel newModel.searchModel load)
-                , expect = Http.expectJson GotSearchResult searchResultDecoder
+                , body = Http.jsonBody (buildSearchBody model searchModel load)
+                , expect = Http.expectJson (GotSearchResult loadingNew) searchResultDecoder
                 , timeout = Just 10000
                 , tracker = Just ("search-" ++ String.fromInt newTracker)
                 }
