@@ -1019,6 +1019,16 @@ filterFields =
             List.filter (\a -> List.member a (List.map Tuple.first allAlignments))
                 >> List.sort
       }
+    , { field = "archetype.keyword"
+      , key = "archetypes"
+      , useOperator = False
+      , values = List.sort
+      }
+    , { field = "archetype_category"
+      , key = "archetype-categories"
+      , useOperator = False
+      , values = List.sort
+      }
     , { field = "area_type"
       , key = "area-types"
       , useOperator = False
@@ -1034,6 +1044,11 @@ filterFields =
       , useOperator = False
       , values = List.sort
       }
+    , { field = "aspect"
+      , key = "aspects"
+      , useOperator = False
+      , values = List.sort
+      }
     , { field = "attack_bonus_scale"
       , key = "attack-bonus-scales"
       , useOperator = False
@@ -1043,6 +1058,11 @@ filterFields =
       , key = "attributes"
       , useOperator = False
       , values = List.sortWith (Order.Extra.explicit allAttributes)
+      }
+    , { field = "base_item.keyword"
+      , key = "base-items"
+      , useOperator = False
+      , values = List.sort
       }
     , { field = "charisma_scale"
       , key = "charisma-scales"
@@ -1096,6 +1116,16 @@ filterFields =
       }
     , { field = "domain"
       , key = "domains"
+      , useOperator = True
+      , values = List.sort
+      }
+    , { field = "domain_alternate"
+      , key = "domains-alternate"
+      , useOperator = True
+      , values = List.sort
+      }
+    , { field = "domain_primary"
+      , key = "domains-primary"
       , useOperator = True
       , values = List.sort
       }
@@ -1252,6 +1282,11 @@ filterFields =
       , useOperator = False
       , values = List.sortWith (Order.Extra.explicit scales)
       }
+    , { field = "spell_type"
+      , key = "spell-types"
+      , useOperator = True
+      , values = List.sort
+      }
     , { field = "strength_scale"
       , key = "strength-scales"
       , useOperator = False
@@ -1351,6 +1386,7 @@ numericFields =
     , "duration"
     , "fortitude_save"
     , "hardness"
+    , "heighten_rank"
     , "hp"
     , "level"
     , "rank"
