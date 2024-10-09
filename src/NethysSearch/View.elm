@@ -4166,7 +4166,7 @@ viewActiveSorts canClick searchModel =
             , HA.class "align-baseline"
             ]
             (List.concat
-                [ [ Html.text "Sort by:" ]
+                [ [ Html.text "Sorting by:" ]
                 , List.map
                     (\( field, dir ) ->
                         Html.button
