@@ -76,7 +76,7 @@ viewQuery model searchModel =
         , HA.class "align-stretch"
         , HA.class "limit-width"
         , HA.class "gap-medium"
-        , HA.class "fill-width-with-padding"
+        , HA.class "fill-width"
         ]
         [ Html.div
             [ HA.class "row"
@@ -4239,7 +4239,7 @@ viewSearchResults model searchModel =
         (List.append
             [ Html.div
                 [ HA.class "limit-width"
-                , HA.class "fill-width-with-padding"
+                , HA.class "fill-width"
                 , HA.class "fade-in"
                 ]
                 [ case total of
@@ -4296,7 +4296,7 @@ viewLoadMoreButtons pageSize remaining =
 viewSearchResultsShort : Model -> SearchModel -> Int -> Int -> List (Html Msg)
 viewSearchResultsShort model searchModel remaining resultCount =
     [ Html.Keyed.ol
-        [ HA.class "fill-width-with-padding"
+        [ HA.class "fill-width"
         , HA.class "limit-width"
         , HA.class "results-list"
         , if model.viewModel.showResultIndex then
@@ -4593,7 +4593,7 @@ viewMaskedDocument viewModel document =
 viewSearchResultsFull : Model -> SearchModel -> Int -> List (Html Msg)
 viewSearchResultsFull model searchModel remaining =
     [ Html.Keyed.ol
-        [ HA.class "fill-width-with-padding"
+        [ HA.class "fill-width"
         , HA.class "limit-width"
         , HA.class "results-list"
         , if model.viewModel.showResultIndex then
@@ -4649,7 +4649,7 @@ viewSearchResultsFull model searchModel remaining =
 viewSearchResultsTableContainer : Model -> SearchModel -> Int -> List (Html Msg)
 viewSearchResultsTableContainer model searchModel remaining =
     [ Html.div
-        [ HA.class "fill-width-with-padding"
+        [ HA.class "fill-width"
         , HA.style "transition" "max-width ease-in-out 0.2s"
         , if model.limitTableWidth then
             HA.class  "limit-width"
@@ -5870,7 +5870,7 @@ viewSearchResultsGrouped model searchModel remaining =
         [ HA.class "column"
         , HA.class "gap-large"
         , HA.class "limit-width"
-        , HA.class "fill-width-with-padding"
+        , HA.class "fill-width"
         , HAE.attributeIf searchModel.loadingNew (HA.class "dim")
         ]
         (List.map
@@ -8537,6 +8537,10 @@ css args =
         list-style-type: decimal;
     }
 
+    ol.results-list {
+        padding-inline-start: 0;
+    }
+
     #results:focus {
         outline: none;
     }
@@ -8672,10 +8676,8 @@ css args =
         animation: 0.3s fade-in;
     }
 
-    .fill-width-with-padding {
+    .fill-width {
         box-sizing: border-box;
-        padding-left: 8px;
-        padding-right: 8px;
         width: 100%;
     }
 

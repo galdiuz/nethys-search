@@ -6,6 +6,11 @@
     <script src="app.js"></script>
     <link rel="preload" as="font" href="Pathfinder-Icons.ttf" type="font/ttf" crossorigin="anonymous">
     <link rel="search" type="application/opensearchdescription+xml" title="Nethys Search" href="opensearch.xml">
+    <style>
+        body {
+            padding: 8px;
+        }
+    </style>
 </head>
 <body>
     <script>
@@ -22,18 +27,20 @@
                 localStorage: { ...localStorage },
                 pageId: "search",
                 randomSeed: Math.floor(Math.random() * 2147483647),
-                showHeader: true,
+                showHeader: false,
                 windowWidth: window.innerWidth,
                 windowHeight: window.innerHeight,
             }
         });
 
         app.ports.document_focusElement.subscribe(id => {
-            let element = document.getElementById(id);
+            window.requestAnimationFrame(() => {
+                let element = document.getElementById(id);
 
-            if (element) {
-                element.focus();
-            }
+                if (element) {
+                    element.focus();
+                }
+            });
         });
 
         app.ports.document_scrollElementIntoView.subscribe(id => {
