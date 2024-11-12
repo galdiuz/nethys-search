@@ -5496,6 +5496,17 @@ searchResultTableCellToString viewModel document column =
                 |> Maybe.map String.fromInt
                 |> maybeAsString
 
+        [ "mount" ] ->
+            case document.mount of
+                Just True ->
+                    "True"
+
+                Just False ->
+                    "False"
+
+                Nothing ->
+                    ""
+
         [ "mystery" ] ->
             maybeAsStringWithoutMarkdown document.mysteries
 

@@ -283,6 +283,7 @@ type alias Document =
     , lessons : Maybe String
     , level : Maybe Int
     , markdown : Markdown
+    , mount : Maybe Bool
     , mysteries : Maybe String
     , onset : Maybe String
     , pantheons : List String
@@ -892,6 +893,7 @@ fields =
     , ( "lesson_type", "Witch lesson type" )
     , ( "l", "[n] alias for 'level'" )
     , ( "level", "[n] Level" )
+    , ( "mount", "If animal companion has mount special ability (true / false)" )
     , ( "mystery", "Oracle mysteries associated with a spell" )
     , ( "name", "Name" )
     , ( "npc", "Is creature an NPC? (true / false)" )
@@ -1181,6 +1183,11 @@ filterFields =
       }
     , { field = "item_subcategory.keyword"
       , key = "item-subcategories"
+      , useOperator = False
+      , values = List.sort
+      }
+    , { field = "mount"
+      , key = "mount"
       , useOperator = False
       , values = List.sort
       }
@@ -2005,6 +2012,7 @@ sortFields =
     , ( "item_category", "item_category.keyword", False )
     , ( "item_subcategory", "item_subcategory.keyword", False )
     , ( "level", "level", True )
+    , ( "mount", "mount", False )
     , ( "mystery", "mystery", False )
     , ( "name", "name.keyword", False )
     , ( "onset", "onset", True )
@@ -2202,6 +2210,7 @@ tableColumns =
     , "language"
     , "lesson"
     , "level"
+    , "mount"
     , "mystery"
     , "onset"
     , "passengers"
@@ -3940,6 +3949,7 @@ documentDecoder =
     Field.attempt "lesson_type" Decode.string <| \lessonType ->
     Field.attempt "level" Decode.int <| \level ->
     Field.attempt "markdown" Decode.string <| \markdown ->
+    Field.attempt "mount" Decode.bool <| \mount ->
     Field.attempt "mystery_markdown" Decode.string <| \mysteries ->
     Field.attempt "onset_raw" Decode.string <| \onset ->
     Field.attempt "pantheon" stringListDecoder <| \pantheons ->
@@ -4126,6 +4136,7 @@ documentDecoder =
         , lessons = lessons
         , level = level
         , markdown = NotParsed (Maybe.withDefault "" markdown)
+        , mount = mount
         , mysteries = mysteries
         , onset = onset
         , pantheons = Maybe.withDefault [] pantheons
