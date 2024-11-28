@@ -466,17 +466,17 @@ type alias DamageTypeValues =
     , good : Maybe Int
     , lawful : Maybe Int
     , mental : Maybe Int
-    , negative : Maybe Int
     , orichalcum : Maybe Int
     , physical : Maybe Int
     , piercing : Maybe Int
     , poison : Maybe Int
-    , positive : Maybe Int
     , precision : Maybe Int
     , silver : Maybe Int
     , slashing : Maybe Int
     , sonic : Maybe Int
     , splash : Maybe Int
+    , vitality : Maybe Int
+    , void : Maybe Int
     }
 
 
@@ -777,6 +777,8 @@ allDamageTypes =
     , "spirit"
     , "splash"
     , "unholy"
+    , "vitality"
+    , "void"
     ]
 
 
@@ -3145,7 +3147,7 @@ getDamageTypeValue type_ values =
             values.mental
 
         "negative" ->
-            values.negative
+            values.void
 
         "orichalcum" ->
             values.orichalcum
@@ -3160,7 +3162,7 @@ getDamageTypeValue type_ values =
             values.poison
 
         "positive" ->
-            values.positive
+            values.vitality
 
         "precision" ->
             values.precision
@@ -3176,6 +3178,12 @@ getDamageTypeValue type_ values =
 
         "splash" ->
             values.splash
+
+        "vitality" ->
+            values.vitality
+
+        "void" ->
+            values.void
 
         _ ->
             Nothing
@@ -4249,17 +4257,17 @@ damageTypeValuesDecoder =
     Field.attempt "good" Decode.int <| \good ->
     Field.attempt "lawful" Decode.int <| \lawful ->
     Field.attempt "mental" Decode.int <| \mental ->
-    Field.attempt "negative" Decode.int <| \negative ->
     Field.attempt "orichalcum" Decode.int <| \orichalcum ->
     Field.attempt "physical" Decode.int <| \physical ->
     Field.attempt "piercing" Decode.int <| \piercing ->
     Field.attempt "poison" Decode.int <| \poison ->
-    Field.attempt "positive" Decode.int <| \positive ->
     Field.attempt "precision" Decode.int <| \precision ->
     Field.attempt "silver" Decode.int <| \silver ->
     Field.attempt "slashing" Decode.int <| \slashing ->
     Field.attempt "sonic" Decode.int <| \sonic ->
     Field.attempt "splash" Decode.int <| \splash ->
+    Field.attempt "vitality" Decode.int <| \vitality ->
+    Field.attempt "void" Decode.int <| \void ->
     Decode.succeed
         { acid = acid
         , all = all
@@ -4276,17 +4284,17 @@ damageTypeValuesDecoder =
         , good = good
         , lawful = lawful
         , mental = mental
-        , negative = negative
         , orichalcum = orichalcum
         , physical = physical
         , piercing = piercing
         , poison = poison
-        , positive = positive
         , precision = precision
         , silver = silver
         , slashing = slashing
         , sonic = sonic
         , splash = splash
+        , vitality = vitality
+        , void = void
         }
 
 
