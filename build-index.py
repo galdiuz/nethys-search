@@ -125,6 +125,7 @@ def fetch_docs(url):
                     'lesson_type',
                     'level',
                     'markdown',
+                    'mount',
                     'mystery_markdown',
                     'onset_raw',
                     'passengers_raw',
