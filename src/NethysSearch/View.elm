@@ -4904,6 +4904,9 @@ viewSearchResultTableCell viewModel document column =
             [ "advanced_domain_spell" ] ->
                 maybeAsMarkdown document.advancedDomainSpell
 
+            [ "anathema" ] ->
+                maybeAsMarkdown document.anathemas
+
             [ "apocryphal_spell" ] ->
                 maybeAsMarkdown document.apocryphalSpell
 
@@ -4969,6 +4972,9 @@ viewSearchResultTableCell viewModel document column =
 
             [ "domain_spell" ] ->
                 maybeAsMarkdown document.domainSpell
+
+            [ "edict" ] ->
+                maybeAsMarkdown document.edicts
 
             [ "favored_weapon" ] ->
                 maybeAsMarkdown document.favoredWeapons
@@ -5205,7 +5211,7 @@ searchResultTableCellToString viewModel document column =
             maybeAsString document.alignment
 
         [ "anathema" ] ->
-            maybeAsString document.anathemas
+            maybeAsStringWithoutMarkdown document.anathemas
 
         [ "apocryphal_spell" ] ->
             maybeAsStringWithoutMarkdown document.apocryphalSpell
@@ -5375,7 +5381,7 @@ searchResultTableCellToString viewModel document column =
             maybeAsString document.duration
 
         [ "edict" ] ->
-            maybeAsString document.edicts
+            maybeAsStringWithoutMarkdown document.edicts
 
         [ "element" ] ->
             document.elements
