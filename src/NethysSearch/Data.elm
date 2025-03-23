@@ -311,6 +311,7 @@ type alias Document =
     , reflexScale : Maybe Int
     , region : Maybe String
     , releaseDate : Maybe String
+    , religiousSymbol : Maybe String
     , reload : Maybe String
     , remasterIds : List String
     , requiredAbilities : Maybe String
@@ -318,6 +319,8 @@ type alias Document =
     , resistanceValues : Maybe DamageTypeValues
     , resistances : Maybe String
     , sanctification : Maybe String
+    , sacredAnimal : Maybe String
+    , sacredColors : List String
     , savingThrow : Maybe String
     , school : Maybe String
     , searchMarkdown : Markdown
@@ -1834,7 +1837,7 @@ predefinedColumnConfigurations =
         ]
       , label = "Creatures (extended)"
       }
-    , { columns = [ "pfs", "area_of_concern", "edict", "anathema", "domain_primary", "domain_alternate", "divine_font", "sanctification", "attribute", "skill", "favored_weapon", "deity_category", "pantheon", "source" ]
+    , { columns = [ "pfs", "area_of_concern", "edict", "anathema", "domain_primary", "domain_alternate", "divine_font", "sanctification", "attribute", "skill", "favored_weapon", "deity_category", "pantheon", "religious_symbol", "sacred_animal", "sacred_color", "source" ]
       , label = "Deities"
       }
     , { columns = [ "level", "saving_throw", "onset", "stage", "trait", "rarity" ]
@@ -2238,8 +2241,11 @@ tableColumns =
     , "reflex_scale"
     , "region"
     , "release_date"
+    , "religious_symbol"
     , "requirement"
     , "resistance"
+    , "sacred_animal"
+    , "sacred_color"
     , "sanctification"
     , "saving_throw"
     , "school"
@@ -3990,6 +3996,7 @@ documentDecoder =
     Field.attempt "reflex_save_scale_number" Decode.int <| \reflexScale ->
     Field.attempt "region" Decode.string <| \region->
     Field.attempt "release_date" Decode.string <| \releaseDate ->
+    Field.attempt "religious_symbol" Decode.string <| \religiousSymbol ->
     Field.attempt "reload_raw" Decode.string <| \reload ->
     Field.attempt "remaster_id" stringListDecoder <| \remasterIds ->
     Field.attempt "required_abilities" Decode.string <| \requiredAbilities ->
@@ -3997,6 +4004,8 @@ documentDecoder =
     Field.attempt "resistance" damageTypeValuesDecoder <| \resistanceValues ->
     Field.attempt "resistance_markdown" Decode.string <| \resistances ->
     Field.attempt "sanctification_raw" Decode.string <| \sanctification ->
+    Field.attempt "sacred_animal" Decode.string <| \sacredAnimal ->
+    Field.attempt "sacred_color" stringListDecoder <| \sacredColors ->
     Field.attempt "saving_throw_markdown" Decode.string <| \savingThrow ->
     Field.attempt "school" Decode.string <| \school ->
     Field.attempt "search_markdown" Decode.string <| \searchMarkdown ->
@@ -4177,12 +4186,15 @@ documentDecoder =
         , reflexScale = reflexScale
         , region = region
         , releaseDate = releaseDate
+        , religiousSymbol = religiousSymbol
         , reload = reload
         , remasterIds = Maybe.withDefault [] remasterIds
         , requiredAbilities = requiredAbilities
         , requirements = requirements
         , resistanceValues = resistanceValues
         , resistances = resistances
+        , sacredAnimal = sacredAnimal
+        , sacredColors = Maybe.withDefault [] sacredColors
         , sanctification = sanctification
         , savingThrow = savingThrow
         , school = school

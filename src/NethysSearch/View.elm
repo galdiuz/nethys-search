@@ -5600,6 +5600,9 @@ searchResultTableCellToString viewModel document column =
                 |> Maybe.map (formatDate viewModel)
                 |> maybeAsString
 
+        [ "religious_symbol" ] ->
+            maybeAsString document.religiousSymbol
+
         [ "reload" ] ->
             maybeAsString document.reload
 
@@ -5614,6 +5617,14 @@ searchResultTableCellToString viewModel document column =
                 |> Maybe.andThen (getDamageTypeValue type_)
                 |> Maybe.map String.fromInt
                 |> maybeAsString
+
+        [ "sacred_animal" ] ->
+            maybeAsStringWithoutMarkdown document.sacredAnimal
+
+        [ "sacred_color" ] ->
+            document.sacredColors
+                |> String.join ", "
+                |> toTitleCase
 
         [ "sanctification" ] ->
             maybeAsString document.sanctification
