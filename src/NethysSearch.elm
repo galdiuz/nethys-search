@@ -2663,6 +2663,9 @@ urlToDocumentId url =
             else
                 withId "animal-companion"
 
+        "/apparitions.aspx" ->
+            withId "apparition"
+
         "/arcaneschools.aspx" ->
             withId "arcane-school"
 
@@ -2750,6 +2753,9 @@ urlToDocumentId url =
         "/elements.aspx" ->
             withId "element"
 
+        "/epithets.aspx" ->
+            withId "epithet"
+
         "/equipment.aspx" ->
             withId "equipment"
 
@@ -2777,6 +2783,9 @@ urlToDocumentId url =
 
         "/hybridstudies.aspx" ->
             withId "hybrid-study"
+
+        "/ikons.aspx" ->
+            withId "ikon"
 
         "/implements.aspx" ->
             withId "implement"
@@ -2811,6 +2820,15 @@ urlToDocumentId url =
         "/mysteries.aspx" ->
             withId "mystery"
 
+        "/mythiccallings.aspx" ->
+            withId "mythic-calling"
+
+        "/mythicrituals.aspx" ->
+            withId "ritual"
+
+        "/mythicspells.aspx" ->
+            withId "spell"
+
         "/npcthemetemplates.aspx" ->
             withId "npc-theme-template"
 
@@ -2819,6 +2837,9 @@ urlToDocumentId url =
 
         "/planes.aspx" ->
             withId "plane"
+
+        "/practices.aspx" ->
+            withId "practice"
 
         "/rackets.aspx" ->
             withId "racket"
