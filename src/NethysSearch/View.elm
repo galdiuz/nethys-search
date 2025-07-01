@@ -8776,6 +8776,7 @@ css args =
         font-variant-caps: normal;
         font-weight: normal;
         vertical-align: text-bottom;
+        white-space: nowrap;
     }
 
     .input-button {
