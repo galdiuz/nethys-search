@@ -201,7 +201,7 @@ type alias Document =
     , alignment : Maybe String
     , anathemas : Maybe String
     , apocryphalSpell : Maybe String
-    , archetype : Maybe String
+    , archetypes : List String
     , area : Maybe String
     , areasOfConcern : Maybe String
     , areaTypes : List String
@@ -2728,6 +2728,7 @@ toTitleCase str =
         |> String.replace " The " " the "
         |> String.replace ": the " ": The "
         |> String.replace ", the " ", The "
+        |> String.replace "Npc" "NPC"
         |> String.replace "Pfs" "PFS"
         |> String.replace "Gm's " "GM's "
         |> String.replace " Dc" " DC"
@@ -3886,7 +3887,7 @@ documentDecoder =
     Field.attempt "alignment" Decode.string <| \alignment ->
     Field.attempt "anathema" Decode.string <| \anathemas ->
     Field.attempt "apocryphal_spell_markdown" Decode.string <| \apocryphalSpell ->
-    Field.attempt "archetype" Decode.string <| \archetype ->
+    Field.attempt "archetype" stringListDecoder <| \archetypes ->
     Field.attempt "area_raw" Decode.string <| \area ->
     Field.attempt "area_of_concern_raw" Decode.string <| \areasOfConcern ->
     Field.attempt "area_type" stringListDecoder <| \areaTypes ->
@@ -4076,7 +4077,7 @@ documentDecoder =
         , alignment = alignment
         , anathemas = anathemas
         , apocryphalSpell = apocryphalSpell
-        , archetype = archetype
+        , archetypes = Maybe.withDefault [] archetypes
         , area = area
         , areasOfConcern = areasOfConcern
         , areaTypes = Maybe.withDefault [] areaTypes

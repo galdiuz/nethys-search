@@ -5217,7 +5217,8 @@ searchResultTableCellToString viewModel document column =
             maybeAsStringWithoutMarkdown document.apocryphalSpell
 
         [ "archetype" ] ->
-            maybeAsString document.archetype
+            document.archetypes
+                |> String.join ", "
 
         [ "area" ] ->
             maybeAsString document.area
