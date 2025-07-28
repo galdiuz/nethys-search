@@ -569,6 +569,7 @@ allFilters model =
       , visibleIf = getAggregationValues "item_subcategory" >> List.any ((==) "base weapons")
       }
     ]
+        |> List.filter (\filterBox -> filterBox.id /= "legacy" || not model.starfinder)
 
 
 allOptions : List FilterBox
@@ -2396,7 +2397,7 @@ viewFilterArmor model searchModel =
             , { field = "price"
               , hint = Nothing
               , step = "1"
-              , suffix = Just "cp"
+              , suffix = if model.starfinder then Nothing else Just "cp"
               }
             ]
         )
@@ -2752,7 +2753,7 @@ viewFilterItems model searchModel =
             , { field = "price"
               , hint = Nothing
               , step = "1"
-              , suffix = Just "cp"
+              , suffix = if model.starfinder then Nothing else Just "cp"
               }
             , { field = "bulk"
               , hint = Just "(L bulk is 0.1)"
@@ -3489,7 +3490,7 @@ viewFilterWeapons model searchModel =
             , { field = "price"
               , hint = Nothing
               , step = "1"
-              , suffix = Just "cp"
+              , suffix = if model.starfinder then Nothing else Just "cp"
               }
             , { field = "range"
               , hint = Nothing

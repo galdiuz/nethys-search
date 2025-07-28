@@ -54,6 +54,7 @@ type alias Model =
     , searchModel : SearchModel
     , showQueryControls : Bool
     , showLegacyFilters : Bool
+    , starfinder : Bool
     , url : Url
     , viewModel : ViewModel
     , windowSize : Size
@@ -411,6 +412,7 @@ type alias Flags =
     , removeFilters : List String
     , showQueryControls : Bool
     , resultBaseUrl : String
+    , starfinder : Bool
     , windowHeight : Int
     , windowWidth : Int
     }
@@ -434,6 +436,7 @@ defaultFlags =
     , randomSeed = 1
     , removeFilters = []
     , resultBaseUrl = "https://2e.aonprd.com/"
+    , starfinder = False
     , showQueryControls = True
     , windowHeight = 0
     , windowWidth = 0
@@ -2730,6 +2733,7 @@ toTitleCase str =
         |> String.replace ", the " ", The "
         |> String.replace "Npc" "NPC"
         |> String.replace "Pfs" "PFS"
+        |> String.replace "Sfs" "SFS"
         |> String.replace "Gm's " "GM's "
         |> String.replace " Dc" " DC"
         |> String.replace "Ac " "AC "
@@ -3625,6 +3629,7 @@ flagsDecoder =
     Field.attempt "pageId" Decode.string <| \pageId ->
     Field.attempt "randomSeed" Decode.int <| \randomSeed ->
     Field.attempt "removeFilters" (Decode.list Decode.string) <| \removeFilters ->
+    Field.attempt "starfinder" Decode.bool <| \starfinder ->
     Field.attempt "showQueryControls" Decode.bool <| \showQueryControls ->
     Field.attempt "windowHeight" Decode.int <| \windowHeight ->
     Field.attempt "windowWidth" Decode.int <| \windowWidth ->
@@ -3655,6 +3660,7 @@ flagsDecoder =
                     filters
                )
         , resultBaseUrl = Maybe.withDefault defaultFlags.resultBaseUrl resultBaseUrl
+        , starfinder = Maybe.withDefault defaultFlags.starfinder starfinder
         , showQueryControls = Maybe.withDefault defaultFlags.showQueryControls showQueryControls
         , windowHeight = Maybe.withDefault defaultFlags.windowHeight windowHeight
         , windowWidth = Maybe.withDefault defaultFlags.windowWidth windowWidth

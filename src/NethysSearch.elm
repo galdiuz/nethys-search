@@ -108,6 +108,7 @@ init flagsValue =
                 }
       , showLegacyFilters = True
       , showQueryControls = flags.showQueryControls
+      , starfinder = flags.starfinder
       , url = url
       , viewModel =
             { browserDateFormat = flags.browserDateFormat
@@ -807,6 +808,13 @@ update msg model =
             ( { model
                 | documentIndex = Result.withDefault Dict.empty result
                 , documentsToFetch = Set.empty
+                , dataUrl =
+                    case result of
+                        Err (Http.BadStatus 404) ->
+                            ""
+
+                        _ ->
+                            model.dataUrl
               }
             , Cmd.none
             )
@@ -841,9 +849,16 @@ update msg model =
                 |> parseAndFetchDocuments alwaysParseMarkdown legacyMode ids
 
         GotGlobalAggregationsResult result ->
-            ( { model | globalAggregations = Just result }
-            , Cmd.none
-            )
+            if result == Err (Http.BadStatus 404) && model.dataUrl /= "" then
+                ( { model | dataUrl = "" }
+                , Cmd.none
+                )
+                    |> addCmd getGlobalAggregations
+
+            else
+                ( { model | globalAggregations = Just result }
+                , Cmd.none
+                )
 
         GotGroupAggregationsResult result ->
             ( updateCurrentSearchModel
@@ -1124,7 +1139,7 @@ update msg model =
 
                 documentId : Maybe String
                 documentId =
-                    Maybe.andThen urlToDocumentId parsedUrl
+                    Maybe.andThen (urlToDocumentId model.starfinder) parsedUrl
 
                 noRedirect : Bool
                 noRedirect =
@@ -2625,8 +2640,17 @@ parseUrl url =
             }
 
 
-urlToDocumentId : Url -> Maybe String
-urlToDocumentId url =
+urlToDocumentId : Bool -> Url -> Maybe String
+urlToDocumentId starfinder url =
+    if starfinder then
+        urlToDocumentIdStarfinder url
+
+    else
+        urlToDocumentIdPathfinder url
+
+
+urlToDocumentIdPathfinder : Url -> Maybe String
+urlToDocumentIdPathfinder url =
     let
         queryParams : Dict String (List String)
         queryParams =
@@ -2922,6 +2946,15 @@ urlToDocumentId url =
 
         _ ->
             Nothing
+
+
+urlToDocumentIdStarfinder : Url -> Maybe String
+urlToDocumentIdStarfinder url =
+    url.path
+        |> String.split "/"
+        |> List.filter (not << String.isEmpty)
+        |> String.join "--"
+        |> Just
 
 
 saveToLocalStorage : String -> String -> Cmd msg
@@ -4220,7 +4253,10 @@ getDocumentIndex model =
 
 getGlobalAggregations : Model -> Cmd Msg
 getGlobalAggregations model =
-    if model.index /= "" && model.dataUrl /= "" then
+    if model.index /= ""
+        && model.dataUrl /= ""
+        && model.globalAggregations /= Just (Err (Http.BadStatus 404))
+    then
         Http.get
             { expect = Http.expectJson GotGlobalAggregationsResult globalAggregationsDecoder
             , url = model.dataUrl ++ "/" ++ model.index ++ "-aggs.json"
