@@ -130,6 +130,7 @@ init flagsValue =
             , showResultSpoilers = True
             , showResultSummary = True
             , showResultTraits = True
+            , starfinder = flags.starfinder
             }
       , windowSize = { width = flags.windowWidth, height = flags.windowHeight }
       }

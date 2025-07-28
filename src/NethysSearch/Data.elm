@@ -76,6 +76,7 @@ type alias ViewModel =
     , showResultSpoilers : Bool
     , showResultSummary : Bool
     , showResultTraits : Bool
+    , starfinder : Bool
     }
 
 

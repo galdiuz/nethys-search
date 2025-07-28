@@ -1105,7 +1105,7 @@ viewDefaultParams model searchModel =
         [ Html.h3
             []
             [ Html.text ("Defaults for " ++ model.pageId) ]
-        , viewActiveFilters False pageDefaultSearchModel
+        , viewActiveFilters model pageDefaultSearchModel False
         , viewActiveSorts False pageDefaultSearchModel
         , Html.div
             [ HA.class "row"
@@ -2315,6 +2315,7 @@ viewWhatsNew model _ =
 viewFilterActions : Model -> SearchModel -> List (Html Msg)
 viewFilterActions model searchModel =
     [ viewFilterList
+        model
         searchModel
         { label = ""
         , filterKey = "actions"
@@ -2330,6 +2331,7 @@ viewFilterActions model searchModel =
 viewFilterAlignments : Model -> SearchModel -> List (Html Msg)
 viewFilterAlignments model searchModel =
     [ viewFilterList
+        model
         searchModel
         { label = ""
         , filterKey = "alignments"
@@ -2346,6 +2348,7 @@ viewFilterAlignments model searchModel =
 viewFilterArmor : Model -> SearchModel -> List (Html Msg)
 viewFilterArmor model searchModel =
     [ viewFilterList
+        model
         searchModel
         { label = "Armor categories"
         , filterKey = "armor-categories"
@@ -2356,6 +2359,7 @@ viewFilterArmor model searchModel =
                 |> List.sortWith (Order.Extra.explicit armorCategories)
         }
     , viewFilterList
+        model
         searchModel
         { label = "Armor groups"
         , filterKey = "armor-groups"
@@ -2407,6 +2411,7 @@ viewFilterArmor model searchModel =
 viewFilterAttributes : Model -> SearchModel -> List (Html Msg)
 viewFilterAttributes model searchModel =
     [ viewFilterList
+        model
         searchModel
         { label = ""
         , filterKey = "attributes"
@@ -2463,6 +2468,7 @@ viewFilterCreatures model searchModel =
                     (List.map
                         (\( filterType, label, values ) ->
                             viewFilterList
+                                model
                                 searchModel
                                 { label = label
                                 , filterKey = filterType
@@ -2558,6 +2564,7 @@ viewFilterCreatures model searchModel =
     , details
         "Creature families"
         [ viewFilterList
+            model
             searchModel
             { label = ""
             , filterKey = "creature-families"
@@ -2602,6 +2609,7 @@ viewFilterCreatures model searchModel =
     , details
         "Strongest save"
         [ viewFilterList
+            model
             searchModel
             { label = ""
             , filterKey = "strongest-saves"
@@ -2617,6 +2625,7 @@ viewFilterCreatures model searchModel =
     , details
         "Weakest save"
         [ viewFilterList
+            model
             searchModel
             { label = ""
             , filterKey = "weakest-saves"
@@ -2632,6 +2641,7 @@ viewFilterCreatures model searchModel =
     , details
         "Spells"
         [ viewFilterList
+            model
             searchModel
             { label = ""
             , filterKey = "spells"
@@ -2646,6 +2656,7 @@ viewFilterCreatures model searchModel =
     , details
         "Spellcasting traditions"
         [ viewFilterList
+            model
             searchModel
             { label = ""
             , filterKey = "traditions"
@@ -2662,6 +2673,7 @@ viewFilterCreatures model searchModel =
 viewFilterDeities : Model -> SearchModel -> List (Html Msg)
 viewFilterDeities model searchModel =
     [  viewFilterList
+        model
         searchModel
         { label = "Deity categories"
         , filterKey = "deity-categories"
@@ -2673,6 +2685,7 @@ viewFilterDeities model searchModel =
         }
 
     , viewFilterList
+        model
         searchModel
         { label = "Divine font"
         , filterKey = "divine-fonts"
@@ -2684,6 +2697,7 @@ viewFilterDeities model searchModel =
         }
 
     , viewFilterList
+        model
         searchModel
         { label = "Sanctification"
         , filterKey = "sanctifications"
@@ -2695,6 +2709,7 @@ viewFilterDeities model searchModel =
         }
 
     , viewFilterList
+        model
         searchModel
         { label = "Favored weapons"
         , filterKey = "favored-weapons"
@@ -2706,6 +2721,7 @@ viewFilterDeities model searchModel =
         }
 
     , viewFilterList
+        model
         searchModel
         { label = "Pantheons"
         , filterKey = "pantheons"
@@ -2721,6 +2737,7 @@ viewFilterDeities model searchModel =
 viewFilterDomains : Model -> SearchModel -> List (Html Msg)
 viewFilterDomains model searchModel =
     [ viewFilterList
+        model
         searchModel
         { label = ""
         , filterKey = "domains"
@@ -2769,6 +2786,7 @@ viewFilterItems model searchModel =
         )
 
     , viewFilterList
+        model
         searchModel
         { label = "Item categories"
         , filterKey = "item-categories"
@@ -2789,6 +2807,7 @@ viewFilterItems model searchModel =
         , viewFilterButtons searchModel "item-subcategories" False
         , viewFilterSearch searchModel "item-subcategories"
         , viewFilterScrollbox
+            model
             searchModel
             "item-subcategories"
             (case searchModel.aggregations of
@@ -2824,6 +2843,7 @@ viewFilterItems model searchModel =
         ]
 
     , viewFilterList
+        model
         searchModel
         { label = "Item Bonus Actions"
         , filterKey = "item-bonus-actions"
@@ -2835,6 +2855,7 @@ viewFilterItems model searchModel =
         }
 
     , viewFilterList
+        model
         searchModel
         { label = "Item Bonus Consumable"
         , filterKey = "item-bonus-consumable"
@@ -2922,6 +2943,7 @@ viewFilterLevel model searchModel =
 viewFilterPfs : Model -> SearchModel -> List (Html Msg)
 viewFilterPfs model searchModel =
     [ viewFilterList
+        model
         searchModel
         { label = ""
         , filterKey = "pfs"
@@ -2937,6 +2959,7 @@ viewFilterPfs model searchModel =
 viewFilterRarities : Model -> SearchModel -> List (Html Msg)
 viewFilterRarities model searchModel =
     [ viewFilterList
+        model
         searchModel
         { label = ""
         , filterKey = "rarities"
@@ -2952,6 +2975,7 @@ viewFilterRarities model searchModel =
 viewFilterRegions : Model -> SearchModel -> List (Html Msg)
 viewFilterRegions model searchModel =
     [ viewFilterList
+        model
         searchModel
         { label = ""
         , filterKey = "regions"
@@ -2967,6 +2991,7 @@ viewFilterRegions model searchModel =
 viewFilterSizes : Model -> SearchModel -> List (Html Msg)
 viewFilterSizes model searchModel =
     [ viewFilterList
+        model
         searchModel
         { label = ""
         , filterKey = "sizes"
@@ -2982,6 +3007,7 @@ viewFilterSizes model searchModel =
 viewFilterSkills : Model -> SearchModel -> List (Html Msg)
 viewFilterSkills model searchModel =
     [ viewFilterList
+        model
         searchModel
         { label = ""
         , filterKey = "skills"
@@ -2993,6 +3019,7 @@ viewFilterSkills model searchModel =
                 |> List.sort
         }
     , viewFilterList
+        model
         searchModel
         { label = "Lore skills"
         , filterKey = "lore-skills"
@@ -3077,6 +3104,7 @@ viewFilterSources model searchModel =
         ]
 
     , viewFilterList
+        model
         searchModel
         { label = "Source categories"
         , filterKey = "source-categories"
@@ -3097,6 +3125,7 @@ viewFilterSources model searchModel =
         , viewFilterButtons searchModel "sources" False
         , viewFilterSearch searchModel "sources"
         , viewFilterScrollbox
+            model
             searchModel
             "sources"
             (case ( model.globalAggregations, searchModel.aggregations ) of
@@ -3192,6 +3221,7 @@ viewFilterSources model searchModel =
 viewFilterSpells : Model -> SearchModel -> List (Html Msg)
 viewFilterSpells model searchModel =
     [ viewFilterList
+        model
         searchModel
         { label = "Traditions / Spell lists"
         , filterKey = "traditions"
@@ -3204,6 +3234,7 @@ viewFilterSpells model searchModel =
 
     , if model.showLegacyFilters then
         viewFilterList
+            model
             searchModel
             { label = "Magic schools"
             , filterKey = "schools"
@@ -3219,6 +3250,7 @@ viewFilterSpells model searchModel =
 
     , if model.showLegacyFilters then
         viewFilterList
+            model
             searchModel
             { label = "Casting components"
             , filterKey = "components"
@@ -3234,6 +3266,7 @@ viewFilterSpells model searchModel =
             Html.text ""
 
     , viewFilterList
+        model
         searchModel
         { label = "Defenses / Saving throws"
         , filterKey = "saving-throws"
@@ -3247,6 +3280,7 @@ viewFilterSpells model searchModel =
         }
 
     , viewFilterList
+        model
         searchModel
         { label = "Area types"
         , filterKey = "area-types"
@@ -3352,7 +3386,7 @@ viewFilterTraits model searchModel =
                                         ]
                                         [ Html.text "Reset group selection" ]
                                     ]
-                                , viewFilterScrollbox searchModel "traits" (List.sort traits)
+                                , viewFilterScrollbox model searchModel "traits" (List.sort traits)
                                 ]
                         )
                         (globalAggregations.traits
@@ -3379,6 +3413,7 @@ viewFilterTraits model searchModel =
 
       else
         viewFilterScrollbox
+            model
             searchModel
             "traits"
             (getAggregationValues "trait" searchModel
@@ -3398,6 +3433,7 @@ viewFilterTraits model searchModel =
 viewFilterTypes : Model -> SearchModel -> List (Html Msg)
 viewFilterTypes model searchModel =
     [ viewFilterList
+        model
         searchModel
         { label = ""
         , filterKey = "types"
@@ -3413,6 +3449,7 @@ viewFilterTypes model searchModel =
 viewFilterWeapons : Model -> SearchModel -> List (Html Msg)
 viewFilterWeapons model searchModel =
     [ viewFilterList
+        model
         searchModel
         { label = "Weapon categories"
         , filterKey = "weapon-categories"
@@ -3423,6 +3460,7 @@ viewFilterWeapons model searchModel =
                 |> List.sortWith (Order.Extra.explicit Data.weaponCategories)
         }
     , viewFilterList
+        model
         searchModel
         { label = "Weapon groups"
         , filterKey = "weapon-groups"
@@ -3433,6 +3471,7 @@ viewFilterWeapons model searchModel =
                 |> List.sort
         }
     , viewFilterList
+        model
         searchModel
         { label = "Weapon types"
         , filterKey = "weapon-types"
@@ -3443,6 +3482,7 @@ viewFilterWeapons model searchModel =
                 |> List.sort
         }
     , viewFilterList
+        model
         searchModel
         { label = "Damage types"
         , filterKey = "damage-types"
@@ -3453,6 +3493,7 @@ viewFilterWeapons model searchModel =
                 |> List.sort
         }
     , viewFilterList
+        model
         searchModel
         { label = "Reload"
         , filterKey = "reloads"
@@ -3463,6 +3504,7 @@ viewFilterWeapons model searchModel =
                 |> List.sort
         }
     , viewFilterList
+        model
         searchModel
         { label = "Hands"
         , filterKey = "hands"
@@ -3722,7 +3764,8 @@ viewFilterNumberWithSelect searchModel { field, hint, step, suffix, values, defa
 
 
 viewFilterList :
-    SearchModel
+    Model
+    -> SearchModel
     -> { label : String
        , filterKey : String
        , showOperator : Bool
@@ -3730,7 +3773,7 @@ viewFilterList :
        , values : List String
        }
     -> Html Msg
-viewFilterList searchModel { label, filterKey, showOperator, showSearch, values } =
+viewFilterList model searchModel { label, filterKey, showOperator, showSearch, values } =
     if List.isEmpty values then
         Html.text ""
 
@@ -3747,7 +3790,7 @@ viewFilterList searchModel { label, filterKey, showOperator, showSearch, values 
                 )
             , viewFilterButtons searchModel filterKey showOperator
             , Html.Extra.viewIf showSearch (viewFilterSearch searchModel filterKey)
-            , viewFilterScrollbox searchModel filterKey values
+            , viewFilterScrollbox model searchModel filterKey values
             ]
 
 
@@ -3821,8 +3864,8 @@ viewFilterSearch searchModel filterKey =
         ]
 
 
-viewFilterScrollbox : SearchModel -> String -> List String -> Html Msg
-viewFilterScrollbox searchModel filterKey values =
+viewFilterScrollbox : Model -> SearchModel -> String -> List String -> Html Msg
+viewFilterScrollbox model searchModel filterKey values =
     Html.div
         [ HA.class "row"
         , HA.class "gap-tiny"
@@ -3859,7 +3902,7 @@ viewFilterScrollbox searchModel filterKey values =
                     , HAE.attributeIf (filterKey == "traits") (getTraitClass value)
                     ]
                     [ if filterKey == "pfs" then
-                        viewPfsIcon 16 value
+                        viewPfsIcon model.starfinder 16 value
 
                       else
                         Html.text ""
@@ -3909,7 +3952,7 @@ viewActiveFiltersAndOptions model searchModel =
             Html.text ""
 
           else
-            viewActiveFilters True searchModel
+            viewActiveFilters model searchModel True
 
         , viewActiveSorts True searchModel
 
@@ -3955,8 +3998,8 @@ viewActiveFiltersAndOptions model searchModel =
         ]
 
 
-viewActiveFilters : Bool -> SearchModel -> Html Msg
-viewActiveFilters canClick searchModel =
+viewActiveFilters : Model -> SearchModel -> Bool -> Html Msg
+viewActiveFilters model searchModel canClick =
     Html.div
         [ HA.class "row"
         , HA.class "gap-medium"
@@ -3987,7 +4030,7 @@ viewActiveFilters canClick searchModel =
                                             , HAE.attributeIf canClick (HE.onClick (removeMsg value))
                                             ]
                                             (List.append
-                                                [ viewPfsIcon 16 value
+                                                [ viewPfsIcon model.starfinder 16 value
                                                 ]
                                                 (viewTextWithActionIcons (toTitleCase value))
                                             )
@@ -4406,7 +4449,7 @@ viewSingleShortResultLoaded viewModel document =
                 , HA.class "nowrap"
                 ]
                 [ if viewModel.showResultPfs then
-                    viewPfsIconWithLink 25 (Maybe.withDefault "" document.pfs)
+                    viewPfsIconWithLink viewModel.starfinder 25 (Maybe.withDefault "" document.pfs)
 
                   else
                     Html.text ""
@@ -4512,7 +4555,7 @@ viewMaskedDocument viewModel document =
                 , HA.class "nowrap"
                 ]
                 [ if viewModel.showResultPfs then
-                    viewPfsIconWithLink 25 (Maybe.withDefault "" document.pfs)
+                    viewPfsIconWithLink viewModel.starfinder 25 (Maybe.withDefault "" document.pfs)
 
                   else
                     Html.text ""
@@ -5068,7 +5111,7 @@ viewSearchResultTableCell viewModel document column =
             [ "pfs" ] ->
                 document.pfs
                     |> Maybe.withDefault ""
-                    |> viewPfsIconWithLink 20
+                    |> viewPfsIconWithLink viewModel.starfinder 20
                     |> List.singleton
                     |> Html.div
                         [ HA.class "column"
@@ -5935,7 +5978,7 @@ viewSearchResultsGrouped model searchModel remaining =
                         [ HA.class "title" ]
                         [ Html.div
                             []
-                            [ viewGroupedTitle searchModel.groupField1 key1
+                            [ viewGroupedTitle model.starfinder searchModel.groupField1 key1
                             ]
                         , Html.div
                             [ HA.class "row"
@@ -6062,7 +6105,7 @@ viewSearchResultsGroupedLevel2 model searchModel key1 field2 documents1 =
                             [ HA.class "title" ]
                             [ Html.div
                                 []
-                                [ viewGroupedTitle field2 key2
+                                [ viewGroupedTitle model.starfinder field2 key2
                                 ]
                             , Html.div
                                 [ HA.class "row"
@@ -6175,7 +6218,7 @@ viewSearchResultsGroupedLevel3 model searchModel key1 key2 field3 documents2 =
                             ]
                             [ Html.div
                                 []
-                                [ viewGroupedTitle field3 key3
+                                [ viewGroupedTitle model.starfinder field3 key3
                                 ]
                             , Html.div
                                 [ HA.class "row"
@@ -6272,7 +6315,7 @@ viewSearchResultGroupedHorizontal viewModel document =
         [ if viewModel.groupedShowPfs then
             document.pfs
                 |> Maybe.withDefault ""
-                |> viewPfsIcon 0
+                |> viewPfsIcon viewModel.starfinder 0
 
           else
               Html.text ""
@@ -6291,7 +6334,7 @@ viewSearchResultGroupedVertical viewModel document =
         [ if viewModel.groupedShowPfs then
             document.pfs
                 |> Maybe.withDefault ""
-                |> viewPfsIcon 0
+                |> viewPfsIcon viewModel.starfinder 0
           else
             Html.text ""
         , viewGroupedLink viewModel document
@@ -6308,7 +6351,7 @@ viewSearchResultGroupedVerticalWithSummary viewModel document =
             [ if viewModel.groupedShowPfs then
                 [ document.pfs
                     |> Maybe.withDefault ""
-                    |> viewPfsIcon 0
+                    |> viewPfsIcon viewModel.starfinder 0
                 , Html.text " "
                 ]
 
@@ -7096,8 +7139,8 @@ compareAlphanum field a b =
                 |> Maybe.withDefault (compare a b)
 
 
-viewGroupedTitle : String -> String -> Html msg
-viewGroupedTitle field value =
+viewGroupedTitle : Bool -> String -> String -> Html msg
+viewGroupedTitle starfinder field value =
     let
         textFrom : (Int -> String) -> String -> Html msg
         textFrom fun v =
@@ -7149,7 +7192,7 @@ viewGroupedTitle field value =
             , HA.class "gap-small"
             , HA.class "align-center"
             ]
-            [ viewPfsIcon 0 value
+            [ viewPfsIcon starfinder 0 value
             , Html.text (toTitleCase value)
             ]
 
@@ -7568,7 +7611,7 @@ markdownHtmlRenderer viewModel =
                             (List.concat
                                 [ case maybePfs of
                                     Just pfs ->
-                                        [ viewPfsIconWithLink 0 pfs ]
+                                        [ viewPfsIconWithLink viewModel.starfinder 0 pfs ]
 
                                     _ ->
                                         []
@@ -7918,9 +7961,9 @@ viewFilterIcon value =
                 [ FontAwesome.view FontAwesome.Regular.circle ]
 
 
-viewPfsIcon : Int -> String -> Html msg
-viewPfsIcon height pfs =
-    case getPfsIconUrl pfs of
+viewPfsIcon : Bool -> Int -> String -> Html msg
+viewPfsIcon starfinder height pfs =
+    case getPfsIconUrl starfinder pfs of
         Just url ->
             Html.img
                 [ HA.src url
@@ -7937,33 +7980,50 @@ viewPfsIcon height pfs =
             Html.text ""
 
 
-viewPfsIconWithLink : Int -> String -> Html msg
-viewPfsIconWithLink height pfs =
-    case getPfsIconUrl pfs of
+viewPfsIconWithLink : Bool -> Int -> String -> Html msg
+viewPfsIconWithLink starfinder height pfs =
+    case getPfsIconUrl starfinder pfs of
         Just url ->
             Html.a
-                [ HA.href "/PFS.aspx"
+                [ if starfinder then
+                    HA.href "/sfs"
+
+                  else
+                    HA.href "/PFS.aspx"
                 , HA.target "_blank"
                 , HA.style "display" "flex"
-                , HA.attribute "aria-label" ("PFS " ++ pfs)
+                , if starfinder then
+                    HA.attribute "aria-label" ("SFS " ++ pfs)
+
+                  else
+                    HA.attribute "aria-label" ("PFS " ++ pfs)
                 ]
-                [ viewPfsIcon height pfs
+                [ viewPfsIcon starfinder height pfs
                 ]
 
         Nothing ->
             Html.text ""
 
 
-getPfsIconUrl : String -> Maybe String
-getPfsIconUrl pfs =
-    case String.toLower pfs of
-        "standard" ->
+getPfsIconUrl : Bool -> String -> Maybe String
+getPfsIconUrl starfinder pfs =
+    case ( starfinder, String.toLower pfs ) of
+        ( True, "standard" ) ->
+            Just "/images/icons/sfs-standard.png"
+
+        ( True, "limited" ) ->
+            Just "/images/icons/sfs-limited.png"
+
+        ( True, "restricted" ) ->
+            Just "/images/icons/sfs-restricted.png"
+
+        ( False, "standard" ) ->
             Just "/Images/Icons/PFS_Standard.png"
 
-        "limited" ->
+        ( False, "limited" ) ->
             Just "/Images/Icons/PFS_Limited.png"
 
-        "restricted" ->
+        ( False, "restricted" ) ->
             Just "/Images/Icons/PFS_Restricted.png"
 
         _ ->
