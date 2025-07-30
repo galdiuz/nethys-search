@@ -980,6 +980,7 @@ fields =
     , ( "text", "All text on a page" )
     , ( "tradition", "Traditions of spell or summoner eidolon" )
     , ( "t", "Alias for 'trait'" )
+    , ( "tactic_type", "Commander tactic type" )
     , ( "trait", "Traits with values removed, e.g. 'Deadly d6' is normalized as 'Deadly'" )
     , ( "trait_group", "Trait group" )
     , ( "trait_raw", "Traits exactly as written" )

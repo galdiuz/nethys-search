@@ -2910,6 +2910,9 @@ urlToDocumentIdPathfinder url =
         "/subconsciousminds.aspx" ->
             withId "subconscious-mind"
 
+        "/tactics.aspx" ->
+            withId "tactic"
+
         "/tenets.aspx" ->
             withId "tenet"
 

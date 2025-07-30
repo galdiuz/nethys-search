@@ -4437,7 +4437,7 @@ viewSingleShortResultLoaded viewModel document =
     let
         hasActionsInTitle : Bool
         hasActionsInTitle =
-            List.member document.category [ "action", "creature-ability", "familiar-ability", "feat", "spell" ]
+            List.member document.category [ "action", "creature-ability", "familiar-ability", "feat", "spell", "tactic" ]
     in
     Html.article
         [ HA.class "column"
