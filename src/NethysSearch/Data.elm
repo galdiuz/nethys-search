@@ -917,7 +917,7 @@ fields =
     , ( "perception", "[n] Perception" )
     , ( "perception_proficiency", "A class's starting perception proficiency" )
     , ( "perception_scale", "Perception scale according to creature building rules" )
-    , ( "pfs", "Pathfinder Society status (Standard / Limited / Restricted)" )
+    , ( "pfs", "Pathfinder/Starfinder Society status (Standard / Limited / Restricted)" )
     , ( "piloting_check", "Piloting check for a vehicle" )
     , ( "plane_category", "Plane category" )
     , ( "prerequisite", "Prerequisites" )
@@ -948,6 +948,7 @@ fields =
     , ( "secondary_casters", "[n] Secondary casters for a ritual" )
     , ( "secondary_check", "Secondary checks for a ritual" )
     , ( "sense", "Senses" )
+    , ( "sfs", "Alias for 'pfs'" )
     , ( "size", "Size" )
     , ( "skill", "Related skills" )
     , ( "skill_mod.<type>", "[n] Skill modifier of <type>. Valid types are acrobatics, arcana, athletics, crafting, deception, diplomacy, intimidation, medicine, nature, occultism, performance, religion, society, stealth, survival, thievery. Use skill_mod.\\* to match any type." )
@@ -1247,6 +1248,11 @@ filterFields =
       , key = "schools"
       , useOperator = False
       , values = List.sort
+      }
+    , { field = "sfs"
+      , key = "sfs"
+      , useOperator = False
+      , values = (::) "none"
       }
     , { field = "size"
       , key = "sizes"
@@ -1768,6 +1774,7 @@ groupFields =
     , "reflex_scale"
     , "sanctification"
     , "school"
+    , "sfs"
     , "size"
     , "source"
     , "source_category"
@@ -1945,6 +1952,7 @@ allSkills =
     , "arcana"
     , "athletics"
     , "crafting"
+    , "computers"
     , "deception"
     , "diplomacy"
     , "intimidation"
@@ -1953,6 +1961,7 @@ allSkills =
     , "nature"
     , "occultism"
     , "performance"
+    , "piloting"
     , "religion"
     , "society"
     , "stealth"
@@ -2050,6 +2059,7 @@ sortFields =
     , ( "school", "school", False )
     , ( "secondary_casters", "secondary_casters", False )
     , ( "secondary_check", "secondary_check.keyword", False )
+    , ( "sfs", "sfs", False )
     , ( "siege_weapon_category", "siege_weapon_category", False )
     , ( "size", "size_id", True )
     , ( "skill", "skill.keyword", True )
@@ -2256,6 +2266,7 @@ tableColumns =
     , "secondary_casters"
     , "secondary_check"
     , "sense"
+    , "sfs"
     , "size"
     , "skill"
     , "skill_proficiency"

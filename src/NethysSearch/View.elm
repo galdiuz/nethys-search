@@ -518,7 +518,7 @@ allFilters model =
     , { id = "pfs"
       , label = "🔵 PFS"
       , view = viewFilterPfs
-      , visibleIf = moreThanOneValueAggregation "pfs"
+      , visibleIf = moreThanOneValueAggregation "pfs" >> (&&) (not model.starfinder)
       }
     , { id = "rarities"
       , label = "💎 Rarities"
@@ -529,6 +529,11 @@ allFilters model =
       , label = "🌐 Regions"
       , view = viewFilterRegions
       , visibleIf = moreThanOneValueAggregation "region"
+      }
+    , { id = "sfs"
+      , label = "🔵 SFS"
+      , view = viewFilterPfs
+      , visibleIf = moreThanOneValueAggregation "pfs" >> (&&) model.starfinder
       }
     , { id = "sizes"
       , label = "🐥 Sizes"
@@ -1233,7 +1238,7 @@ viewResultDisplayShort viewModel =
     , viewCheckbox
         { checked = viewModel.showResultPfs
         , onCheck = ShowShortPfsChanged
-        , text = "Show PFS icon"
+        , text = "Show PFS/SFS icon"
         }
     , viewCheckbox
         { checked = viewModel.showResultSpoilers
@@ -1829,7 +1834,7 @@ viewResultDisplayGrouped model searchModel =
             [ viewCheckbox
                 { checked = model.viewModel.groupedShowPfs
                 , onCheck = GroupedShowPfsIconChanged
-                , text = "PFS icons"
+                , text = "PFS/SFS icons"
                 }
             , viewCheckbox
                 { checked = model.viewModel.groupedShowHeightenable
@@ -2946,7 +2951,7 @@ viewFilterPfs model searchModel =
         model
         searchModel
         { label = ""
-        , filterKey = "pfs"
+        , filterKey = if model.starfinder then "sfs" else "pfs"
         , showOperator = False
         , showSearch = False
         , values =
@@ -3901,7 +3906,7 @@ viewFilterScrollbox model searchModel filterKey values =
                             HAE.empty
                     , HAE.attributeIf (filterKey == "traits") (getTraitClass value)
                     ]
-                    [ if filterKey == "pfs" then
+                    [ if filterKey == "pfs" || filterKey == "sfs" then
                         viewPfsIcon model.starfinder 16 value
 
                       else
@@ -4882,6 +4887,7 @@ viewSearchResultTableRow viewModel tableColumns document =
                             , "source"
                             , "source_category"
                             , "source_group"
+                            , "sfs"
                             , "type"
                             ]
                     then
@@ -5142,6 +5148,17 @@ viewSearchResultTableCell viewModel document column =
 
             [ "sense" ] ->
                 maybeAsMarkdown document.senses
+
+            [ "sfs" ] ->
+                document.pfs
+                    |> Maybe.withDefault ""
+                    |> viewPfsIconWithLink viewModel.starfinder 20
+                    |> List.singleton
+                    |> Html.div
+                        [ HA.class "column"
+                        , HA.class "align-center"
+                        ]
+                    |> List.singleton
 
             [ "skill" ] ->
                 maybeAsMarkdown document.skills
@@ -5690,6 +5707,10 @@ searchResultTableCellToString viewModel document column =
 
         [ "sense" ] ->
             maybeAsStringWithoutMarkdown document.senses
+
+        [ "sfs" ] ->
+            document.pfs
+                |> Maybe.withDefault ""
 
         [ "size" ] ->
             document.sizes
@@ -6848,6 +6869,15 @@ groupDocumentsByField keys field documents =
                         document
                         dict
 
+                "sfs" ->
+                    insertToListDict
+                        (document.pfs
+                            |> Maybe.withDefault ""
+                            |> String.toLower
+                        )
+                        document
+                        dict
+
                 "size" ->
                     if List.isEmpty document.sizeIds then
                         insertToListDict "" document dict
@@ -7967,7 +7997,11 @@ viewPfsIcon starfinder height pfs =
         Just url ->
             Html.img
                 [ HA.src url
-                , HA.alt ("PFS " ++ pfs)
+                , if starfinder then
+                    HA.alt ("SFS " ++ pfs)
+
+                  else
+                    HA.alt ("PFS " ++ pfs)
                 , if height == 0 then
                     HA.style "height" "1em"
 
