@@ -2157,6 +2157,21 @@ viewWhatsNew model _ =
         , HA.class "no-ul-margin"
         ]
         ("""
+        ### Field changes
+
+        <details summary="Show details">
+        - `epithet` - new
+        - `expend` - new
+        - `grade` - new
+        - `location` - new
+        - `tactic_type` - new
+        - `upgrades` - new
+        </details>
+
+
+        ### Previous updates
+
+        <details summary="2024-07-21">
         ### Filter menu
 
         A new way to apply filters and sorting has been added. Use the button to the left of the
@@ -2174,9 +2189,7 @@ viewWhatsNew model _ =
 
         A filter has been added to the _Items_ filter menu to only show the parent item for items
         with multiple children variants (e.g. runes).
-
-
-        ### Previous updates
+        </details>
 
         <details summary="2024-05-27">
         ### Filter button changes &amp; new filters
@@ -4438,6 +4451,11 @@ viewSingleShortResultLoaded viewModel document =
         hasActionsInTitle : Bool
         hasActionsInTitle =
             List.member document.category [ "action", "creature-ability", "familiar-ability", "feat", "spell", "tactic" ]
+
+        hasEpithetInTitle : Bool
+        hasEpithetInTitle =
+            List.member document.category [ "deity" ]
+
     in
     Html.article
         [ HA.class "column"
@@ -4469,6 +4487,12 @@ viewSingleShortResultLoaded viewModel document =
                                 (linkEventAttributes document.url)
                             )
                             [ Html.text document.name
+                            , case ( hasEpithetInTitle, document.epithet ) of
+                                ( True, Just epithet ) ->
+                                    Html.text <| " (" ++ epithet ++ ")"
+
+                                _ ->
+                                    Html.text ""
                             ]
                         ]
                         (case ( document.actions, hasActionsInTitle ) of
@@ -5090,6 +5114,9 @@ viewSearchResultTableCell viewModel document column =
             [ "lesson" ] ->
                 maybeAsMarkdown document.lessons
 
+            [ "magazine" ] ->
+                maybeAsMarkdown document.ammunition
+
             [ "mystery" ] ->
                 maybeAsMarkdown document.mysteries
 
@@ -5450,6 +5477,14 @@ searchResultTableCellToString viewModel document column =
                 |> List.map toTitleCase
                 |> String.join ", "
 
+        [ "epithet" ] ->
+            maybeAsString document.epithet
+
+        [ "expend" ] ->
+            document.expend
+                |> Maybe.map String.fromInt
+                |> maybeAsString
+
         [ "favored_weapon" ] ->
             maybeAsStringWithoutMarkdown document.favoredWeapons
 
@@ -5563,6 +5598,12 @@ searchResultTableCellToString viewModel document column =
             document.level
                 |> Maybe.map String.fromInt
                 |> maybeAsString
+
+        [ "location" ] ->
+            maybeAsString document.location
+
+        [ "magazine" ] ->
+            maybeAsStringWithoutMarkdown document.ammunition
 
         [ "mount" ] ->
             case document.mount of
@@ -5835,6 +5876,11 @@ searchResultTableCellToString viewModel document column =
 
         [ "usage" ] ->
             maybeAsStringWithoutMarkdown document.usage
+
+        [ "upgrades" ] ->
+            document.upgrades
+                |> Maybe.map String.fromInt
+                |> maybeAsString
 
         [ "vision" ] ->
             maybeAsString document.vision

@@ -201,6 +201,7 @@ type alias Document =
     , advancedApocryphalSpell : Maybe String
     , advancedDomainSpell : Maybe String
     , alignment : Maybe String
+    , ammunition : Maybe String
     , anathemas : Maybe String
     , apocryphalSpell : Maybe String
     , archetypes : List String
@@ -251,6 +252,8 @@ type alias Document =
     , durationValue : Maybe Int
     , edicts : Maybe String
     , elements : List String
+    , epithet : Maybe String
+    , expend : Maybe Int
     , familiarAbilities : List String
     , favoredWeapons : Maybe String
     , feats : Maybe String
@@ -284,6 +287,7 @@ type alias Document =
     , lessonType : Maybe String
     , lessons : Maybe String
     , level : Maybe Int
+    , location : Maybe String
     , markdown : Markdown
     , mount : Maybe Bool
     , mysteries : Maybe String
@@ -362,6 +366,7 @@ type alias Document =
     , traitList : List String
     , traits : Maybe String
     , trigger : Maybe String
+    , upgrades : Maybe Int
     , usage : Maybe String
     , vision : Maybe String
     , wardenSpellTier : Maybe String
@@ -869,6 +874,8 @@ fields =
     , ( "duration", "[n] Duration of spell, ritual, or poison, in seconds" )
     , ( "duration_raw", "Duration exactly as written" )
     , ( "edict", "Deity edicts" )
+    , ( "epithet", "Epithet of deity / planet" )
+    , ( "expend", "[n] Weapon ammunition expenditure" )
     , ( "element", "Element traits" )
     , ( "familiar_ability", "Abilities granted by specific familiars" )
     , ( "favored_weapon", "Deity's favored weapon" )
@@ -880,6 +887,7 @@ fields =
     , ( "fortitude_save", "[n] Fortitude save" )
     , ( "fortitude_save_scale", "Fortitude save scale according to creatuer building rules" )
     , ( "frequency", "Frequency of which something can be used" )
+    , ( "grade", "Item grade" )
     , ( "hands", "Hands required to use item" )
     , ( "hardness", "[n] Hazard or shield hardness" )
     , ( "hazard_type", "Hazard type trait" )
@@ -902,6 +910,7 @@ fields =
     , ( "lesson_type", "Witch lesson type" )
     , ( "l", "[n] alias for 'level'" )
     , ( "level", "[n] Level" )
+    , ( "location", "Planet location" )
     , ( "mount", "If animal companion has mount special ability (true / false)" )
     , ( "mystery", "Oracle mysteries associated with a spell" )
     , ( "name", "Name" )
@@ -986,6 +995,7 @@ fields =
     , ( "trait_raw", "Traits exactly as written" )
     , ( "trigger", "Trigger" )
     , ( "type", "Type" )
+    , ( "upgrade", "[n] Item upgrades" )
     , ( "usage", "Usage of curse or item" )
     , ( "vision", "Ancestry or creature vision type" )
     , ( "warden_spell_tier", "Spell tier for Ranger Warden Spells" )
@@ -1066,6 +1076,11 @@ filterFields =
       , key = "attack-bonus-scales"
       , useOperator = False
       , values = List.sortWith (Order.Extra.explicit scales)
+      }
+    , { field = "ammunition.keyword"
+      , key = "ammunition"
+      , useOperator = False
+      , values = List.sort
       }
     , { field = "attribute"
       , key = "attributes"
@@ -1407,6 +1422,7 @@ numericFields =
     , "dexterity"
     , "dex_cap"
     , "duration"
+    , "expend"
     , "fortitude_save"
     , "hardness"
     , "heighten_rank"
@@ -1429,6 +1445,7 @@ numericFields =
     , "spell_attack_bonus"
     , "spell_dc"
     , "strength"
+    , "upgrades"
     , "weakness"
     , "will_save"
     , "wisdom"
@@ -1849,7 +1866,7 @@ predefinedColumnConfigurations =
         ]
       , label = "Creatures (extended)"
       }
-    , { columns = [ "pfs", "area_of_concern", "edict", "anathema", "domain_primary", "domain_alternate", "divine_font", "sanctification", "attribute", "skill", "favored_weapon", "deity_category", "pantheon", "religious_symbol", "sacred_animal", "sacred_color", "source" ]
+    , { columns = [ "epithet", "pfs", "area_of_concern", "edict", "anathema", "domain_primary", "domain_alternate", "divine_font", "sanctification", "attribute", "skill", "favored_weapon", "deity_category", "pantheon", "religious_symbol", "sacred_animal", "sacred_color", "source" ]
       , label = "Deities"
       }
     , { columns = [ "level", "saving_throw", "onset", "stage", "trait", "rarity" ]
@@ -2012,6 +2029,8 @@ sortFields =
     , ( "domain_alternate", "domain_alternate", False )
     , ( "domain_primary", "domain_primary", False )
     , ( "duration", "duration", True )
+    , ( "epithet", "epithet", False )
+    , ( "expend", "expend", True )
     , ( "favored_weapon", "favored_weapon.keyword", False )
     , ( "fortitude", "fortitude", False )
     , ( "fortitude_proficiency", "fortitude_proficiency", False )
@@ -2031,6 +2050,7 @@ sortFields =
     , ( "item_category", "item_category.keyword", False )
     , ( "item_subcategory", "item_subcategory.keyword", False )
     , ( "level", "level", True )
+    , ( "location", "location.keyword", False )
     , ( "mount", "mount", False )
     , ( "mystery", "mystery", False )
     , ( "name", "name.keyword", False )
@@ -2054,6 +2074,7 @@ sortFields =
     , ( "reflex_scale", "reflex_save_scale_number", True )
     , ( "region", "region", False )
     , ( "release_date", "release_date", False )
+    , ( "reload", "reload", True )
     , ( "requirement", "requirement.keyword", False )
     , ( "sanctification", "sanctification_raw.keyword", False )
     , ( "saving_throw", "saving_throw.keyword", False )
@@ -2084,6 +2105,7 @@ sortFields =
     , ( "tradition", "tradition", False )
     , ( "trigger", "trigger.keyword", False )
     , ( "type", "type", False )
+    , ( "upgrades", "upgrades", True )
     , ( "vision", "vision.keyword", False )
     , ( "warden_spell_tier", "warden_spell_tier", False )
     , ( "weakest_save", "weakest_save", False )
@@ -2205,6 +2227,8 @@ tableColumns =
     , "duration"
     , "edict"
     , "element"
+    , "epithet"
+    , "expend"
     , "favored_weapon"
     , "feat"
     , "follower_alignment"
@@ -2233,6 +2257,8 @@ tableColumns =
     , "language"
     , "lesson"
     , "level"
+    , "location"
+    , "magazine"
     , "mount"
     , "mystery"
     , "onset"
@@ -2297,6 +2323,7 @@ tableColumns =
     , "trait"
     , "trigger"
     , "type"
+    , "upgrades"
     , "url"
     , "usage"
     , "vision"
@@ -3904,6 +3931,7 @@ documentDecoder =
     Field.attempt "advanced_apocryphal_spell_markdown" Decode.string <| \advancedApocryphalSpell ->
     Field.attempt "advanced_domain_spell_markdown" Decode.string <| \advancedDomainSpell ->
     Field.attempt "alignment" Decode.string <| \alignment ->
+    Field.attempt "ammunition_markdown" Decode.string <| \ammunition ->
     Field.attempt "anathema" Decode.string <| \anathemas ->
     Field.attempt "apocryphal_spell_markdown" Decode.string <| \apocryphalSpell ->
     Field.attempt "archetype" stringListDecoder <| \archetypes ->
@@ -3954,6 +3982,8 @@ documentDecoder =
     Field.attempt "duration_raw" Decode.string <| \duration ->
     Field.attempt "edict" Decode.string <| \edicts ->
     Field.attempt "element" stringListDecoder <| \elements ->
+    Field.attempt "epithet" Decode.string <| \epithet ->
+    Field.attempt "expend" Decode.int <| \expend ->
     Field.attempt "familiar_ability" stringListDecoder <| \familiarAbilities ->
     Field.attempt "favored_weapon_markdown" Decode.string <| \favoredWeapons ->
     Field.attempt "feat_markdown" Decode.string <| \feats ->
@@ -3987,6 +4017,7 @@ documentDecoder =
     Field.attempt "lesson_markdown" Decode.string <| \lessons ->
     Field.attempt "lesson_type" Decode.string <| \lessonType ->
     Field.attempt "level" Decode.int <| \level ->
+    Field.attempt "location" Decode.string <| \location ->
     Field.attempt "markdown" Decode.string <| \markdown ->
     Field.attempt "mount" Decode.bool <| \mount ->
     Field.attempt "mystery_markdown" Decode.string <| \mysteries ->
@@ -4066,6 +4097,7 @@ documentDecoder =
     Field.attempt "trait" stringListDecoder <| \traitList ->
     Field.attempt "trigger_markdown" Decode.string <| \trigger ->
     Field.attempt "usage_markdown" Decode.string <| \usage ->
+    Field.attempt "upgrades" Decode.int <| \upgrades ->
     Field.attempt "vision" Decode.string <| \vision ->
     Field.attempt "warden_spell_tier" Decode.string <| \wardenSpellTier ->
     Field.attempt "weakest_save" stringListDecoder <| \weakestSaves ->
@@ -4094,6 +4126,7 @@ documentDecoder =
         , advancedApocryphalSpell = advancedApocryphalSpell
         , advancedDomainSpell = advancedDomainSpell
         , alignment = alignment
+        , ammunition = ammunition
         , anathemas = anathemas
         , apocryphalSpell = apocryphalSpell
         , archetypes = Maybe.withDefault [] archetypes
@@ -4144,6 +4177,8 @@ documentDecoder =
         , durationValue = durationValue
         , edicts = edicts
         , elements = Maybe.withDefault [] elements
+        , epithet = epithet
+        , expend = expend
         , familiarAbilities = Maybe.withDefault [] familiarAbilities
         , favoredWeapons = favoredWeapons
         , feats = feats
@@ -4177,6 +4212,7 @@ documentDecoder =
         , lessonType = lessonType
         , lessons = lessons
         , level = level
+        , location = location
         , markdown = NotParsed (Maybe.withDefault "" markdown)
         , mount = mount
         , mysteries = mysteries
@@ -4256,6 +4292,7 @@ documentDecoder =
         , traits = traits
         , trigger = trigger
         , usage = usage
+        , upgrades = upgrades
         , vision = vision
         , wardenSpellTier = wardenSpellTier
         , weakestSaves = Maybe.withDefault [] weakestSaves
