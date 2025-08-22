@@ -2748,6 +2748,9 @@ urlToDocumentIdPathfinder url =
         "/monsterfamilies.aspx" ->
             withId "creature-family"
 
+        "/cultactivities.aspx" ->
+            withId "cult-activity"
+
         "/curses.aspx" ->
             withId "curse"
 
