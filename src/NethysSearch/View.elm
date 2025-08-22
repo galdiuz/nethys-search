@@ -511,7 +511,7 @@ allFilters model =
       , visibleIf = \_ -> True
       }
     , { id = "level"
-      , label = "📊 Level"
+      , label = "📊 Level / Rank"
       , view = viewFilterLevel
       , visibleIf = Data.hasMultipleMinmaxValues "level"
       }
@@ -2951,7 +2951,7 @@ viewFilterLevel model searchModel =
     [ viewFilterNumber
         searchModel
             { field = "level"
-            , hint = Nothing
+            , hint = Just "/ Rank"
             , step = "1"
             , suffix = Nothing
             }
