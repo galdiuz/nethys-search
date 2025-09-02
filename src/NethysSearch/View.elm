@@ -2158,6 +2158,12 @@ viewWhatsNew model _ =
         ]
         ("""
         ### Field changes
+        - `vehicle_type` - new
+
+        ### Previous updates
+
+        <details summary="2025-07-31">
+        ### Field changes
 
         <details summary="Show details">
         - `epithet` - new
@@ -2168,8 +2174,7 @@ viewWhatsNew model _ =
         - `upgrades` - new
         </details>
 
-
-        ### Previous updates
+        </details>
 
         <details summary="2024-07-21">
         ### Filter menu
@@ -5881,6 +5886,9 @@ searchResultTableCellToString viewModel document column =
             document.upgrades
                 |> Maybe.map String.fromInt
                 |> maybeAsString
+
+        [ "vehicle_type" ] ->
+            maybeAsString document.vehicleType
 
         [ "vision" ] ->
             maybeAsString document.vision

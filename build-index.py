@@ -209,6 +209,7 @@ def fetch_docs(url):
                     'trigger_markdown',
                     'upgrades',
                     'usage_markdown',
+                    'vehicle_type',
                     'vision',
                     'warden_spell_tier',
                     'weakest_save',

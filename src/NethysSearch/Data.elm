@@ -368,6 +368,7 @@ type alias Document =
     , trigger : Maybe String
     , upgrades : Maybe Int
     , usage : Maybe String
+    , vehicleType : Maybe String
     , vision : Maybe String
     , wardenSpellTier : Maybe String
     , weakestSaves : List String
@@ -997,6 +998,7 @@ fields =
     , ( "type", "Type" )
     , ( "upgrade", "[n] Item upgrades" )
     , ( "usage", "Usage of curse or item" )
+    , ( "vehicle_type", "Vehicle type" )
     , ( "vision", "Ancestry or creature vision type" )
     , ( "warden_spell_tier", "Spell tier for Ranger Warden Spells" )
     , ( "weakest_save", "The weakest save(s) of a creature (Fortitude / Reflex / Will)" )
@@ -1366,6 +1368,11 @@ filterFields =
       }
     , { field = "type"
       , key = "types"
+      , useOperator = False
+      , values = List.sort
+      }
+    , { field = "vehicle_type"
+      , key = "vehicle-types"
       , useOperator = False
       , values = List.sort
       }
@@ -2106,11 +2113,13 @@ sortFields =
     , ( "strike_damage_average", "strike_damage_average", True )
     , ( "strike_damage_scale", "strike_damage_scale_number", True )
     , ( "strongest_save", "strongest_save", False )
+    , ( "tactic_type", "tactic_type", False )
     , ( "target", "target.keyword", False )
     , ( "tradition", "tradition", False )
     , ( "trigger", "trigger.keyword", False )
     , ( "type", "type", False )
     , ( "upgrades", "upgrades", True )
+    , ( "vehicle_type", "vehicle_type", False )
     , ( "vision", "vision.keyword", False )
     , ( "warden_spell_tier", "warden_spell_tier", False )
     , ( "weakest_save", "weakest_save", False )
@@ -2331,6 +2340,7 @@ tableColumns =
     , "upgrades"
     , "url"
     , "usage"
+    , "vehicle_type"
     , "vision"
     , "warden_spell_tier"
     , "weakest_save"
@@ -4103,6 +4113,7 @@ documentDecoder =
     Field.attempt "trigger_markdown" Decode.string <| \trigger ->
     Field.attempt "usage_markdown" Decode.string <| \usage ->
     Field.attempt "upgrades" Decode.int <| \upgrades ->
+    Field.attempt "vehicle_type" Decode.string <| \vehicleType ->
     Field.attempt "vision" Decode.string <| \vision ->
     Field.attempt "warden_spell_tier" Decode.string <| \wardenSpellTier ->
     Field.attempt "weakest_save" stringListDecoder <| \weakestSaves ->
@@ -4298,6 +4309,7 @@ documentDecoder =
         , trigger = trigger
         , usage = usage
         , upgrades = upgrades
+        , vehicleType = vehicleType
         , vision = vision
         , wardenSpellTier = wardenSpellTier
         , weakestSaves = Maybe.withDefault [] weakestSaves
