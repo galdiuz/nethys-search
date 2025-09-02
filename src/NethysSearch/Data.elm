@@ -1342,6 +1342,11 @@ filterFields =
             List.filter (\s -> List.Extra.notMember s [ "fort", "ref" ])
                 >> List.sort
       }
+    , { field = "tactic_type"
+      , key = "tactic-types"
+      , useOperator = False
+      , values = List.sort
+      }
     , { field = "tradition"
       , key = "traditions"
       , useOperator = True
