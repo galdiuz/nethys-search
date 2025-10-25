@@ -2356,6 +2356,14 @@ tableColumns =
     ]
 
 
+tableColumnAliases : Dict String String
+tableColumnAliases =
+    [ ( "bloodline_skill", "skill" )
+    , ( "sorcerous_gifts", "spell" )
+    ]
+        |> Dict.fromList
+
+
 allTraditions : List String
 allTraditions =
     [ "arcane"

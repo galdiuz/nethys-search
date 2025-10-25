@@ -4808,7 +4808,13 @@ viewSearchResultTable model searchModel =
             [ Html.tr
                 []
                 (List.map
-                    (\column ->
+                    (\inputColumn ->
+                        let
+                            column : String
+                            column =
+                                Dict.get inputColumn Data.tableColumnAliases
+                                    |> Maybe.withDefault inputColumn
+                        in
                         Html.th
                             (if column == "name" then
                                 [ HA.class "sticky-left"
@@ -4828,7 +4834,7 @@ viewSearchResultTable model searchModel =
                                     ]
                                     [ Html.div
                                         []
-                                        [ Html.text (sortFieldToLabel column)
+                                        [ Html.text (sortFieldToLabel inputColumn)
                                         ]
                                     , viewSortIcon
                                         column
@@ -4839,7 +4845,7 @@ viewSearchResultTable model searchModel =
                                     ]
 
                               else
-                                Html.text (sortFieldToLabel column)
+                                Html.text (sortFieldToLabel inputColumn)
                             ]
                     )
                     ("name" :: searchModel.tableColumns)
@@ -4942,8 +4948,13 @@ viewSearchResultTableRow viewModel tableColumns document =
 
 
 viewSearchResultTableCell : ViewModel -> Document -> String -> Html Msg
-viewSearchResultTableCell viewModel document column =
+viewSearchResultTableCell viewModel document inputColumn =
     let
+        column : String
+        column =
+            Dict.get inputColumn Data.tableColumnAliases
+                |> Maybe.withDefault inputColumn
+
         maybeAsMarkdown : Maybe String -> List (Html Msg)
         maybeAsMarkdown maybeString =
             maybeString
@@ -5264,7 +5275,13 @@ viewSearchResultTableCell viewModel document column =
 
 
 searchResultTableCellToString : ViewModel -> Document -> String -> String
-searchResultTableCellToString viewModel document column =
+searchResultTableCellToString viewModel document inputColumn =
+    let
+        column : String
+        column =
+            Dict.get inputColumn Data.tableColumnAliases
+                |> Maybe.withDefault inputColumn
+    in
     case String.split "." column of
         [ "ability" ] ->
             document.attributes
