@@ -2730,6 +2730,19 @@ urlToDocumentIdPathfinder url =
         "/classsamples.aspx" ->
             withId "class-sample"
 
+        "/companions.aspx" ->
+            if Dict.get "type" queryParams == Just [ "advancement" ] then
+                withId "animal-companion-advanced"
+
+            else if Dict.get "type" queryParams == Just [ "specialized" ] then
+                withId "animal-companion-specialization"
+
+            else if Dict.get "type" queryParams == Just [ "unique" ] then
+                withId "animal-companion-unique"
+
+            else
+                withId "animal-companion"
+
         "/conditions.aspx" ->
             withId "condition"
 
