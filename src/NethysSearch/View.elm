@@ -41,7 +41,8 @@ type alias FilterBox =
 view : Model -> Html Msg
 view model =
     Html.div
-        []
+        [ HE.on "touchstart" (Decode.succeed LinkLeft)
+        ]
         [ viewCss model
         , FontAwesome.Styles.css
         , if model.noUi then
