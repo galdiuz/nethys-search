@@ -166,7 +166,7 @@ emptySearchModel { defaultQuery, fixedQueryString, removeFilters } =
     , sortHasChanged = False
     , tableColumns = []
     , tracker = Nothing
-    , visibleFilterBoxes = [ "whats-new" ]
+    , visibleFilterBoxes = []
     }
 
 
