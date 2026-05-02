@@ -7579,6 +7579,13 @@ markdownHtmlRenderer viewModel =
             (\_ ->
                 []
             )
+        , Markdown.Html.tag "s"
+            (\children ->
+                [ Html.s
+                    []
+                    (List.concat children)
+                ]
+            )
         , Markdown.Html.tag "search"
             (\_ ->
                 [] -- Rendered elsewhere
