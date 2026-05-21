@@ -3064,6 +3064,34 @@ viewFilterSources model searchModel =
         searchValue : String
         searchValue =
             dictGetString "sources" searchModel.searchFilters
+
+        maskByDefault : Bool
+        maskByDefault =
+            Maybe.withDefault Data.defaultMaskByDefault model.viewModel.maskByDefault
+
+        sourceGroupIsMasked : String -> Bool
+        sourceGroupIsMasked sourceGroup =
+            if maskByDefault then
+                not (Set.member sourceGroup model.viewModel.unmaskedSourceGroups)
+
+            else
+                Set.member sourceGroup model.viewModel.maskedSourceGroups
+
+        visibleSourceGroups : List String
+        visibleSourceGroups =
+            case model.globalAggregations of
+                Just (Ok globalAggregations) ->
+                    globalAggregations.sources
+                        |> List.filterMap .group
+                        |> List.filter
+                            (caseInsensitiveContains
+                                (dictGetString "mask-spoilers" searchModel.searchFilters)
+                            )
+                        |> List.Extra.unique
+                        |> List.sort
+
+                _ ->
+                    []
     in
     [ Html.div
         [ HA.class "column"
@@ -3196,6 +3224,23 @@ viewFilterSources model searchModel =
             []
             [ Html.text "Mask Spoilers" ]
         , Html.text "Masks results and previews from the selected source groups. This is saved between page visits."
+        , viewCheckbox
+            { checked = maskByDefault
+            , onCheck = MaskByDefaultChanged
+            , text = "Mask source groups by default"
+            }
+        , Html.div
+            [ HA.class "row"
+            , HA.class "align-center"
+            , HA.class "gap-medium"
+            ]
+            [ Html.button
+                [ HE.onClick (MaskSourceGroupsPressed True visibleSourceGroups) ]
+                [ Html.text "Select all" ]
+            , Html.button
+                [ HE.onClick (MaskSourceGroupsPressed False visibleSourceGroups) ]
+                [ Html.text "Select none" ]
+            ]
         , viewFilterSearch model.searchModel "mask-spoilers"
         , Html.div
             [ HA.class "row"
@@ -3203,7 +3248,7 @@ viewFilterSources model searchModel =
             , HA.class "scrollbox"
             ]
             (case model.globalAggregations of
-                Just (Ok globalAggregations) ->
+                Just (Ok _) ->
                     List.map
                         (\sourceGroup ->
                             Html.button
@@ -3214,7 +3259,7 @@ viewFilterSources model searchModel =
                                 ]
                                 [ Html.text (toTitleCase sourceGroup)
                                 , viewFilterIcon
-                                    (if Set.member sourceGroup model.viewModel.maskedSourceGroups then
+                                    (if sourceGroupIsMasked sourceGroup then
                                         Just False
 
                                      else
@@ -3222,15 +3267,7 @@ viewFilterSources model searchModel =
                                     )
                                 ]
                         )
-                        (globalAggregations.sources
-                            |> List.filterMap .group
-                            |> List.filter
-                                (caseInsensitiveContains
-                                    (dictGetString "mask-spoilers" searchModel.searchFilters)
-                                )
-                            |> List.Extra.unique
-                            |> List.sort
-                        )
+                        visibleSourceGroups
 
                 Just (Err _) ->
                     []
@@ -8386,11 +8423,20 @@ replaceActionLigatures text ( find, replace ) rem =
 
 documentShouldBeMasked : ViewModel -> Document -> Bool
 documentShouldBeMasked viewModel document =
+    let
+        sourceGroupIsMasked : String -> Bool
+        sourceGroupIsMasked sourceGroup =
+            if Maybe.withDefault Data.defaultMaskByDefault viewModel.maskByDefault then
+                not (Set.member sourceGroup viewModel.unmaskedSourceGroups)
+
+            else
+                Set.member sourceGroup viewModel.maskedSourceGroups
+    in
     List.all
         identity
         [ document.sourceGroups
             |> List.map String.toLower
-            |> List.any (\sourceGroup -> Set.member sourceGroup viewModel.maskedSourceGroups)
+            |> List.any sourceGroupIsMasked
         , List.any
             (\source -> not (caseInsensitiveContains "player's guide" source))
             document.sourceList

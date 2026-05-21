@@ -116,6 +116,7 @@ init flagsValue =
             , groupedShowHeightenable = True
             , groupedShowPfs = True
             , groupedShowRarity = True
+            , maskByDefault = Nothing
             , maskedSourceGroups = Set.empty
             , openInNewTab = False
             , resultBaseUrl =
@@ -131,6 +132,7 @@ init flagsValue =
             , showResultSummary = True
             , showResultTraits = True
             , starfinder = flags.starfinder
+            , unmaskedSourceGroups = Set.empty
             }
       , windowSize = { width = flags.windowWidth, height = flags.windowHeight }
       }
@@ -1240,25 +1242,111 @@ update msg model =
             , Random.generate RandomSeedGenerated (Random.int 0 2147483647)
             )
 
+        MaskByDefaultChanged value ->
+            ( updateViewModel
+                (\viewModel ->
+                    { viewModel | maskByDefault = Just value }
+                )
+                model
+            , saveToLocalStorage
+                "mask-by-default"
+                (if value then "1" else "0")
+            )
+
         MaskSourceGroupToggled sourceGroup ->
             let
+                maskByDefault : Bool
+                maskByDefault =
+                    Maybe.withDefault defaultMaskByDefault model.viewModel.maskByDefault
+
+                newModel : Model
                 newModel =
                     updateViewModel
                         (\viewModel ->
-                            { viewModel
-                                | maskedSourceGroups =
-                                    Set.Extra.toggle sourceGroup viewModel.maskedSourceGroups
-                            }
+                            if maskByDefault then
+                                { viewModel
+                                    | unmaskedSourceGroups =
+                                        Set.Extra.toggle sourceGroup viewModel.unmaskedSourceGroups
+                                }
+
+                            else
+                                { viewModel
+                                    | maskedSourceGroups =
+                                        Set.Extra.toggle sourceGroup viewModel.maskedSourceGroups
+                                }
                         )
                         model
+
+                encodeSet : Set String -> String
+                encodeSet set =
+                    set
+                        |> Encode.set Encode.string
+                        |> Encode.encode 0
             in
             ( newModel
-            , saveToLocalStorage
-                "masked-source-groups"
-                (newModel.viewModel.maskedSourceGroups
-                    |> Encode.set Encode.string
-                    |> Encode.encode 0
-                )
+            , if maskByDefault then
+                saveToLocalStorage
+                    "unmasked-source-groups"
+                    (encodeSet newModel.viewModel.unmaskedSourceGroups)
+
+              else
+                saveToLocalStorage
+                    "masked-source-groups"
+                    (encodeSet newModel.viewModel.maskedSourceGroups)
+            )
+
+        MaskSourceGroupsPressed shouldMask sourceGroups ->
+            let
+                maskByDefault : Bool
+                maskByDefault =
+                    Maybe.withDefault defaultMaskByDefault model.viewModel.maskByDefault
+
+                groupsSet : Set String
+                groupsSet =
+                    Set.fromList sourceGroups
+
+                newModel : Model
+                newModel =
+                    updateViewModel
+                        (\viewModel ->
+                            if maskByDefault then
+                                { viewModel
+                                    | unmaskedSourceGroups =
+                                        if shouldMask then
+                                            Set.diff viewModel.unmaskedSourceGroups groupsSet
+
+                                        else
+                                            Set.union groupsSet viewModel.unmaskedSourceGroups
+                                }
+
+                            else
+                                { viewModel
+                                    | maskedSourceGroups =
+                                        if shouldMask then
+                                            Set.union groupsSet viewModel.maskedSourceGroups
+
+                                        else
+                                            Set.diff viewModel.maskedSourceGroups groupsSet
+                                }
+                        )
+                        model
+
+                encodeSet : Set String -> String
+                encodeSet set =
+                    set
+                        |> Encode.set Encode.string
+                        |> Encode.encode 0
+            in
+            ( newModel
+            , if maskByDefault then
+                saveToLocalStorage
+                    "unmasked-source-groups"
+                    (encodeSet newModel.viewModel.unmaskedSourceGroups)
+
+              else
+                saveToLocalStorage
+                    "masked-source-groups"
+                    (encodeSet newModel.viewModel.maskedSourceGroups)
             )
 
         NoOp ->
@@ -2424,6 +2512,21 @@ updateModelFromLocalStorage ( key, value ) model =
                 _ ->
                     model
 
+        "mask-by-default" ->
+            updateViewModel
+                (\viewModel ->
+                    case value of
+                        "1" ->
+                            { viewModel | maskByDefault = Just True }
+
+                        "0" ->
+                            { viewModel | maskByDefault = Just False }
+
+                        _ ->
+                            viewModel
+                )
+                model
+
         "masked-source-groups" ->
             updateViewModel
                 (\viewModel ->
@@ -2612,6 +2715,18 @@ updateModelFromLocalStorage ( key, value ) model =
 
                         "0" ->
                             { viewModel | showResultTraits = False }
+
+                        _ ->
+                            viewModel
+                )
+                model
+
+        "unmasked-source-groups" ->
+            updateViewModel
+                (\viewModel ->
+                    case Decode.decodeString (DecodeExtra.set Decode.string) value of
+                        Ok set ->
+                            { viewModel | unmaskedSourceGroups = set }
 
                         _ ->
                             viewModel

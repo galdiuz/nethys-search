@@ -67,6 +67,7 @@ type alias ViewModel =
     , groupedShowHeightenable : Bool
     , groupedShowPfs : Bool
     , groupedShowRarity : Bool
+    , maskByDefault : Maybe Bool
     , maskedSourceGroups : Set String
     , openInNewTab : Bool
     , resultBaseUrl : String
@@ -77,6 +78,7 @@ type alias ViewModel =
     , showResultSummary : Bool
     , showResultTraits : Bool
     , starfinder : Bool
+    , unmaskedSourceGroups : Set String
     }
 
 
@@ -450,6 +452,11 @@ defaultFlags =
     }
 
 
+defaultMaskByDefault : Bool
+defaultMaskByDefault =
+    False
+
+
 type alias Aggregations =
     { itemSubcategories : List { category : String, name : String }
     , minmax : Dict String ( Float, Float )
@@ -573,7 +580,9 @@ type Msg
     | LoadGroupPressed (List ( String, String ))
     | LoadMorePressed Int
     | LocalStorageValueReceived Decode.Value
+    | MaskByDefaultChanged Bool
     | MaskSourceGroupToggled String
+    | MaskSourceGroupsPressed Bool (List String)
     | NewRandomSeedPressed
     | NoOp
     | OpenInNewTabChanged Bool
