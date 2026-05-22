@@ -142,6 +142,7 @@ init flagsValue =
                 model
                 (Dict.toList flags.localStorage)
         |> updateModelFromDefaultsOrUrl
+        |> showSpoilerOptionsIfNeeded
     , Cmd.none
     )
         |> addCmd getDocumentIndex
@@ -1249,7 +1250,7 @@ update msg model =
                 )
                 model
             , saveToLocalStorage
-                "mask-by-default"
+                "mask-spoilers-by-default"
                 (if value then "1" else "0")
             )
 
@@ -1612,26 +1613,45 @@ update msg model =
             )
 
         ShowFilterBox id show ->
-            ( updateCurrentSearchModel
-                (\searchModel ->
-                    { searchModel
-                        | visibleFilterBoxes =
-                            if show then
-                                id :: searchModel.visibleFilterBoxes
+            let
+                modelWithVisibility : Model
+                modelWithVisibility =
+                    updateCurrentSearchModel
+                        (\searchModel ->
+                            { searchModel
+                                | visibleFilterBoxes =
+                                    if show then
+                                        id :: searchModel.visibleFilterBoxes
 
-                            else
-                                List.Extra.remove id searchModel.visibleFilterBoxes
-                    }
-                )
-                model
-            , if not show && id == "whats-new" then
-                saveToLocalStorage
+                                    else
+                                        List.Extra.remove id searchModel.visibleFilterBoxes
+                            }
+                        )
+                        model
+            in
+            if not show && id == "whats-new" then
+                ( modelWithVisibility
+                , saveToLocalStorage
                     "seen-whats-new"
                     (String.fromInt whatsNewVersion)
+                )
 
-              else
-                Cmd.none
-            )
+            else if not show && id == "mask-spoilers" then
+                let
+                    value : Bool
+                    value =
+                        Maybe.withDefault Data.defaultMaskByDefault model.viewModel.maskByDefault
+                in
+                ( updateViewModel
+                    (\viewModel -> { viewModel | maskByDefault = Just value })
+                    modelWithVisibility
+                , saveToLocalStorage
+                    "mask-spoilers-by-default"
+                    (if value then "1" else "0")
+                )
+
+            else
+                ( modelWithVisibility, Cmd.none )
 
         ShowLegacyFiltersChanged value ->
             ( { model | showLegacyFilters = value }
@@ -2512,7 +2532,7 @@ updateModelFromLocalStorage ( key, value ) model =
                 _ ->
                     model
 
-        "mask-by-default" ->
+        "mask-spoilers-by-default" ->
             updateViewModel
                 (\viewModel ->
                     case value of
@@ -4045,6 +4065,21 @@ updateModelFromDefaultsOrUrl model =
                 urlParams
     in
     { model | searchModel = updateSearchModelFromParams paramsToUpdateWith model model.searchModel }
+
+
+showSpoilerOptionsIfNeeded : Model -> Model
+showSpoilerOptionsIfNeeded model =
+    if model.viewModel.maskByDefault == Nothing then
+        updateCurrentSearchModel
+            (\searchModel ->
+                { searchModel
+                    | visibleFilterBoxes = "mask-spoilers" :: searchModel.visibleFilterBoxes
+                }
+            )
+            model
+
+    else
+        model
 
 
 getQueryParam : Url -> String -> String

@@ -547,7 +547,7 @@ allFilters model =
       , visibleIf = moreThanOneValueAggregation "skill"
       }
     , { id = "sources"
-      , label = "📚 Sources / Spoilers"
+      , label = "📚 Sources"
       , view = viewFilterSources
       , visibleIf = moreThanOneValueAggregation "source"
       }
@@ -608,6 +608,11 @@ allOptions =
     , { id = "settings"
       , label = "General settings"
       , view = viewGeneralSettings
+      , visibleIf = \_ -> True
+      }
+    , { id = "mask-spoilers"
+      , label = "Mask spoilers"
+      , view = viewMaskSpoilers
       , visibleIf = \_ -> True
       }
     , { id = "whats-new"
@@ -1067,6 +1072,105 @@ viewGeneralSettings model searchModel =
                 , text = "dd/MM/yyyy"
                 }
             ]
+        ]
+    ]
+
+
+viewMaskSpoilers : Model -> SearchModel -> List (Html Msg)
+viewMaskSpoilers model searchModel =
+    let
+        maskByDefault : Bool
+        maskByDefault =
+            Maybe.withDefault Data.defaultMaskByDefault model.viewModel.maskByDefault
+
+        sourceGroupIsMasked : String -> Bool
+        sourceGroupIsMasked sourceGroup =
+            if maskByDefault then
+                not (Set.member sourceGroup model.viewModel.unmaskedSourceGroups)
+
+            else
+                Set.member sourceGroup model.viewModel.maskedSourceGroups
+
+        visibleSourceGroups : List String
+        visibleSourceGroups =
+            case model.globalAggregations of
+                Just (Ok globalAggregations) ->
+                    globalAggregations.sources
+                        |> List.filterMap .group
+                        |> List.filter
+                            (caseInsensitiveContains
+                                (dictGetString "mask-spoilers" searchModel.searchFilters)
+                            )
+                        |> List.Extra.unique
+                        |> List.sort
+
+                _ ->
+                    []
+    in
+    [ Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.text "Mask search results and link previews from published adventures to guard against spoilers. Recommended if you play any."
+        , viewCheckbox
+            { checked = maskByDefault
+            , onCheck = MaskByDefaultChanged
+            , text = "Mask spoilers by default"
+            }
+        ]
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Mask per source group" ]
+        , Html.div
+            [ HA.class "row"
+            , HA.class "align-center"
+            , HA.class "gap-medium"
+            ]
+            [ Html.button
+                [ HE.onClick (MaskSourceGroupsPressed True visibleSourceGroups) ]
+                [ Html.text "Select all" ]
+            , Html.button
+                [ HE.onClick (MaskSourceGroupsPressed False visibleSourceGroups) ]
+                [ Html.text "Select none" ]
+            ]
+        , viewFilterSearch searchModel "mask-spoilers"
+        , Html.div
+            [ HA.class "row"
+            , HA.class "gap-tiny"
+            , HA.class "scrollbox"
+            ]
+            (case model.globalAggregations of
+                Just (Ok _) ->
+                    List.map
+                        (\sourceGroup ->
+                            Html.button
+                                [ HA.class "row"
+                                , HA.class "gap-tiny"
+                                , HA.class "align-center"
+                                , HE.onClick (MaskSourceGroupToggled sourceGroup)
+                                ]
+                                [ Html.text (toTitleCase sourceGroup)
+                                , viewFilterIcon
+                                    (if sourceGroupIsMasked sourceGroup then
+                                        Just False
+
+                                     else
+                                         Nothing
+                                    )
+                                ]
+                        )
+                        visibleSourceGroups
+
+                Just (Err _) ->
+                    []
+
+                Nothing ->
+                    [ viewScrollboxLoader ]
+            )
         ]
     ]
 
@@ -2776,11 +2880,6 @@ viewFilterDomains model searchModel =
 
 viewFilterItems : Model -> SearchModel -> List (Html Msg)
 viewFilterItems model searchModel =
-    let
-        searchValue : String
-        searchValue =
-            dictGetString "item-subcategories" searchModel.searchFilters
-    in
     [ Html.div
         [ HA.class "numbers-grid"
         ]
@@ -3060,39 +3159,6 @@ viewFilterSkills model searchModel =
 
 viewFilterSources : Model -> SearchModel -> List (Html Msg)
 viewFilterSources model searchModel =
-    let
-        searchValue : String
-        searchValue =
-            dictGetString "sources" searchModel.searchFilters
-
-        maskByDefault : Bool
-        maskByDefault =
-            Maybe.withDefault Data.defaultMaskByDefault model.viewModel.maskByDefault
-
-        sourceGroupIsMasked : String -> Bool
-        sourceGroupIsMasked sourceGroup =
-            if maskByDefault then
-                not (Set.member sourceGroup model.viewModel.unmaskedSourceGroups)
-
-            else
-                Set.member sourceGroup model.viewModel.maskedSourceGroups
-
-        visibleSourceGroups : List String
-        visibleSourceGroups =
-            case model.globalAggregations of
-                Just (Ok globalAggregations) ->
-                    globalAggregations.sources
-                        |> List.filterMap .group
-                        |> List.filter
-                            (caseInsensitiveContains
-                                (dictGetString "mask-spoilers" searchModel.searchFilters)
-                            )
-                        |> List.Extra.unique
-                        |> List.sort
-
-                _ ->
-                    []
-    in
     [ Html.div
         [ HA.class "column"
         , HA.class "gap-small"
@@ -3213,67 +3279,6 @@ viewFilterSources model searchModel =
 
                 _ ->
                     []
-            )
-        ]
-
-    , Html.div
-        [ HA.class "column"
-        , HA.class "gap-small"
-        ]
-        [ Html.h3
-            []
-            [ Html.text "Mask Spoilers" ]
-        , Html.text "Masks results and previews from the selected source groups. This is saved between page visits."
-        , viewCheckbox
-            { checked = maskByDefault
-            , onCheck = MaskByDefaultChanged
-            , text = "Mask source groups by default"
-            }
-        , Html.div
-            [ HA.class "row"
-            , HA.class "align-center"
-            , HA.class "gap-medium"
-            ]
-            [ Html.button
-                [ HE.onClick (MaskSourceGroupsPressed True visibleSourceGroups) ]
-                [ Html.text "Select all" ]
-            , Html.button
-                [ HE.onClick (MaskSourceGroupsPressed False visibleSourceGroups) ]
-                [ Html.text "Select none" ]
-            ]
-        , viewFilterSearch model.searchModel "mask-spoilers"
-        , Html.div
-            [ HA.class "row"
-            , HA.class "gap-tiny"
-            , HA.class "scrollbox"
-            ]
-            (case model.globalAggregations of
-                Just (Ok _) ->
-                    List.map
-                        (\sourceGroup ->
-                            Html.button
-                                [ HA.class "row"
-                                , HA.class "gap-tiny"
-                                , HA.class "align-center"
-                                , HE.onClick (MaskSourceGroupToggled sourceGroup)
-                                ]
-                                [ Html.text (toTitleCase sourceGroup)
-                                , viewFilterIcon
-                                    (if sourceGroupIsMasked sourceGroup then
-                                        Just False
-
-                                     else
-                                         Nothing
-                                    )
-                                ]
-                        )
-                        visibleSourceGroups
-
-                Just (Err _) ->
-                    []
-
-                Nothing ->
-                    [ viewScrollboxLoader ]
             )
         ]
     ]
@@ -4703,6 +4708,10 @@ viewMaskedDocument viewModel document =
                     |> parseAndViewAsMarkdown viewModel
                 )
             ]
+        , Html.div
+            [ HA.class "inline"
+            ]
+            [ Html.text "This entry is masked by your spoiler settings." ]
         ]
 
 
