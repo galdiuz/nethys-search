@@ -116,7 +116,8 @@ init flagsValue =
             , groupedShowHeightenable = True
             , groupedShowPfs = True
             , groupedShowRarity = True
-            , maskByDefault = Nothing
+            , maskMajorSpoilers = True
+            , maskSpoilersByDefault = Nothing
             , maskedSourceGroups = Set.empty
             , openInNewTab = False
             , resultBaseUrl =
@@ -1243,28 +1244,28 @@ update msg model =
             , Random.generate RandomSeedGenerated (Random.int 0 2147483647)
             )
 
-        MaskByDefaultChanged value ->
+        MaskMajorSpoilersChanged value ->
             ( updateViewModel
                 (\viewModel ->
-                    { viewModel | maskByDefault = Just value }
+                    { viewModel | maskMajorSpoilers = value }
                 )
                 model
             , saveToLocalStorage
-                "mask-spoilers-by-default"
+                "mask-major-spoilers"
                 (if value then "1" else "0")
             )
 
         MaskSourceGroupToggled sourceGroup ->
             let
-                maskByDefault : Bool
-                maskByDefault =
-                    Maybe.withDefault defaultMaskByDefault model.viewModel.maskByDefault
+                maskSpoilersByDefault : Bool
+                maskSpoilersByDefault =
+                    Maybe.withDefault defaultMaskSpoilersByDefault model.viewModel.maskSpoilersByDefault
 
                 newModel : Model
                 newModel =
                     updateViewModel
                         (\viewModel ->
-                            if maskByDefault then
+                            if maskSpoilersByDefault then
                                 { viewModel
                                     | unmaskedSourceGroups =
                                         Set.Extra.toggle sourceGroup viewModel.unmaskedSourceGroups
@@ -1285,7 +1286,7 @@ update msg model =
                         |> Encode.encode 0
             in
             ( newModel
-            , if maskByDefault then
+            , if maskSpoilersByDefault then
                 saveToLocalStorage
                     "unmasked-source-groups"
                     (encodeSet newModel.viewModel.unmaskedSourceGroups)
@@ -1298,9 +1299,9 @@ update msg model =
 
         MaskSourceGroupsPressed shouldMask sourceGroups ->
             let
-                maskByDefault : Bool
-                maskByDefault =
-                    Maybe.withDefault defaultMaskByDefault model.viewModel.maskByDefault
+                maskSpoilersByDefault : Bool
+                maskSpoilersByDefault =
+                    Maybe.withDefault defaultMaskSpoilersByDefault model.viewModel.maskSpoilersByDefault
 
                 groupsSet : Set String
                 groupsSet =
@@ -1310,7 +1311,7 @@ update msg model =
                 newModel =
                     updateViewModel
                         (\viewModel ->
-                            if maskByDefault then
+                            if maskSpoilersByDefault then
                                 { viewModel
                                     | unmaskedSourceGroups =
                                         if shouldMask then
@@ -1339,7 +1340,7 @@ update msg model =
                         |> Encode.encode 0
             in
             ( newModel
-            , if maskByDefault then
+            , if maskSpoilersByDefault then
                 saveToLocalStorage
                     "unmasked-source-groups"
                     (encodeSet newModel.viewModel.unmaskedSourceGroups)
@@ -1348,6 +1349,17 @@ update msg model =
                 saveToLocalStorage
                     "masked-source-groups"
                     (encodeSet newModel.viewModel.maskedSourceGroups)
+            )
+
+        MaskSpoilersByDefaultChanged value ->
+            ( updateViewModel
+                (\viewModel ->
+                    { viewModel | maskSpoilersByDefault = Just value }
+                )
+                model
+            , saveToLocalStorage
+                "mask-spoilers-by-default"
+                (if value then "1" else "0")
             )
 
         NoOp ->
@@ -1640,10 +1652,10 @@ update msg model =
                 let
                     value : Bool
                     value =
-                        Maybe.withDefault Data.defaultMaskByDefault model.viewModel.maskByDefault
+                        Maybe.withDefault Data.defaultMaskSpoilersByDefault model.viewModel.maskSpoilersByDefault
                 in
                 ( updateViewModel
-                    (\viewModel -> { viewModel | maskByDefault = Just value })
+                    (\viewModel -> { viewModel | maskSpoilersByDefault = Just value })
                     modelWithVisibility
                 , saveToLocalStorage
                     "mask-spoilers-by-default"
@@ -2532,15 +2544,30 @@ updateModelFromLocalStorage ( key, value ) model =
                 _ ->
                     model
 
+        "mask-major-spoilers" ->
+            updateViewModel
+                (\viewModel ->
+                    case value of
+                        "1" ->
+                            { viewModel | maskMajorSpoilers = True }
+
+                        "0" ->
+                            { viewModel | maskMajorSpoilers = False }
+
+                        _ ->
+                            viewModel
+                )
+                model
+
         "mask-spoilers-by-default" ->
             updateViewModel
                 (\viewModel ->
                     case value of
                         "1" ->
-                            { viewModel | maskByDefault = Just True }
+                            { viewModel | maskSpoilersByDefault = Just True }
 
                         "0" ->
-                            { viewModel | maskByDefault = Just False }
+                            { viewModel | maskSpoilersByDefault = Just False }
 
                         _ ->
                             viewModel
@@ -4069,7 +4096,7 @@ updateModelFromDefaultsOrUrl model =
 
 showSpoilerOptionsIfNeeded : Model -> Model
 showSpoilerOptionsIfNeeded model =
-    if model.viewModel.maskByDefault == Nothing then
+    if model.viewModel.maskSpoilersByDefault == Nothing then
         updateCurrentSearchModel
             (\searchModel ->
                 { searchModel
@@ -4575,4 +4602,4 @@ buildTraitsAggregationBody =
 
 whatsNewVersion : Int
 whatsNewVersion =
-    5
+    6

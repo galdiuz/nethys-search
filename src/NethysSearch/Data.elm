@@ -67,7 +67,8 @@ type alias ViewModel =
     , groupedShowHeightenable : Bool
     , groupedShowPfs : Bool
     , groupedShowRarity : Bool
-    , maskByDefault : Maybe Bool
+    , maskSpoilersByDefault : Maybe Bool
+    , maskMajorSpoilers : Bool
     , maskedSourceGroups : Set String
     , openInNewTab : Bool
     , resultBaseUrl : String
@@ -290,6 +291,7 @@ type alias Document =
     , lessons : Maybe String
     , level : Maybe Int
     , location : Maybe String
+    , majorSpoiler : Bool
     , markdown : Markdown
     , mount : Maybe Bool
     , mysteries : Maybe String
@@ -452,8 +454,8 @@ defaultFlags =
     }
 
 
-defaultMaskByDefault : Bool
-defaultMaskByDefault =
+defaultMaskSpoilersByDefault : Bool
+defaultMaskSpoilersByDefault =
     False
 
 
@@ -580,9 +582,10 @@ type Msg
     | LoadGroupPressed (List ( String, String ))
     | LoadMorePressed Int
     | LocalStorageValueReceived Decode.Value
-    | MaskByDefaultChanged Bool
+    | MaskMajorSpoilersChanged Bool
     | MaskSourceGroupToggled String
     | MaskSourceGroupsPressed Bool (List String)
+    | MaskSpoilersByDefaultChanged Bool
     | NewRandomSeedPressed
     | NoOp
     | OpenInNewTabChanged Bool
@@ -921,6 +924,7 @@ fields =
     , ( "l", "[n] alias for 'level'" )
     , ( "level", "[n] Level" )
     , ( "location", "Planet location" )
+    , ( "major_spoiler", "If the entry is marked as major spoiler (true / false)" )
     , ( "mount", "If animal companion has mount special ability (true / false)" )
     , ( "mystery", "Oracle mysteries associated with a spell" )
     , ( "name", "Name" )
@@ -4050,6 +4054,7 @@ documentDecoder =
     Field.attempt "lesson_type" Decode.string <| \lessonType ->
     Field.attempt "level" Decode.int <| \level ->
     Field.attempt "location" Decode.string <| \location ->
+    Field.attempt "major_spoiler" Decode.bool <| \majorSpoiler ->
     Field.attempt "markdown" Decode.string <| \markdown ->
     Field.attempt "mount" Decode.bool <| \mount ->
     Field.attempt "mystery_markdown" Decode.string <| \mysteries ->
@@ -4246,6 +4251,7 @@ documentDecoder =
         , lessons = lessons
         , level = level
         , location = location
+        , majorSpoiler = Maybe.withDefault False majorSpoiler
         , markdown = NotParsed (Maybe.withDefault "" markdown)
         , mount = mount
         , mysteries = mysteries

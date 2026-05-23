@@ -1079,13 +1079,13 @@ viewGeneralSettings model searchModel =
 viewMaskSpoilers : Model -> SearchModel -> List (Html Msg)
 viewMaskSpoilers model searchModel =
     let
-        maskByDefault : Bool
-        maskByDefault =
-            Maybe.withDefault Data.defaultMaskByDefault model.viewModel.maskByDefault
+        maskSpoilersByDefault : Bool
+        maskSpoilersByDefault =
+            Maybe.withDefault Data.defaultMaskSpoilersByDefault model.viewModel.maskSpoilersByDefault
 
         sourceGroupIsMasked : String -> Bool
         sourceGroupIsMasked sourceGroup =
-            if maskByDefault then
+            if maskSpoilersByDefault then
                 not (Set.member sourceGroup model.viewModel.unmaskedSourceGroups)
 
             else
@@ -1113,9 +1113,24 @@ viewMaskSpoilers model searchModel =
         ]
         [ Html.text "Mask search results and link previews from published adventures to guard against spoilers. Recommended if you play any."
         , viewCheckbox
-            { checked = maskByDefault
-            , onCheck = MaskByDefaultChanged
+            { checked = maskSpoilersByDefault
+            , onCheck = MaskSpoilersByDefaultChanged
             , text = "Mask spoilers by default"
+            }
+        ]
+    , Html.div
+        [ HA.class "column"
+        , HA.class "gap-small"
+        ]
+        [ Html.h3
+            []
+            [ Html.text "Mask major spoilers" ]
+        , Html.text """Some entries have been hand-picked as major spoilers by the AoN team. This
+        option masks those entries regardless of source group masking."""
+        , viewCheckbox
+            { checked = model.viewModel.maskMajorSpoilers
+            , onCheck = MaskMajorSpoilersChanged
+            , text = "Mask major spoilers"
             }
         ]
     , Html.div
@@ -2262,10 +2277,21 @@ viewWhatsNew model _ =
         , HA.class "no-ul-margin"
         ]
         ("""
-        ### Field changes
-        - `vehicle_type` - new
+        ### Spoiler masking
+
+        Spoiler masking options have been moved to their own "Spoilers" options box. We've added a
+        new option to default to masking spoilers, and a new option to mask "major spoilers", which
+        masks entries the AoN team considers to be especially damaging spoilers. This second option
+        defaults to enabled.
+
+        As a result the previous "Sources / Spoilers" is now only "Sources".
 
         ### Previous updates
+
+        <details summary="2025-09-02">
+        ### Field changes
+        - `vehicle_type` - new
+        </details>
 
         <details summary="2025-07-31">
         ### Field changes
@@ -4643,7 +4669,11 @@ viewMaskedDocument viewModel document =
                         ]
                         (linkEventAttributes document.url)
                     )
-                    [ Html.text "<Spoiler>"
+                    [ if document.majorSpoiler then
+                        Html.text "<Major Spoiler>"
+
+                      else
+                        Html.text "<Spoiler>"
                     ]
                 ]
             , Html.div
@@ -4955,7 +4985,11 @@ viewSearchResultTableRow viewModel tableColumns document =
                                     ]
                                     (linkEventAttributes (getUrl viewModel document))
                                 )
-                                [ Html.text "<Spoiler>"
+                                [ if document.majorSpoiler then
+                                    Html.text "<Major Spoiler>"
+
+                                  else
+                                    Html.text "<Spoiler>"
                                 ]
                             ]
 
@@ -6527,7 +6561,11 @@ viewGroupedLink viewModel document =
             (linkEventAttributes (getUrl viewModel document))
         )
         [ if documentShouldBeMasked viewModel document then
-            Html.text "<Spoiler>"
+            if document.majorSpoiler then
+                Html.text "<Major Spoiler>"
+
+            else
+                Html.text "<Spoiler>"
 
           else
             Html.text document.name
@@ -8435,7 +8473,7 @@ documentShouldBeMasked viewModel document =
     let
         sourceGroupIsMasked : String -> Bool
         sourceGroupIsMasked sourceGroup =
-            if Maybe.withDefault Data.defaultMaskByDefault viewModel.maskByDefault then
+            if Maybe.withDefault Data.defaultMaskSpoilersByDefault viewModel.maskSpoilersByDefault then
                 not (Set.member sourceGroup viewModel.unmaskedSourceGroups)
 
             else
@@ -8443,9 +8481,11 @@ documentShouldBeMasked viewModel document =
     in
     List.all
         identity
-        [ document.sourceGroups
+        [ (document.sourceGroups
             |> List.map String.toLower
             |> List.any sourceGroupIsMasked
+          )
+            || (document.majorSpoiler && viewModel.maskMajorSpoilers)
         , List.any
             (\source -> not (caseInsensitiveContains "player's guide" source))
             document.sourceList

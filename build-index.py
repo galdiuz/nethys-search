@@ -128,6 +128,7 @@ def fetch_docs(url):
                     'lesson_type',
                     'level',
                     'location',
+                    'major_spoiler',
                     'markdown',
                     'mount',
                     'mystery_markdown',
