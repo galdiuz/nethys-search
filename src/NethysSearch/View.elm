@@ -342,7 +342,7 @@ viewQueryDropdownFilterHint model =
             , HA.class "row"
             , HA.class "gap-tiny"
             ]
-            [ Html.text "Try the new filter menu!"
+            [ Html.text "Try the filter menu!"
             , Html.button
                 [ HA.class "input-button"
                 , HA.attribute "aria-label" "Close"
@@ -1111,7 +1111,8 @@ viewMaskSpoilers model searchModel =
         [ HA.class "column"
         , HA.class "gap-small"
         ]
-        [ Html.text "Mask search results and link previews from published adventures to guard against spoilers. Recommended if you play any."
+        [ Html.text """Mask search results and link previews from published adventures to guard
+            against spoilers. Recommended if you play any published adventures."""
         , viewCheckbox
             { checked = maskSpoilersByDefault
             , onCheck = MaskSpoilersByDefaultChanged
@@ -1126,7 +1127,7 @@ viewMaskSpoilers model searchModel =
             []
             [ Html.text "Mask major spoilers" ]
         , Html.text """Some entries have been hand-picked as major spoilers by the AoN team. This
-        option masks those entries regardless of source group masking."""
+            option masks those entries regardless of source group masking."""
         , viewCheckbox
             { checked = model.viewModel.maskMajorSpoilers
             , onCheck = MaskMajorSpoilersChanged
