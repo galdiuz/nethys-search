@@ -2969,8 +2969,14 @@ urlToDocumentIdPathfinder url =
             else
                 withId "familiar-ability"
 
+        "/fatalmethods.aspx" ->
+            withId "fatal-method"
+
         "/feats.aspx" ->
             withId "feat"
+
+        "/grimfascinations.aspx" ->
+            withId "grim-fascination"
 
         "/hazards.aspx" ->
             withId "hazard"
@@ -3058,6 +3064,9 @@ urlToDocumentIdPathfinder url =
 
         "/rules.aspx" ->
             withId "rules"
+
+        "/runesmithrunes.aspx" ->
+            withId "runesmith-rune"
 
         "/setrelics.aspx" ->
             withId "set-relic"
