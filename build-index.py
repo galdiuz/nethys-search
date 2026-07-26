@@ -166,7 +166,7 @@ def fetch_docs(url):
                     'resistance',
                     'resistance_markdown',
                     'sacred_animal',
-                    'sacred_color'
+                    'sacred_color',
                     'sanctification',
                     'sanctification_raw',
                     'saving_throw_markdown',
