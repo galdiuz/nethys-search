@@ -7,6 +7,23 @@ import json
 import os
 import requests
 
+try:
+    from itertools import batched
+except ImportError:
+    def batched(iterable, n):
+        it = iter(iterable)
+        while chunk := tuple(itertools.islice(it, n)):
+            yield chunk
+
+
+def write_json_atomic(path, data):
+    tmp_path = path + '.tmp'
+
+    with open(tmp_path, 'w') as fp:
+        json.dump(data, fp)
+
+    os.replace(tmp_path, path)
+
 
 def fetch_index_name(url):
     print('Fetching index name')
@@ -366,11 +383,9 @@ def fetch_trait_agg(url):
 
 
 if __name__ == '__main__':
-    if not 'batched' in dir(itertools):
-        exit('Python 3.12 or greater is required')
-
     parser = argparse.ArgumentParser()
     parser.add_argument('url')
+    parser.add_argument('--output-dir', default='json-data')
     args = parser.parse_args()
 
     url = args.url + '/_search'
@@ -383,17 +398,10 @@ if __name__ == '__main__':
     print('Writing files for index ' + index_name)
 
     index = {}
-    dir_path = 'json-data'
+    dir_path = args.output_dir
 
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
-
-    with open(dir_path + '/' + index_name + '-aggs.json', 'w') as fp:
-        aggs = {
-            "sources": source_agg,
-            "traits": trait_agg,
-        }
-        json.dump(aggs, fp)
 
     docs.sort(key=lambda doc: doc['category'])
     by_cat = {k: list(v) for k, v in itertools.groupby(docs, lambda doc: doc['category'])}
@@ -405,7 +413,7 @@ if __name__ == '__main__':
         cat_docs = by_cat[cat]
 
         if len(cat_docs) > 200:
-            chunks += itertools.batched(cat_docs, 200)
+            chunks += batched(cat_docs, 200)
 
         elif len(cat_docs) >= 50:
             chunks.append(cat_docs)
@@ -432,17 +440,28 @@ if __name__ == '__main__':
         if chunk:
             chunks.append(chunk)
 
+    written = 0
+
     for chunk in chunks:
         chunk_json = json.dumps(chunk)
         chunk_hash = hashlib.md5(chunk_json.encode('utf-8')).hexdigest()
+        chunk_path = f'{dir_path}/{chunk_hash}.json'
 
-        with open(f'{dir_path}/{chunk_hash}.json', 'w') as fp:
-            json.dump(chunk, fp)
+        if not os.path.exists(chunk_path):
+            write_json_atomic(chunk_path, chunk)
+            written += 1
 
         ids = [doc['id'] for doc in chunk]
         index[chunk_hash] = ids
 
-    with open(dir_path + '/' + index_name + '-index.json', 'w') as fp:
-        json.dump(index, fp)
+    print(f'Wrote {written} new chunks, {len(chunks) - written} unchanged')
+
+    aggs = {
+        "sources": source_agg,
+        "traits": trait_agg,
+    }
+
+    write_json_atomic(f'{dir_path}/{index_name}-aggs.json', aggs)
+    write_json_atomic(f'{dir_path}/{index_name}-index.json', index)
 
     print('Done')
