@@ -5082,6 +5082,9 @@ viewSearchResultTableCell viewModel document inputColumn =
             [ "apocryphal_spell" ] ->
                 maybeAsMarkdown document.apocryphalSpell
 
+            [ "area" ] ->
+                maybeAsMarkdown document.area
+
             [ "armor_group" ] ->
                 maybeAsMarkdown document.armorGroup
 
@@ -5413,7 +5416,7 @@ searchResultTableCellToString viewModel document inputColumn =
                 |> String.join ", "
 
         [ "area" ] ->
-            maybeAsString document.area
+            maybeAsStringWithoutMarkdown document.area
 
         [ "area_type" ] ->
             document.areaTypes

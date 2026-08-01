@@ -3971,7 +3971,7 @@ documentDecoder =
     Field.attempt "anathema" Decode.string <| \anathemas ->
     Field.attempt "apocryphal_spell_markdown" Decode.string <| \apocryphalSpell ->
     Field.attempt "archetype" stringListDecoder <| \archetypes ->
-    Field.attempt "area_raw" Decode.string <| \area ->
+    Field.attempt "area_markdown" Decode.string <| \area ->
     Field.attempt "area_of_concern_raw" Decode.string <| \areasOfConcern ->
     Field.attempt "area_type" stringListDecoder <| \areaTypes ->
     Field.attempt "armor_category" Decode.string <| \armorCategory ->

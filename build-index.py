@@ -62,7 +62,7 @@ def fetch_docs(url):
                     'anathema',
                     'apocryphal_spell_markdown',
                     'archetype',
-                    'area_raw',
+                    'area_markdown',
                     'area_of_concern_raw',
                     'area_type',
                     'armor_category',
