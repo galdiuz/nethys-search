@@ -2975,6 +2975,9 @@ urlToDocumentIdPathfinder url =
         "/feats.aspx" ->
             withId "feat"
 
+        "/followers.aspx" ->
+            withId "follower"
+
         "/grimfascinations.aspx" ->
             withId "grim-fascination"
 
