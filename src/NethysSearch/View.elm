@@ -4978,7 +4978,9 @@ viewSearchResultTableRow viewModel tableColumns document =
                 , if documentShouldBeMasked viewModel document then
                     if column == "name" then
                         Html.td
-                            []
+                            [ HA.class "sticky-left"
+                            , HA.style "z-index" "1"
+                            ]
                             [ Html.a
                                 (List.append
                                     [ HA.href (getUrl viewModel document)
