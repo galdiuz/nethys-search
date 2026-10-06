@@ -7619,19 +7619,32 @@ markdownHtmlRenderer viewModel =
             )
             |> Markdown.Html.withAttribute "value"
         , Markdown.Html.tag "details"
-            (\summary children ->
+            (\maybeSummary children ->
                 [ Html.details
                     []
                     (List.append
-                        [ Html.summary
-                            []
-                            [ Html.text summary ]
-                        ]
+                        (case maybeSummary of
+                            Just summary ->
+                                [ Html.summary
+                                    []
+                                    [ Html.text summary ]
+                                ]
+
+                            Nothing ->
+                                []
+                        )
                         (List.concat children)
                     )
                 ]
             )
-            |> Markdown.Html.withAttribute "summary"
+            |> Markdown.Html.withOptionalAttribute "summary"
+        , Markdown.Html.tag "details-summary"
+            (\children ->
+                [ Html.summary
+                    []
+                    (List.concat children)
+                ]
+            )
         , Markdown.Html.tag "document"
             (\id _ ->
                 [ Html.div
