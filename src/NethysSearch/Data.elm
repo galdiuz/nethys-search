@@ -3567,6 +3567,7 @@ mergeInlinesHelper block result =
             [ "actions"
             , "br"
             , "date"
+            , "major-spoiler"
             , "sup"
             ]
 

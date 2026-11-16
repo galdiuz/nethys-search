@@ -7670,6 +7670,28 @@ markdownHtmlRenderer viewModel =
                     (List.concat children)
                 ]
             )
+        , Markdown.Html.tag "major-spoiler"
+            (\href children ->
+                [ Html.a
+                    (List.append
+                        [ if String.startsWith "/" href then
+                            HA.href (viewModel.resultBaseUrl ++ href)
+
+                          else
+                            HA.href href
+                        , HAE.attributeIf (viewModel.openInNewTab) (HA.target "_blank")
+                        ]
+                        (linkEventAttributes href)
+                    )
+                    (if viewModel.maskMajorSpoilers then
+                        [ Html.text "<Major Spoiler>" ]
+
+                     else
+                        (List.concat children)
+                    )
+                ]
+            )
+            |> Markdown.Html.withAttribute "href"
         , Markdown.Html.tag "ol"
             (\start children ->
                 [ Html.ol
